@@ -1,0 +1,10 @@
+[package]
+name = "pbs_engine"
+version = "0.1.0"
+authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+nalgebra-glm = "0.3.0"
+glfw = "0.26.1"
+pbs_gl = {path = "../pbs_gl"}

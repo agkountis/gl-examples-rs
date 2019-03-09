@@ -1,0 +1,8 @@
+[package]
+name = "pbs_rs"
+version = "0.1.0"
+authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+pbs_engine = {path = "pbs_engine"}

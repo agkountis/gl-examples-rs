@@ -1,0 +1,13 @@
+[package]
+name = "pbs_gl"
+version = "0.1.0"
+build = "build.rs"
+authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "pbs_gl"
+path = "src/lib.rs"
+
+[build-dependencies]
+gl_generator = "0.10.0"
