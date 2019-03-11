@@ -14,8 +14,11 @@ pub struct Window {
 
 impl Window {
 
-    pub fn new(title: &String, size: UVec2,
-               api_version: &Version, window_mode: &WindowMode, msaa: &Msaa) -> Window {
+    pub fn new(title: &str,
+               size: UVec2,
+               api_version: &Version,
+               window_mode: &WindowMode,
+               msaa: &Msaa) -> Window {
 
         assert!(api_version.major > 3 && api_version.minor > 2,
                 "Only OpenGL version greater than 3.2 are supported");
@@ -43,7 +46,7 @@ impl Window {
         let (mut window, events) = glfw.with_primary_monitor(|glfw, monitor| {
             glfw.create_window(size.x,
                                size.y,
-                               title.as_str(),
+                               title,
                                monitor.map_or(glfw::WindowMode::Windowed, |m| {
                                    match window_mode {
                                        WindowMode::Windowed => {
@@ -57,7 +60,6 @@ impl Window {
         }).expect("Failed to create GLFW window.");
 
         gl::load_with(|s| window.get_proc_address(s) as *const _);
-
 
         window.set_key_polling(true);
         window.make_current();

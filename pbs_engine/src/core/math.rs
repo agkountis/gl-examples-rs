@@ -1,5 +1,3 @@
-
-
 pub mod vector {
     use nalgebra_glm as glm;
 
@@ -50,3 +48,15 @@ pub mod matrix {
         glm::scale(matrix, &Vec3::new(x, y, z))
     }
 }
+
+pub mod utilities {
+    use nalgebra_glm as glm;
+    use super::*;
+
+    pub fn value_ptr<N: glm::Scalar, R: glm::Dimension, C: glm::Dimension>(value: &glm::TMat<N, R, C>) -> *const N
+        where glm::DefaultAllocator: glm::Alloc<N, R, C> {
+        glm::value_ptr(value).as_ptr()
+    }
+}
+
+

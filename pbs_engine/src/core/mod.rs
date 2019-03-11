@@ -1,26 +1,32 @@
 pub mod application;
 pub mod math;
+pub mod rendering;
+
 mod window;
 
 use self::math::vector::UVec2;
 
+#[derive(Debug)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: u32
 }
 
+#[derive(Debug)]
 pub enum WindowMode {
     Windowed,
     Fullscreen
 }
 
+#[derive(Debug)]
 pub enum Msaa {
     None,
     X4,
     X16
 }
 
+#[derive(Debug)]
 pub struct Settings {
     pub name: String,
     pub version: Version,
