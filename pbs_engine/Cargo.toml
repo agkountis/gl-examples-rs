@@ -7,4 +7,5 @@ edition = "2018"
 [dependencies]
 nalgebra-glm = "0.3.0"
 glfw = "0.26.1"
+bitflags = "1.0.4"
 pbs_gl = {path = "../pbs_gl"}
