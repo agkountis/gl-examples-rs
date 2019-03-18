@@ -33,7 +33,7 @@ pub enum BufferClearInternalFormat {
     RGBA8I = gl::RGBA8I,
     RGBA16I = gl::RGBA16I,
     RGBA32I = gl::RGBA32I,
-    RGBA8UI = gl::RGBA32I,
+    RGBA8UI = gl::RGBA8UI,
     RGBA16UI = gl::RGBA16UI,
     RGBA32UI = gl::RGBA32UI
 }

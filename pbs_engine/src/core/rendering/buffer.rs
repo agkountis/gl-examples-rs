@@ -44,6 +44,14 @@ pub enum BufferTarget {
     Uniform = gl::UNIFORM_BUFFER
 }
 
+pub struct BufferCopyInfo<'a> {
+    pub source: &'a Buffer,
+    pub destination: &'a Buffer,
+    pub source_offset: isize,
+    pub destination_offset: isize,
+    pub size: isize
+}
+
 pub struct Buffer {
     id: GLuint,
     size: isize,
@@ -177,12 +185,63 @@ impl Buffer {
         }
     }
 
+    pub fn get_id(&self) -> GLuint {
+        self.id
+    }
+
+    pub fn get_size(&self) -> isize {
+        self.size
+    }
+
+    pub fn is_mapped(&self) -> bool {
+        self.mapped_ptr != ptr::null_mut()
+    }
+
+    pub fn get_storage_flags(&self) -> BufferStorageFlags {
+        self.storage_flags
+    }
+
     pub fn clear(&self) {
         //TODO
     }
 
-    pub fn copy(source: &Buffer, destination: &Buffer) {
-        //TODO
+    pub fn copy(buffer_copy_info: BufferCopyInfo) {
+        assert!(buffer_copy_info.source_offset > 0, "Buffer copy source offset must be > 0.");
+        assert!(buffer_copy_info.destination_offset > 0,
+                "Buffer copy destination offset must be > 0");
+        assert!(buffer_copy_info.size > 0, "Buffer copy size must be > 0.");
+        assert!(buffer_copy_info.source_offset + buffer_copy_info.size
+            <= buffer_copy_info.source.get_size(),
+                "Source offset + size must be less or equal to source buffer size");
+        assert!(buffer_copy_info.destination_offset + buffer_copy_info.size
+                    <= buffer_copy_info.destination.get_size(),
+                "Destination offset + size must be less or equal to destination buffer size");
+
+        if buffer_copy_info.source.get_id() == buffer_copy_info.destination.get_id() {
+            assert_ne!(buffer_copy_info.source_offset + buffer_copy_info.size - buffer_copy_info.source_offset,
+                       buffer_copy_info.destination_offset + buffer_copy_info.size - buffer_copy_info.destination_offset,
+                       "Source and destination memory ranges cannot overlap when copying on the same buffer")
+        }
+
+        if buffer_copy_info.source.is_mapped() {
+            assert!(buffer_copy_info.source.get_storage_flags().intersects(BufferStorageFlags::MAP_PERSISTENT),
+                    "Mapped buffer 'source' can only be used if mapped persistently. \
+                    Map persistently or unmap the buffer before attempting to copy.")
+        }
+
+        if buffer_copy_info.destination.is_mapped() {
+            assert!(buffer_copy_info.destination.get_storage_flags().intersects(BufferStorageFlags::MAP_PERSISTENT),
+                    "Mapped buffer 'destination' can only be used if mapped persistently. \
+                    Map persistently or unmap the buffer before attempting to copy.")
+        }
+
+        unsafe {
+            gl::CopyNamedBufferSubData(buffer_copy_info.source.get_id(),
+                                       buffer_copy_info.destination.get_id(),
+                                       buffer_copy_info.source_offset,
+                                       buffer_copy_info.destination_offset,
+                                       buffer_copy_info.size)
+        }
     }
 }
 
