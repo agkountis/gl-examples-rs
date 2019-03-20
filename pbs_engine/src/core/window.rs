@@ -43,21 +43,22 @@ impl Window {
         }
 
 
-        let (mut window, events) = glfw.with_primary_monitor(|glfw, monitor| {
-            glfw.create_window(size.x,
-                               size.y,
-                               title,
-                               monitor.map_or(glfw::WindowMode::Windowed, |m| {
-                                   match window_mode {
-                                       WindowMode::Windowed => {
-                                           glfw::WindowMode::Windowed
-                                       },
-                                       WindowMode::Fullscreen => {
-                                           glfw::WindowMode::FullScreen(m)
-                                       }
-                                   }
-                               }))
-        }).expect("Failed to create GLFW window.");
+        let (mut window, events) =
+            glfw.with_primary_monitor(|glfw, monitor| {
+                glfw.create_window(size.x,
+                                   size.y,
+                                   title,
+                                   monitor.map_or(glfw::WindowMode::Windowed, |m| {
+                                       match window_mode {
+                                           WindowMode::Windowed => {
+                                               glfw::WindowMode::Windowed
+                                            },
+                                            WindowMode::Fullscreen => {
+                                               glfw::WindowMode::FullScreen(m)
+                                            }
+                                        }
+                                   }))
+            }).expect("Failed to create GLFW window.");
 
         gl::load_with(|s| window.get_proc_address(s) as *const _);
 

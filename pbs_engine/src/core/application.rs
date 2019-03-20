@@ -1,12 +1,12 @@
 use super::{ Settings, window::Window };
 use pbs_gl as gl;
 
-pub struct Application {
+pub struct Application<'a> {
     window: Window,
-    settings: Settings
+    settings: Settings<'a>
 }
 
-impl Application {
+impl<'a> Application<'a> {
 
     pub fn new(settings: Settings) -> Application {
         Application {

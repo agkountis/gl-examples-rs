@@ -27,8 +27,8 @@ pub enum Msaa {
 }
 
 #[derive(Debug)]
-pub struct Settings {
-    pub name: String,
+pub struct Settings<'a> {
+    pub name: &'a str,
     pub version: Version,
     pub graphics_api_version: Version,
     pub window_size: UVec2,
