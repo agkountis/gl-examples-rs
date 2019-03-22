@@ -2,38 +2,75 @@ use pbs_gl as gl;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
-pub enum BufferClearInternalFormat {
+pub enum BufferInternalFormat {
     R8 = gl::R8,
     R16 = gl::R16,
-    R16F = gl::R16F,
-    R32F = gl::R32F,
-    R8I = gl::R8I,
-    R16I = gl::R16I,
-    R32I = gl::R32I,
-    R8UI = gl::R8UI,
-    R16UI = gl::R16UI,
-    R32UI = gl::R32UI,
-    RG8 = gl::RG8,
-    RG16 = gl::RG16,
-    RG16F = gl::RG16F,
-    RG32F = gl::RG32F,
-    RG8I = gl::RG8I,
-    RG16I = gl::RG16I,
-    RG32I = gl::RG32I,
-    RG8UI = gl::RG8UI,
-    RG16UI = gl::RG16UI,
-    RG32UI = gl::RG32UI,
-    RGB32F = gl::RGB32F,
-    RGB32I = gl::RGB32I,
-    RGB32UI = gl::RGB32UI,
-    RGBA8 = gl::RGBA8,
-    RGBA16 = gl::RGBA16,
-    RGBA16F = gl::RGBA16F,
-    RGBA32F = gl::RGBA32F,
-    RGBA8I = gl::RGBA8I,
-    RGBA16I = gl::RGBA16I,
-    RGBA32I = gl::RGBA32I,
-    RGBA8UI = gl::RGBA8UI,
-    RGBA16UI = gl::RGBA16UI,
-    RGBA32UI = gl::RGBA32UI
+    R16f = gl::R16F,
+    R32f = gl::R32F,
+    R8i = gl::R8I,
+    R16i = gl::R16I,
+    R32i = gl::R32I,
+    R8ui = gl::R8UI,
+    R16ui = gl::R16UI,
+    R32ui = gl::R32UI,
+    Rg8 = gl::RG8,
+    Rg16 = gl::RG16,
+    Rg16f = gl::RG16F,
+    Rg32f = gl::RG32F,
+    Rg8i = gl::RG8I,
+    Rg16i = gl::RG16I,
+    Rg32i = gl::RG32I,
+    Rg8ui = gl::RG8UI,
+    Rg16ui = gl::RG16UI,
+    Rg32ui = gl::RG32UI,
+    Rgb32f = gl::RGB32F,
+    Rgb32i = gl::RGB32I,
+    Rgb32ui = gl::RGB32UI,
+    Rgba8 = gl::RGBA8,
+    Rgba16 = gl::RGBA16,
+    Rgba16f = gl::RGBA16F,
+    Rgba32f = gl::RGBA32F,
+    Rgba8i = gl::RGBA8I,
+    Rgba16i = gl::RGBA16I,
+    Rgba32i = gl::RGBA32I,
+    Rgba8ui = gl::RGBA8UI,
+    Rgba16ui = gl::RGBA16UI,
+    Rgba32ui = gl::RGBA32UI
 }
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum DataType {
+    Byte = gl::BYTE,
+    UnsignedByte = gl::UNSIGNED_BYTE,
+    Short = gl::SHORT,
+    UnsignedShort = gl::UNSIGNED_SHORT,
+    Int = gl::INT,
+    UnsignedInt = gl::UNSIGNED_INT,
+    HalfFloat = gl::HALF_FLOAT,
+    Float = gl::FLOAT
+}
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum DataFormat {
+    StencilIndex = gl::STENCIL_INDEX,
+    DepthComponent = gl::DEPTH_COMPONENT,
+    DepthStencil = gl::DEPTH_STENCIL,
+    Red = gl::RED,
+    Green = gl::GREEN,
+    Blue = gl::BLUE,
+    Rg = gl::RG,
+    Rgb = gl::RGB,
+    Rgba = gl::RGBA,
+    Bgr = gl::BGR,
+    Bgra = gl::BGRA,
+    RedInteger = gl::RED_INTEGER,
+    BlueInteger = gl::BLUE_INTEGER,
+    RgInteger = gl::RG_INTEGER,
+    RgbInteger = gl::RGB_INTEGER,
+    RgbaInteger = gl::RGBA_INTEGER,
+    BgrInteger = gl::BGR_INTEGER,
+    BgraInteger = gl::BGRA_INTEGER
+}
+

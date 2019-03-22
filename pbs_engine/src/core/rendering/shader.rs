@@ -3,7 +3,7 @@ use gl::types::*;
 use std::ptr;
 use std::fs::File;
 use std::io::Read;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 
 #[repr(u32)]
@@ -28,21 +28,21 @@ impl Shader {
     pub fn new(stage: ShaderType, entry_point: &str, filename: &str) -> Result<Shader, String> {
 
         let mut spir_v = Vec::new();
-        let mut file_size_in_bytes = 0usize;
-        let mut bytes_read = 0usize;
 
         {
             let mut file = File::open(filename).unwrap();
 
-            file_size_in_bytes = file.metadata().unwrap().len() as usize;
+            let file_size_in_bytes = file.metadata().unwrap().len() as usize;
 
-            bytes_read = file.read_to_end(&mut spir_v).unwrap();
+            let bytes_read = file.read_to_end(&mut spir_v).unwrap();
+
+            assert_eq!(bytes_read, file_size_in_bytes, "Could not read the entirety of the file.");
         }
 
-        assert_eq!(bytes_read, file_size_in_bytes, "Could not read the entirety of the file.");
 
 
-        let mut id: GLuint = 0;
+
+        let id: GLuint;
 
         unsafe {
             id = gl::CreateShader(stage as u32);

@@ -51,9 +51,10 @@ pub mod matrix {
 
 pub mod utilities {
     use nalgebra_glm as glm;
-    use super::*;
 
-    pub fn value_ptr<N: glm::Scalar, R: glm::Dimension, C: glm::Dimension>(value: &glm::TMat<N, R, C>) -> *const N
+    pub fn value_ptr<N: glm::Scalar,
+                     R: glm::Dimension,
+                     C: glm::Dimension>(value: &glm::TMat<N, R, C>) -> *const N
         where glm::DefaultAllocator: glm::Alloc<N, R, C> {
         glm::value_ptr(value).as_ptr()
     }

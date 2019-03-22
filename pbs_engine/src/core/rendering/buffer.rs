@@ -1,7 +1,7 @@
 use std::ptr;
 use pbs_gl as gl;
 use gl::types::*;
-use std::mem;
+use crate::core::rendering::format::{BufferInternalFormat, DataFormat, DataType};
 
 
 bitflags! {
@@ -201,8 +201,33 @@ impl Buffer {
         self.storage_flags
     }
 
-    pub fn clear(&self) {
-        //TODO
+    pub fn clear(&self,
+                 internal_format: BufferInternalFormat,
+                 date_format: DataFormat,
+                 data_type: DataType,
+                 data: &[u8]) {
+        self.clear_range(internal_format, 0, self.size, data_format, data_type, data)
+    }
+
+    pub fn clear_range(&self,
+                       internal_format: BufferInternalFormat,
+                       offset: isize,
+                       size: isize,
+                       data_format: DataFormat,
+                       data_type: DataType,
+                       data: &[u8]) {
+
+        //TODO: Add asserts to ensure spec correctness
+
+        unsafe {
+            gl::ClearNamedBufferSubData(self.id,
+                                        internal_format as u32,
+                                        offset,
+                                        size,
+                                        data_format as u32,
+                                        data_type as u32,
+                                        data.as_ptr() as *const GLvoid);
+        }
     }
 
     pub fn copy(buffer_copy_info: BufferCopyInfo) {
