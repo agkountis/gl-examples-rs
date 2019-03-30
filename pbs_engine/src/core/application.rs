@@ -1,37 +1,29 @@
 use super::{ Settings, window::Window };
 use pbs_gl as gl;
+use crate::core::math::vector::Vec4;
 
-pub struct Application<'a> {
-    window: Window,
-    settings: Settings<'a>
+
+pub trait Run {
+    fn run(&mut self);
 }
 
-impl<'a> Application<'a> {
+pub trait Draw {
+    fn draw(&self);
+}
 
-    pub fn new(settings: Settings) -> Application {
-        Application {
-            window: Window::new(&settings.name,
-                                settings.window_size,
-                                &settings.graphics_api_version,
-                                &settings.window_mode,
-                                &settings.msaa),
-            settings
-        }
+pub trait Update {
+    fn update(&mut self, dt: f32);
+}
+
+pub trait RenderingApplication {
+    fn run(&mut self);
+    fn draw(&mut self);
+    fn update(&mut self, dt: f32);
+}
+
+pub fn clear_default_framebuffer(color: &Vec4) {
+    unsafe {
+        gl::ClearColor(color.x, color.y, color.z, color.w);
+        gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
     }
-
-    pub fn run(&mut self) {
-        while !self.window.should_close() {
-            self.window.handle_events();
-            self.draw();
-            self.window.swap_buffers();
-        }
-    }
-
-    fn draw(&self) {
-        unsafe {
-            gl::ClearColor(1.0, 0.0, 0.0, 0.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-        }
-    }
-
 }

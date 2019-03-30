@@ -79,7 +79,6 @@ impl Buffer {
     }
 
     pub fn new_with_data(data: &[u8],
-                         size: isize,
                          buffer_storage_flags: BufferStorageFlags) -> Buffer {
         let mut id: GLuint = 0;
 
@@ -87,7 +86,7 @@ impl Buffer {
             gl::CreateBuffers(1, &mut id);
             gl::NamedBufferStorage(
                 id,
-                size,
+                data.len() as isize,
                 data.as_ptr() as *const GLvoid,
                 buffer_storage_flags.bits()
             );
@@ -95,7 +94,7 @@ impl Buffer {
 
         Buffer {
             id,
-            size,
+            size: data.len() as isize,
             mapped_ptr: ptr::null_mut(),
             storage_flags: buffer_storage_flags,
             current_bound_target: BufferTarget::None
@@ -203,7 +202,7 @@ impl Buffer {
 
     pub fn clear(&self,
                  internal_format: BufferInternalFormat,
-                 date_format: DataFormat,
+                 data_format: DataFormat,
                  data_type: DataType,
                  data: &[u8]) {
         self.clear_range(internal_format, 0, self.size, data_format, data_type, data)

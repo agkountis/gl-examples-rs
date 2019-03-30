@@ -39,9 +39,6 @@ impl Shader {
             assert_eq!(bytes_read, file_size_in_bytes, "Could not read the entirety of the file.");
         }
 
-
-
-
         let id: GLuint;
 
         unsafe {

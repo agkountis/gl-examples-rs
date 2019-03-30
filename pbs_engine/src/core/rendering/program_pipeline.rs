@@ -67,7 +67,9 @@ impl<'a> ProgramPipeline<'a> {
                                              gl::INFO_LOG_LENGTH,
                                              &mut message_size);
 
-                            let mut buffer = Vec::with_capacity(message_size as usize + 1); //+1 for nul termination
+                            //+1 for nul termination
+                            let mut buffer =
+                                Vec::with_capacity(message_size as usize + 1);
 
                             buffer.extend([b' ']
                                 .iter()
