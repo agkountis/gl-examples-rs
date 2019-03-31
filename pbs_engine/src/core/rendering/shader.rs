@@ -18,7 +18,7 @@ pub fn check_spirv_support() -> bool {
     }
 
     if format_count > 0 {
-        let mut formats = Vec::with_capacity((format_count * mem::size_of::<GLint>() as i32) as usize);
+        let mut formats = vec![0; format_count as usize];
 
         unsafe {
             gl::GetIntegerv(gl::SHADER_BINARY_FORMATS, formats.as_mut_ptr());
@@ -29,7 +29,7 @@ pub fn check_spirv_support() -> bool {
                 *m == gl::SHADER_BINARY_FORMAT_SPIR_V_ARB as i32
             });
         match opt {
-            Some(_) => true,
+            Some(_) => return true,
             _ => false
         };
     }

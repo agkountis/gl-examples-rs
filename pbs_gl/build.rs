@@ -12,7 +12,7 @@ fn main() {
 
     let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
 
-    Registry::new(Api::Gl, (4, 6), Profile::Core, Fallbacks::All, [
+    Registry::new(Api::Gl, (4, 5), Profile::Core, Fallbacks::All, [
         "GL_ARB_draw_buffers_blend",
         "GL_ARB_program_interface_query",
         "GL_ARB_multitexture",
