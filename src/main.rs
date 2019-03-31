@@ -6,8 +6,6 @@ use pbs_application::Application;
 
 use pbs_engine::core::{Settings, Version, WindowMode, Msaa};
 use pbs_engine::core::math::vector::{Vec4, UVec2};
-use pbs_engine::core::rendering::shader::{Shader, ShaderType};
-use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
 use pbs_engine::core::application::RenderingApplication;
 
 
@@ -24,17 +22,6 @@ fn main() {
         default_clear_color: Vec4::new(1.0, 0.0, 0.0, 0.0)
     });
 
-//    let vertex_shader = Shader::new(ShaderType::Vertex,
-//                                    "main",
-//                                    "sdr/pbs.vert.spv").unwrap();
-//
-//    let fragment_shader = Shader::new(ShaderType::Fragment,
-//                                      "main",
-//                                      "sdr/pbs.frag.spv").unwrap();
-//
-//    let pipeline = ProgramPipeline::new().add_shader(&vertex_shader)
-//                                         .add_shader(&fragment_shader)
-//                                         .build().unwrap();
 
     app.run()
 }
