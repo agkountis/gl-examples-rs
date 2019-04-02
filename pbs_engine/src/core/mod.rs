@@ -9,6 +9,9 @@ pub mod application;
 pub mod math;
 pub mod rendering;
 pub mod window;
+pub mod scene;
+pub mod camera;
+pub mod entity;
 
 use self::math::vector::UVec2;
 use crate::core::math::vector::Vec4;

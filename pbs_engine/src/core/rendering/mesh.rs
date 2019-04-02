@@ -115,3 +115,220 @@ impl Drop for Mesh {
         }
     }
 }
+
+pub struct MeshUtilities;
+
+impl MeshUtilities {
+
+    pub fn generate_quadrilateral(dimensions: Vec3) -> Mesh {
+
+        let half_dimensions = dimensions / 2.0;
+
+        let vertices = vec![
+            // front
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, -half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, -half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            // right
+            Vertex {
+                position: Vec3::new(half_dimensions.x, -half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tex_coord: Vec2::new(0.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tex_coord: Vec2::new(0.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tex_coord: Vec2::new(1.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tex_coord: Vec2::new(1.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            // left
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tex_coord: Vec2::new(0.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tex_coord: Vec2::new(0.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, -half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tex_coord: Vec2::new(1.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tex_coord: Vec2::new(1.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            // back
+            Vertex {
+                position: Vec3::new(half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            // top
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, 1.0, 0.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, 1.0, 0.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, 1.0, 0.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, 1.0, 0.0),
+                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            // bottom
+            Vertex {
+                position: Vec3::new(half_dimensions.x, -half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, -1.0, 0.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, -1.0, 0.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(0.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, -half_dimensions.y, half_dimensions.z),
+                normal: Vec3::new(0.0, -1.0, 0.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 1.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            },
+            Vertex {
+                position: Vec3::new(-half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
+                normal: Vec3::new(0.0, -1.0, 0.0),
+                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tex_coord: Vec2::new(1.0, 0.0),
+                color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+            }
+        ];
+
+        let index_count = vertices.len() / 2 * 3;
+
+        let mut indices = vec![];
+        indices.resize(index_count, 0);
+
+        let mut i = 0;
+        let mut j = 0;
+        while i < indices.len() {
+            indices[i] = j;
+
+            indices[i + 1] = j + 2;
+            indices[i + 4] = j + 2;
+
+            indices[i + 2] = j + 1;
+            indices[i + 3] = j + 1;
+
+            indices[i + 5] = j + 3;
+
+            i+=6;
+            j+=4;
+        }
+
+
+        Mesh::new(vertices, indices)
+    }
+
+    pub fn generate_cube(size: f32) -> Mesh {
+        Self::generate_quadrilateral(Vec3::new(size, size, size))
+    }
+
+}

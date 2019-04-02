@@ -8,4 +8,6 @@ edition = "2018"
 nalgebra-glm = "0.3.0"
 glfw = "0.26.1"
 bitflags = "1.0.4"
+assimp = "0.3.1"
+image = "*"
 pbs_gl = {path = "../pbs_gl"}

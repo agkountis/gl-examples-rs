@@ -5,6 +5,10 @@ use std::ptr;
 
 use super::shader::Shader;
 use crate::core::rendering::shader::ShaderType;
+use crate::core::math::matrix::Mat4;
+use crate::core::math::utilities;
+use crate::core::rendering::texture::Texture;
+use crate::core::rendering::sampler::Sampler;
 
 pub struct ProgramPipeline<'a> {
     id: GLuint,
@@ -28,7 +32,7 @@ impl<'a> ProgramPipeline<'a> {
         }
     }
 
-    pub fn add_shader(mut self, shader: &'a Shader) -> Self {
+    pub fn add_shader(&mut self, shader: &'a Shader) -> &mut Self {
         let idx = Self::shader_type_to_array_index(shader.get_type());
 
         if let Some(ref sdr) = self.shaders[idx] {
@@ -40,7 +44,7 @@ impl<'a> ProgramPipeline<'a> {
         self
     }
 
-    pub fn build(mut self) -> Result<Self, String> {
+    pub fn build(&mut self) -> Result<&mut Self, String> {
 
         unsafe {
             gl::BindProgramPipeline(self.id);
@@ -97,6 +101,53 @@ impl<'a> ProgramPipeline<'a> {
         Ok(self)
     }
 
+    pub fn set_matrix4f(&self, name: &str, value: &Mat4, stage: ShaderType) -> &Self {
+
+        let (program_id, location) = self.get_shader_stage_id_and_resource_location(stage,
+                                                                                    gl::UNIFORM,
+                                                                                    name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe {
+            gl::ProgramUniformMatrix4fv(program_id,
+                                        location,
+                                        1,
+                                        gl::FALSE,
+                                        utilities::value_ptr(value))
+        }
+
+        self
+    }
+
+    pub fn set_texture(&self,
+                       name: &str,
+                       texture: Texture,
+                       sampler: Sampler,
+                       stage: ShaderType) -> &Self {
+        let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
+                                                                                    gl::UNIFORM,
+                                                                                    name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe {
+            gl::BindTextureUnit(location as GLuint, texture.get_id());
+            gl::BindSampler(location as GLuint, sampler.id)
+        }
+
+        self
+    }
+
+    pub fn set_integer(&self, name: &str, value: i32, stage: ShaderType) {
+        let (program_id, location) = self.get_shader_stage_id_and_resource_location(stage,
+                                                                                    gl::UNIFORM,
+                                                                                    name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe {
+            gl::ProgramUniform1i(program_id, location, value)
+        }
+    }
+
     fn shader_type_to_array_index(shader_type: ShaderType) -> usize {
         match shader_type {
             ShaderType::Vertex => 0,
@@ -106,6 +157,31 @@ impl<'a> ProgramPipeline<'a> {
             ShaderType::Fragment => 4,
             ShaderType::Compute => 5,
         }
+    }
+
+    fn get_shader_stage_id_and_resource_location(&self,
+                                                 stage: ShaderType,
+                                                 resource_type: GLenum,
+                                                 name: &str) -> Result<(GLuint, GLint), String> {
+        let program_index = Self::shader_type_to_array_index(stage);
+
+        let program_id = match self.shader_programs[program_index] {
+            Some(id) => id,
+            _ => {
+                return Err(format!("Shader of type {:?} is not present in the program pipeline", stage));
+            }
+        };
+
+        let c_str = CString::new(name).unwrap();
+        let location = unsafe { gl::GetProgramResourceLocation(program_id,
+                                                               resource_type,
+                                                               c_str.as_ptr() as *const GLchar) };
+
+        if location < 0 {
+            return Err(format!("Uniform: {} is not active or does not exist in shader stage {:?} with ID {}", name, stage, program_id))
+        }
+
+        Ok((program_id, location))
     }
 }
 

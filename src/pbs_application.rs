@@ -3,6 +3,7 @@ use pbs_engine::core::application::{RenderingApplication, Draw, Update, Run, cle
 use pbs_engine::core::window::Window;
 use pbs_engine::core::rendering::shader::{Shader, ShaderType};
 use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
+use pbs_engine::core::rendering::mesh::{Mesh, MeshUtilities};
 
 pub struct Application<'a> {
     window: Window,
@@ -45,6 +46,8 @@ impl<'a> Application<'a> {
         let program_pipeline = ProgramPipeline::new().add_shader(&vertex_shader)
                                                                    .add_shader(&fragment_shader)
                                                                    .build().unwrap();
+
+        let mesh = MeshUtilities::generate_cube(1.0);
 
         Application {
             window,
