@@ -9,7 +9,8 @@ use super::math::vector::UVec2;
 pub struct Window {
     glfw: glfw::Glfw,
     window: glfw::Window,
-    events: Receiver<(f64, glfw::WindowEvent)>
+    events: Receiver<(f64, glfw::WindowEvent)>,
+    size: UVec2
 }
 
 impl Window {
@@ -68,7 +69,8 @@ impl Window {
         Window {
             glfw,
             window,
-            events
+            events,
+            size
         }
     }
 
@@ -91,6 +93,14 @@ impl Window {
 
     pub fn swap_buffers(&mut self) {
         self.window.swap_buffers()
+    }
+
+    pub fn get_width(&self) -> u32 {
+        self.size.x
+    }
+
+    pub fn get_height(&self) -> u32 {
+        self.size.y
     }
 
 }

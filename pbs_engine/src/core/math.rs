@@ -40,12 +40,23 @@ pub mod matrix {
         glm::translate(matrix, &Vec3::new(x, y, z))
     }
 
+    pub fn rotate(matrix: &Mat4, angle_deg: f32, axis: Vec3) -> Mat4 {
+        glm::rotate(matrix, angle_deg * glm::pi::<f32>() / 180.0, &axis)
+    }
+
     pub fn scale(matrix: &Mat4, scale: Vec3) -> Mat4 {
         glm::scale(matrix, &scale)
     }
 
     pub fn scale_xyz(matrix: &Mat4, x: f32, y: f32, z: f32) -> Mat4 {
         glm::scale(matrix, &Vec3::new(x, y, z))
+    }
+
+    pub fn perspective(win_width: u32, win_height: u32, fov_deg: u32, near: f32, far: f32) -> Mat4 {
+        glm::perspective(win_height as f32 / win_height as f32,
+                         fov_deg as f32 * glm::pi::<f32>() / 180.0,
+                         near,
+                         far )
     }
 }
 

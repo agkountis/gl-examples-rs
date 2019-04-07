@@ -4,10 +4,8 @@ use std::ptr;
 use std::fs::File;
 use std::io::Read;
 use std::ffi::CString;
-use std::mem;
 use std::path::Path;
 use std::error::Error;
-use core::borrow::Borrow;
 
 
 pub fn check_spirv_support() -> bool {

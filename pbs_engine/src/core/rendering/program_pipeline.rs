@@ -7,18 +7,20 @@ use super::shader::Shader;
 use crate::core::rendering::shader::ShaderType;
 use crate::core::math::matrix::Mat4;
 use crate::core::math::utilities;
-use crate::core::rendering::texture::Texture;
+use crate::core::rendering::texture::Texture2D;
 use crate::core::rendering::sampler::Sampler;
 
-pub struct ProgramPipeline<'a> {
+
+
+pub struct ProgramPipeline {
     id: GLuint,
-    shaders: [Option<&'a Shader>; 6],
+    shaders: [Option<(ShaderType, GLuint)>; 6],
     shader_programs: [Option<GLuint>; 6]
 }
 
-impl<'a> ProgramPipeline<'a> {
+impl ProgramPipeline {
 
-    pub fn new() -> ProgramPipeline<'a> {
+    pub fn new() -> ProgramPipeline {
         let mut id: GLuint = 0;
 
         unsafe {
@@ -32,19 +34,19 @@ impl<'a> ProgramPipeline<'a> {
         }
     }
 
-    pub fn add_shader(&mut self, shader: &'a Shader) -> &mut Self {
+    pub fn add_shader(mut self, shader: &Shader) -> Self {
         let idx = Self::shader_type_to_array_index(shader.get_type());
 
         if let Some(ref sdr) = self.shaders[idx] {
             eprintln!("Shader of type {:?} already exists in the program pipeline... Replacing...", shader.get_type())
         }
 
-        self.shaders[idx] = Some(shader);
+        self.shaders[idx] = Some((shader.get_type(), shader.get_id()));
 
         self
     }
 
-    pub fn build(&mut self) -> Result<&mut Self, String> {
+    pub fn build(mut self) -> Result<Self, String> {
 
         unsafe {
             gl::BindProgramPipeline(self.id);
@@ -57,7 +59,7 @@ impl<'a> ProgramPipeline<'a> {
                         //must be called before linking
                         gl::ProgramParameteri(program_id, gl::PROGRAM_SEPARABLE, gl::TRUE as i32);
 
-                        gl::AttachShader(program_id, shader.get_id());
+                        gl::AttachShader(program_id, shader.1);
 
                         gl::LinkProgram(program_id);
 
@@ -90,13 +92,15 @@ impl<'a> ProgramPipeline<'a> {
                             return Err(message.to_string_lossy().into_owned());
                         }
 
-                        let idx = Self::shader_type_to_array_index(shader.get_type());
+                        let idx = Self::shader_type_to_array_index(shader.0);
                         self.shader_programs[idx] = Some(program_id)
                     },
                     _ => {}
                 }
             }
         }
+
+        assert_eq!(unsafe{gl::GetError()}, gl::NO_ERROR);
 
         Ok(self)
     }
@@ -108,22 +112,25 @@ impl<'a> ProgramPipeline<'a> {
                                                                                     name)
             .expect("Failed to get program id or uniform location");
 
+        let mut ptr: i32 = 0;
         unsafe {
+            gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut ptr);
             gl::ProgramUniformMatrix4fv(program_id,
                                         location,
                                         1,
                                         gl::FALSE,
                                         utilities::value_ptr(value))
         }
-
+        let glerror = unsafe{gl::GetError()};
+        assert_eq!(glerror, gl::NO_ERROR);
         self
     }
 
-    pub fn set_texture(&self,
-                       name: &str,
-                       texture: Texture,
-                       sampler: Sampler,
-                       stage: ShaderType) -> &Self {
+    pub fn set_texture_2d(&self,
+                        name: &str,
+                        texture: Texture2D,
+                        sampler: Sampler,
+                        stage: ShaderType) -> &Self {
         let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
                                                                                     gl::UNIFORM,
                                                                                     name)
@@ -176,6 +183,8 @@ impl<'a> ProgramPipeline<'a> {
         let location = unsafe { gl::GetProgramResourceLocation(program_id,
                                                                resource_type,
                                                                c_str.as_ptr() as *const GLchar) };
+        let glerror = unsafe{gl::GetError()};
+        assert_eq!(glerror, gl::NO_ERROR);
 
         if location < 0 {
             return Err(format!("Uniform: {} is not active or does not exist in shader stage {:?} with ID {}", name, stage, program_id))
@@ -183,9 +192,25 @@ impl<'a> ProgramPipeline<'a> {
 
         Ok((program_id, location))
     }
+
+    pub fn bind(&self) {
+        unsafe {
+            gl::BindProgramPipeline(self.id);
+            let glerror = unsafe{gl::GetError()};
+            assert_eq!(glerror, gl::NO_ERROR);
+        }
+    }
+
+    pub fn unbind(&self) {
+        unsafe {
+            gl::BindProgramPipeline(0);
+            let glerror = unsafe{gl::GetError()};
+            assert_eq!(glerror, gl::NO_ERROR);
+        }
+    }
 }
 
-impl<'a> Drop for ProgramPipeline<'a> {
+impl Drop for ProgramPipeline {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteProgramPipelines(1, &mut self.id)

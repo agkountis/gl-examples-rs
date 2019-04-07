@@ -1,13 +1,42 @@
 use pbs_engine::core::Settings;
-use pbs_engine::core::application::{RenderingApplication, Draw, Update, Run, clear_default_framebuffer};
+use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer};
 use pbs_engine::core::window::Window;
 use pbs_engine::core::rendering::shader::{Shader, ShaderType};
 use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
 use pbs_engine::core::rendering::mesh::{Mesh, MeshUtilities};
+use pbs_engine::core::math::matrix::{Mat4, Vec3, translate, perspective, rotate};
+
+use std::time::Instant;
+
+struct RenderingData {
+    mesh: Mesh,
+    prog: ProgramPipeline,
+    model: Mat4,
+    view: Mat4,
+    proj: Mat4
+}
+
+impl RenderingData {
+    pub fn new(mesh: Mesh, vert: Shader, frag: Shader, model: Mat4, view: Mat4, proj: Mat4) -> RenderingData {
+
+        let prog = ProgramPipeline::new().add_shader(&vert)
+            .add_shader(&frag)
+            .build().unwrap();
+
+        RenderingData {
+            mesh,
+            prog,
+            model,
+            view,
+            proj
+        }
+    }
+}
 
 pub struct Application<'a> {
     window: Window,
-    settings: Settings<'a>
+    settings: Settings<'a>,
+    data: RenderingData
 }
 
 impl<'a> Application<'a> {
@@ -36,22 +65,29 @@ impl<'a> Application<'a> {
         }
         else {
             vertex_shader = Shader::new_from_text(ShaderType::Vertex,
-                                                  "sdr/pbs.vert").unwrap();
+                                                  "sdr/simple_blinn_phong.vert").unwrap();
 
             fragment_shader = Shader::new_from_text(ShaderType::Fragment,
-                                                    "sdr/pbs.frag").unwrap();
+                                                        "sdr/simple_blinn_phong.frag").unwrap();
         }
 
 
-        let program_pipeline = ProgramPipeline::new().add_shader(&vertex_shader)
-                                                                   .add_shader(&fragment_shader)
-                                                                   .build().unwrap();
-
         let mesh = MeshUtilities::generate_cube(1.0);
+
+        let m = translate(&Mat4::identity(), Vec3::new(0.0, 0.0, 2.0));
+        let p = perspective(window.get_width(), window.get_height(), 45, 0.1, 5.0);
+
+        println!("{:?}", m);
+        println!("{:?}", p);
 
         Application {
             window,
-            settings
+            settings,
+            data: RenderingData::new(mesh,
+                                     vertex_shader,
+                                     fragment_shader,
+                                     m,
+                                     Mat4::identity(), Mat4::identity())
         }
     }
 
@@ -74,8 +110,13 @@ impl<'a> Application<'a> {
 
 impl<'a> RenderingApplication for Application<'a> {
     fn run(&mut self) {
+        let start = Instant::now();
+        let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
+        self.data.prog.bind();
         while !self.should_close() {
-            self.update(0.0); //TODO: fix timer
+            let delta =  start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0 - prev_time;
+            prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
+            self.update(delta); //TODO: fix timer
             self.draw();
         }
     }
@@ -83,10 +124,21 @@ impl<'a> RenderingApplication for Application<'a> {
     fn draw(&mut self) {
         clear_default_framebuffer(&self.get_settings().default_clear_color);
 
+        self.data.prog.set_matrix4f("model", &self.data.model, ShaderType::Vertex);
+        self.data.prog.set_matrix4f("view", &self.data.view, ShaderType::Vertex);
+        self.data.prog.set_matrix4f("projection", &self.data.proj, ShaderType::Vertex);
+
+        self.data.mesh.draw();
+
+       // self.data.prog.unbind();
+
         self.swap_buffers()
     }
 
     fn update(&mut self, dt: f32) {
-        self.handle_events()
+        self.handle_events();
+
+        self.data.model = rotate(&self.data.model, 1000.0 * dt, Vec3::new(1.0, 1.0, 0.0));
+        println!("{:?}", self.data.model);
     }
 }

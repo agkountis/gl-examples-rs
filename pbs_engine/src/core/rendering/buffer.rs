@@ -1,12 +1,13 @@
 use std::ptr;
 use pbs_gl as gl;
 use gl::types::*;
+use std::mem;
 use crate::core::rendering::format::{BufferInternalFormat, DataFormat, DataType};
 
 
 bitflags! {
     pub struct BufferStorageFlags : u32 {
-        const DYNAMIC_STORAGE = gl::DYNAMIC_STORAGE_BIT;
+        const DYNAMIC = gl::DYNAMIC_STORAGE_BIT;
         const MAP_READ = gl::MAP_READ_BIT;
         const MAP_WRITE = gl::MAP_WRITE_BIT;
         const MAP_PERSISTENT = gl::MAP_PERSISTENT_BIT;
@@ -78,7 +79,7 @@ impl Buffer {
         }
     }
 
-    pub fn new_with_data(data: &[u8],
+    pub fn new_with_data<T>(data: &Vec<T>,
                          buffer_storage_flags: BufferStorageFlags) -> Buffer {
         let mut id: GLuint = 0;
 
@@ -86,11 +87,13 @@ impl Buffer {
             gl::CreateBuffers(1, &mut id);
             gl::NamedBufferStorage(
                 id,
-                data.len() as isize,
+                (data.len() * mem::size_of::<T>()) as isize,
                 data.as_ptr() as *const GLvoid,
                 buffer_storage_flags.bits()
             );
         }
+        let mut glerror = unsafe{gl::GetError()};
+        assert_eq!(glerror, gl::NO_ERROR);
 
         Buffer {
             id,
@@ -158,10 +161,10 @@ impl Buffer {
     }
 
     pub fn fill(&self, offset: isize, size: isize, data: &[u8]) {
-        assert!(self.storage_flags.intersects(BufferStorageFlags::DYNAMIC_STORAGE),
+        assert!(self.storage_flags.intersects(BufferStorageFlags::DYNAMIC),
                 "Cannot fill non-mapped buffer. \n \
                 Reason: Not able to call glBufferSubData(...).\n\
-                Hint: Create the buffer using BufferStorageFlags::DYNAMIC_STORAGE \
+                Hint: Create the buffer using BufferStorageFlags::DYNAMIC \
                 for non-mapped data updates.");
 
         unsafe {
