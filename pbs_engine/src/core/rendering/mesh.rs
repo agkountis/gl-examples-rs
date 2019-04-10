@@ -116,7 +116,7 @@ impl Mesh {
             gl::DrawElements(gl::TRIANGLES,
                              self.indices.len() as i32,
                              gl::UNSIGNED_INT,
-                             self.indices.as_ptr() as *const GLvoid);
+                             ptr::null());
 
             glerror = unsafe{gl::GetError()};
             assert_eq!(glerror, gl::NO_ERROR);

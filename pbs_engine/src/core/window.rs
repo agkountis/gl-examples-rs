@@ -1,10 +1,13 @@
 use glfw;
 use pbs_gl as gl;
+use gl::types::*;
 
 use std::sync::mpsc::Receiver;
+use std::ptr;
 use glfw::Context;
 use super::{WindowMode, Msaa, Version};
 use super::math::vector::UVec2;
+use std::ffi::CStr;
 
 pub struct Window {
     glfw: glfw::Glfw,
@@ -66,12 +69,46 @@ impl Window {
         window.set_key_polling(true);
         window.make_current();
 
+        unsafe {
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+            gl::Enable(gl::MULTISAMPLE);
+
+            gl::Viewport(0, 0, size.x as i32, size.y as i32);
+
+            if cfg!(debug_assertions) {
+                gl::Enable(gl::DEBUG_OUTPUT);
+                gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS);
+                gl::DebugMessageCallback(Self::debug_callback, ptr::null());
+            }
+        }
+
         Window {
             glfw,
             window,
             events,
             size
         }
+    }
+
+    extern "system" fn debug_callback(source: GLenum,
+                                      message_type: GLenum,
+                                      id: GLuint,
+                                      severity: GLenum,
+                                      length: GLsizei,
+                                      message: *const GLchar,
+                                      user_param: *mut GLvoid) {
+
+        let mut msg_severity = "";
+        if message_type == gl::DEBUG_TYPE_ERROR {
+            msg_severity = "** GL ERROR **"
+        }
+
+        let msg = unsafe { CStr::from_ptr(message) };
+
+        eprintln!("GL CALLBACK: {} type = {:?}, severity = {:?}, message = {:#?}",
+                  msg_severity, message_type, severity, msg )
+
     }
 
     pub fn handle_events(&mut self) {
