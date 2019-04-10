@@ -92,8 +92,6 @@ impl Buffer {
                 buffer_storage_flags.bits()
             );
         }
-        let mut glerror = unsafe{gl::GetError()};
-        assert_eq!(glerror, gl::NO_ERROR);
 
         Buffer {
             id,

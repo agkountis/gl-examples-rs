@@ -37,7 +37,7 @@ pub fn check_spirv_support() -> bool {
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
-pub enum ShaderType {
+pub enum ShaderStage {
     Vertex = gl::VERTEX_SHADER,
     TesselationControl = gl::TESS_CONTROL_SHADER,
     TesselationEvaluation = gl::TESS_EVALUATION_SHADER,
@@ -49,12 +49,12 @@ pub enum ShaderType {
 #[derive(Debug, Clone)]
 pub struct Shader {
     id: GLuint,
-    s_type: ShaderType
+    s_type: ShaderStage
 }
 
 impl Shader {
 
-    pub fn new_from_spirv(stage: ShaderType,
+    pub fn new_from_spirv(stage: ShaderStage,
                           entry_point: &str,
                           filename: &str) -> Result<Shader, String> {
 
@@ -120,7 +120,7 @@ impl Shader {
 
     }
 
-    pub fn new_from_text(stage: ShaderType, filename: &str) -> Result<Shader, String> {
+    pub fn new_from_text(stage: ShaderStage, filename: &str) -> Result<Shader, String> {
 
         let mut text_source = String::new();
 
@@ -138,8 +138,6 @@ impl Shader {
 
         let id: GLuint;
         let c_string_source = unsafe{ CString::new(text_source).unwrap() };
-
-        println!("{:?}", c_string_source);
 
         unsafe {
             id = gl::CreateShader(stage as u32);
@@ -184,7 +182,7 @@ impl Shader {
         self.id
     }
 
-    pub fn get_type(&self) -> ShaderType {
+    pub fn get_type(&self) -> ShaderStage {
         self.s_type
     }
 

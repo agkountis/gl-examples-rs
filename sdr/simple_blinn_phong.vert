@@ -13,7 +13,7 @@ layout(location = 5) uniform mat4 model;
 layout(location = 6) uniform mat4 view;
 layout(location = 7) uniform mat4 projection;
 
-layout(location = 2) out vec2 outTexcoord;
+layout(location = 0) out vec2 outTexcoord;
 
 out gl_PerVertex {
     vec4 gl_Position;

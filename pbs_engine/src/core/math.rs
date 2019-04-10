@@ -53,10 +53,10 @@ pub mod matrix {
     }
 
     pub fn perspective(win_width: u32, win_height: u32, fov_deg: u32, near: f32, far: f32) -> Mat4 {
-        glm::perspective(win_height as f32 / win_height as f32,
+        glm::perspective(win_width as f32 / win_height as f32,
                          fov_deg as f32 * glm::pi::<f32>() / 180.0,
                          near,
-                         far )
+                         far)
     }
 }
 

@@ -4,7 +4,7 @@ use std::ffi::CString;
 use std::ptr;
 
 use super::shader::Shader;
-use crate::core::rendering::shader::ShaderType;
+use crate::core::rendering::shader::ShaderStage;
 use crate::core::math::matrix::Mat4;
 use crate::core::math::utilities;
 use crate::core::rendering::texture::Texture2D;
@@ -14,7 +14,7 @@ use crate::core::rendering::sampler::Sampler;
 
 pub struct ProgramPipeline {
     id: GLuint,
-    shaders: [Option<(ShaderType, GLuint)>; 6],
+    shaders: [Option<(ShaderStage, GLuint)>; 6],
     shader_programs: [Option<GLuint>; 6]
 }
 
@@ -49,8 +49,6 @@ impl ProgramPipeline {
     pub fn build(mut self) -> Result<Self, String> {
 
         unsafe {
-            gl::BindProgramPipeline(self.id);
-
             for option in self.shaders.iter() {
                 match option {
                     Some(shader) => {
@@ -93,44 +91,43 @@ impl ProgramPipeline {
                         }
 
                         let idx = Self::shader_type_to_array_index(shader.0);
-                        self.shader_programs[idx] = Some(program_id)
+                        self.shader_programs[idx] = Some(program_id);
+
+                        gl::UseProgramStages(self.id,
+                                             Self::shader_stage_to_gl_bitfield(shader.0),
+                                             program_id)
                     },
                     _ => {}
                 }
             }
         }
 
-        assert_eq!(unsafe{gl::GetError()}, gl::NO_ERROR);
-
         Ok(self)
     }
 
-    pub fn set_matrix4f(&self, name: &str, value: &Mat4, stage: ShaderType) -> &Self {
+    pub fn set_matrix4f(&self, name: &str, value: &Mat4, stage: ShaderStage) -> &Self {
 
         let (program_id, location) = self.get_shader_stage_id_and_resource_location(stage,
                                                                                     gl::UNIFORM,
                                                                                     name)
             .expect("Failed to get program id or uniform location");
 
-        let mut ptr: i32 = 0;
         unsafe {
-            gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut ptr);
             gl::ProgramUniformMatrix4fv(program_id,
                                         location,
                                         1,
                                         gl::FALSE,
                                         utilities::value_ptr(value))
         }
-        let glerror = unsafe{gl::GetError()};
-        assert_eq!(glerror, gl::NO_ERROR);
+
         self
     }
 
     pub fn set_texture_2d(&self,
-                        name: &str,
-                        texture: Texture2D,
-                        sampler: Sampler,
-                        stage: ShaderType) -> &Self {
+                          name: &str,
+                          texture: Texture2D,
+                          sampler: Sampler,
+                          stage: ShaderStage) -> &Self {
         let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
                                                                                     gl::UNIFORM,
                                                                                     name)
@@ -144,7 +141,7 @@ impl ProgramPipeline {
         self
     }
 
-    pub fn set_integer(&self, name: &str, value: i32, stage: ShaderType) {
+    pub fn set_integer(&self, name: &str, value: i32, stage: ShaderStage) {
         let (program_id, location) = self.get_shader_stage_id_and_resource_location(stage,
                                                                                     gl::UNIFORM,
                                                                                     name)
@@ -155,19 +152,31 @@ impl ProgramPipeline {
         }
     }
 
-    fn shader_type_to_array_index(shader_type: ShaderType) -> usize {
+    pub fn bind(&self) {
+        unsafe {
+            gl::BindProgramPipeline(self.id);
+        }
+    }
+
+    pub fn unbind(&self) {
+        unsafe {
+            gl::BindProgramPipeline(0);
+        }
+    }
+
+    fn shader_type_to_array_index(shader_type: ShaderStage) -> usize {
         match shader_type {
-            ShaderType::Vertex => 0,
-            ShaderType::TesselationControl => 1,
-            ShaderType::TesselationEvaluation => 2,
-            ShaderType::Geometry => 3,
-            ShaderType::Fragment => 4,
-            ShaderType::Compute => 5,
+            ShaderStage::Vertex => 0,
+            ShaderStage::TesselationControl => 1,
+            ShaderStage::TesselationEvaluation => 2,
+            ShaderStage::Geometry => 3,
+            ShaderStage::Fragment => 4,
+            ShaderStage::Compute => 5,
         }
     }
 
     fn get_shader_stage_id_and_resource_location(&self,
-                                                 stage: ShaderType,
+                                                 stage: ShaderStage,
                                                  resource_type: GLenum,
                                                  name: &str) -> Result<(GLuint, GLint), String> {
         let program_index = Self::shader_type_to_array_index(stage);
@@ -183,8 +192,6 @@ impl ProgramPipeline {
         let location = unsafe { gl::GetProgramResourceLocation(program_id,
                                                                resource_type,
                                                                c_str.as_ptr() as *const GLchar) };
-        let glerror = unsafe{gl::GetError()};
-        assert_eq!(glerror, gl::NO_ERROR);
 
         if location < 0 {
             return Err(format!("Uniform: {} is not active or does not exist in shader stage {:?} with ID {}", name, stage, program_id))
@@ -193,19 +200,14 @@ impl ProgramPipeline {
         Ok((program_id, location))
     }
 
-    pub fn bind(&self) {
-        unsafe {
-            gl::BindProgramPipeline(self.id);
-            let glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
-        }
-    }
-
-    pub fn unbind(&self) {
-        unsafe {
-            gl::BindProgramPipeline(0);
-            let glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
+    fn shader_stage_to_gl_bitfield(stage: ShaderStage) -> GLbitfield {
+        match stage {
+            ShaderStage::Vertex => gl::VERTEX_SHADER_BIT,
+            ShaderStage::TesselationControl => gl::TESS_CONTROL_SHADER_BIT,
+            ShaderStage::TesselationEvaluation => gl::TESS_EVALUATION_SHADER_BIT,
+            ShaderStage::Geometry => gl::GEOMETRY_SHADER_BIT,
+            ShaderStage::Fragment => gl::FRAGMENT_SHADER_BIT,
+            ShaderStage::Compute => gl::COMPUTE_SHADER_BIT,
         }
     }
 }

@@ -1,4 +1,3 @@
-use super::{ Settings, window::Window };
 use pbs_gl as gl;
 use crate::core::math::vector::Vec4;
 

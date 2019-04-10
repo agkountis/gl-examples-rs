@@ -2,7 +2,7 @@ use pbs_gl as gl;
 use gl::types::*;
 
 use crate::core::math::vector::{Vec2, Vec3, Vec4};
-use crate::core::rendering::buffer::{ Buffer, BufferStorageFlags };
+use crate::core::rendering::buffer::{Buffer, BufferStorageFlags};
 use std::mem;
 use std::ptr;
 
@@ -38,52 +38,35 @@ impl Mesh {
         let mut vao: GLuint = 0;
         unsafe {
             gl::CreateVertexArrays(1, &mut vao);
-            let mut glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             gl::VertexArrayVertexBuffer(vao, 0, vbo.get_id(), 0, mem::size_of::<Vertex>() as i32);
             gl::VertexArrayElementBuffer(vao, ibo.get_id());
-
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             gl::EnableVertexArrayAttrib(vao, 0); //positions
             gl::EnableVertexArrayAttrib(vao, 1); //normals
             gl::EnableVertexArrayAttrib(vao, 2); //tangents
             gl::EnableVertexArrayAttrib(vao, 3); //texture coordinates
             gl::EnableVertexArrayAttrib(vao, 4); //colors
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             // Specify format for the position attribute (0)
             gl::VertexArrayAttribFormat(vao, 0, 3, gl::FLOAT, gl::FALSE,
                                         offset_of!(Vertex, position) as u32);
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             // Specify format for the normal attribute (1)
             gl::VertexArrayAttribFormat(vao, 1, 3, gl::FLOAT, gl::FALSE,
                                         offset_of!(Vertex, normal) as u32);
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             // Specify format for the tangent attribute (2)
             gl::VertexArrayAttribFormat(vao, 2, 3, gl::FLOAT, gl::FALSE,
                                         offset_of!(Vertex, tangent) as u32);
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             // Specify format for the texture coordinate attribute (3)
             gl::VertexArrayAttribFormat(vao, 3, 2, gl::FLOAT, gl::FALSE,
                                         offset_of!(Vertex, tex_coord) as u32);
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             // Specify format for the color attribute (4)
             gl::VertexArrayAttribFormat(vao, 4, 4, gl::FLOAT, gl::FALSE,
                                         offset_of!(Vertex, color) as u32);
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             // Associate attribute bindings with the VBO binding in the VAO.
             // This VAO has only 1 VBO so it is located in binding 0.
@@ -92,9 +75,6 @@ impl Mesh {
             gl::VertexArrayAttribBinding(vao, 2, 0);
             gl::VertexArrayAttribBinding(vao, 3, 0);
             gl::VertexArrayAttribBinding(vao, 4, 0);
-
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
         }
 
         Mesh {
@@ -110,16 +90,11 @@ impl Mesh {
     pub fn draw(&self) {
         unsafe {
             gl::BindVertexArray(self.vao);
-            let mut glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             gl::DrawElements(gl::TRIANGLES,
                              self.indices.len() as i32,
                              gl::UNSIGNED_INT,
                              ptr::null());
-
-            glerror = unsafe{gl::GetError()};
-            assert_eq!(glerror, gl::NO_ERROR);
 
             gl::BindVertexArray(0);
         }
@@ -340,7 +315,6 @@ impl MeshUtilities {
             i+=6;
             j+=4;
         }
-
 
         Mesh::new(vertices, indices)
     }

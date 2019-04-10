@@ -91,26 +91,6 @@ impl Window {
         }
     }
 
-    extern "system" fn debug_callback(source: GLenum,
-                                      message_type: GLenum,
-                                      id: GLuint,
-                                      severity: GLenum,
-                                      length: GLsizei,
-                                      message: *const GLchar,
-                                      user_param: *mut GLvoid) {
-
-        let mut msg_severity = "";
-        if message_type == gl::DEBUG_TYPE_ERROR {
-            msg_severity = "** GL ERROR **"
-        }
-
-        let msg = unsafe { CStr::from_ptr(message) };
-
-        eprintln!("GL CALLBACK: {} type = {:?}, severity = {:?}, message = {:#?}",
-                  msg_severity, message_type, severity, msg )
-
-    }
-
     pub fn handle_events(&mut self) {
         self.glfw.poll_events();
 
@@ -138,6 +118,48 @@ impl Window {
 
     pub fn get_height(&self) -> u32 {
         self.size.y
+    }
+
+    extern "system" fn debug_callback(source: GLenum,
+                                      message_type: GLenum,
+                                      id: GLuint,
+                                      severity: GLenum,
+                                      length: GLsizei,
+                                      message: *const GLchar,
+                                      user_param: *mut GLvoid) {
+
+        let msg = unsafe { CStr::from_ptr(message) };
+
+        eprintln!("GL CALLBACK: type = {}, severity = {}, message = {:#?}",
+                  Self::message_type_to_str(message_type),
+                  Self::severity_to_str(severity),
+                  msg )
+
+    }
+
+    fn message_type_to_str(message_type: GLenum) -> &'static str {
+        match message_type {
+            gl::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "DEPRECATED BEHAVIOR",
+            gl::DEBUG_TYPE_ERROR => "ERROR",
+            gl::DEBUG_TYPE_MARKER => "MARKER",
+            gl::DEBUG_TYPE_OTHER => "OTHER",
+            gl::DEBUG_TYPE_PERFORMANCE => "PERFORMANCE",
+            gl::DEBUG_TYPE_POP_GROUP => "POP GROUP",
+            gl::DEBUG_TYPE_PORTABILITY => "PORTABILITY",
+            gl::DEBUG_TYPE_PUSH_GROUP => "PUSH GROUP",
+            gl::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "UNDEFINED BEHAVIOR",
+            _ => "!UNDEFINED ENUM!"
+        }
+    }
+
+    fn severity_to_str(severity: GLenum) -> &'static str {
+        match severity {
+            gl::DEBUG_SEVERITY_HIGH => "HIGH",
+            gl::DEBUG_SEVERITY_MEDIUM => "MEDIUM",
+            gl::DEBUG_SEVERITY_LOW => "LOW",
+            gl::DEBUG_SEVERITY_NOTIFICATION => "NOTIFICATION",
+            _ => "!UNDEFINED ENUM!"
+        }
     }
 
 }
