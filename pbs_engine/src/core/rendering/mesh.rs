@@ -5,6 +5,7 @@ use crate::core::math::vector::{Vec2, Vec3, Vec4};
 use crate::core::rendering::buffer::{Buffer, BufferStorageFlags};
 use std::mem;
 use std::ptr;
+use crate::core::rendering::Draw;
 
 
 #[derive(Debug)]
@@ -86,8 +87,10 @@ impl Mesh {
         }
     }
 
+}
 
-    pub fn draw(&self) {
+impl Draw for Mesh {
+    fn draw(&self) {
         unsafe {
             gl::BindVertexArray(self.vao);
 

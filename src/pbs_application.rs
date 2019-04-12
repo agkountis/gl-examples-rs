@@ -1,12 +1,16 @@
+use std::time::Instant;
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use pbs_engine::core::Settings;
-use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer};
+use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer, set_vieport};
 use pbs_engine::core::window::Window;
+use pbs_engine::core::rendering::Draw;
 use pbs_engine::core::rendering::shader::{Shader, ShaderStage};
 use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
 use pbs_engine::core::rendering::mesh::{Mesh, MeshUtilities};
 use pbs_engine::core::math::matrix::{Mat4, Vec3, translate, perspective, rotate};
 
-use std::time::Instant;
 
 struct RenderingData {
     mesh: Mesh,
@@ -36,7 +40,7 @@ impl RenderingData {
 pub struct Application<'a> {
     window: Window,
     settings: Settings<'a>,
-    data: RenderingData
+    data: Rc<RefCell<RenderingData>>
 }
 
 impl<'a> Application<'a> {
@@ -68,11 +72,11 @@ impl<'a> Application<'a> {
         Application {
             window,
             settings,
-            data: RenderingData::new(mesh,
-                                     vertex_shader,
-                                     fragment_shader,
-                                     m,
-                                     Mat4::identity(), p)
+            data: Rc::new(RefCell::new(RenderingData::new(mesh,
+                                                          vertex_shader,
+                                                          fragment_shader,
+                                                          m,
+                                                          Mat4::identity(), p)))
         }
     }
 
@@ -95,10 +99,20 @@ impl<'a> Application<'a> {
 
 impl<'a> RenderingApplication for Application<'a> {
     fn run(&mut self) {
+        let closure_data = Rc::clone(&self.data);
+        self.window.set_resize_callback(move |w, h| {
+            set_vieport(0, 0, w, h);
+            closure_data.borrow_mut().proj = perspective(w as u32,
+                                    h as u32,
+                                    60,
+                                    0.1,
+                                    100.0)
+        });
+
         let start = Instant::now();
         let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
 
-        self.data.prog.bind();
+        self.data.borrow().prog.bind();
 
         while !self.should_close() {
             let delta =  start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0 - prev_time;
@@ -111,11 +125,13 @@ impl<'a> RenderingApplication for Application<'a> {
     fn draw(&mut self) {
         clear_default_framebuffer(&self.get_settings().default_clear_color);
 
-        self.data.prog.set_matrix4f("model", &self.data.model, ShaderStage::Vertex);
-        self.data.prog.set_matrix4f("view", &self.data.view, ShaderStage::Vertex);
-        self.data.prog.set_matrix4f("projection", &self.data.proj, ShaderStage::Vertex);
+        let data = Rc::clone(&self.data);
 
-        self.data.mesh.draw();
+        data.borrow().prog.set_matrix4f("model", &data.borrow().model, ShaderStage::Vertex);
+        data.borrow().prog.set_matrix4f("view", &data.borrow().view, ShaderStage::Vertex);
+        data.borrow().prog.set_matrix4f("projection", &data.borrow().proj, ShaderStage::Vertex);
+
+        data.borrow().mesh.draw();
 
         self.swap_buffers()
     }
@@ -123,6 +139,9 @@ impl<'a> RenderingApplication for Application<'a> {
     fn update(&mut self, dt: f32) {
         self.handle_events();
 
-        self.data.model = rotate(&self.data.model, 2.0 * 360.0 * dt * 0.1, Vec3::new(1.0, 1.0, 0.0));
+        let m = rotate(&self.data.borrow().model,
+                       2.0 * 360.0 * dt * 0.1,
+                       Vec3::new(1.0, 1.0, 0.0));
+        self.data.borrow_mut().model = m;
     }
 }

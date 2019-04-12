@@ -23,8 +23,8 @@ fn main() {
         },
         window_size: UVec2::new(1024, 764),
         window_mode: WindowMode::Windowed,
-        msaa: Msaa::None,
-        vsync: false,
+        msaa: Msaa::X4,
+        vsync: true,
         default_clear_color: Vec4::new(0.2, 0.2, 0.2, 0.0),
     });
 

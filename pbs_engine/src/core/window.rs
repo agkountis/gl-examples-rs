@@ -4,16 +4,20 @@ use gl::types::*;
 
 use std::sync::mpsc::Receiver;
 use std::ptr;
+use std::ffi::CStr;
+
 use glfw::Context;
 use super::{WindowMode, Msaa, Version};
 use super::math::vector::UVec2;
-use std::ffi::CStr;
+
+
 
 pub struct Window {
     glfw: glfw::Glfw,
     window: glfw::Window,
     events: Receiver<(f64, glfw::WindowEvent)>,
-    size: UVec2
+    size: UVec2,
+    resize_callback: Option<Box<FnMut(i32, i32)>>
 }
 
 impl Window {
@@ -69,6 +73,8 @@ impl Window {
         window.set_key_polling(true);
         window.make_current();
 
+        window.set_framebuffer_size_polling(true);
+
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
@@ -87,7 +93,8 @@ impl Window {
             glfw,
             window,
             events,
-            size
+            size,
+            resize_callback: None
         }
     }
 
@@ -98,6 +105,11 @@ impl Window {
             match event {
                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
                     self.window.set_should_close(true)
+                },
+                glfw::WindowEvent::FramebufferSize(w, h) => {
+                    if let Some(resize_cb) = &mut self.resize_callback {
+                        resize_cb(w, h)
+                    }
                 }
                 _ => {}
             }
@@ -118,6 +130,11 @@ impl Window {
 
     pub fn get_height(&self) -> u32 {
         self.size.y
+    }
+
+    pub fn set_resize_callback<T>(&mut self, resize_callback: T)
+        where T: FnMut(i32, i32) + 'static {
+        self.resize_callback = Some(Box::new(resize_callback));
     }
 
     extern "system" fn debug_callback(source: GLenum,
@@ -161,5 +178,4 @@ impl Window {
             _ => "!UNDEFINED ENUM!"
         }
     }
-
 }
