@@ -25,7 +25,7 @@ fn main() {
         window_mode: WindowMode::Windowed,
         msaa: Msaa::X4,
         vsync: true,
-        default_clear_color: Vec4::new(0.2, 0.2, 0.2, 0.0),
+        default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
     });
 
     app.run()

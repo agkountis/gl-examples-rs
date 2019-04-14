@@ -79,7 +79,7 @@ impl Buffer {
         }
     }
 
-    pub fn new_with_data<T>(data: &Vec<T>,
+    pub fn new_with_data<T>(data: &[T],
                          buffer_storage_flags: BufferStorageFlags) -> Buffer {
         let mut id: GLuint = 0;
 

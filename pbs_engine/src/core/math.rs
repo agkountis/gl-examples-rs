@@ -27,7 +27,7 @@ pub mod quaternion {
 pub mod matrix {
     use nalgebra_glm as glm;
 
-    pub use super::vector::Vec3;
+    use super::vector::Vec3;
 
     pub type Mat3 = glm::Mat3;
     pub type Mat4 = glm::Mat4;

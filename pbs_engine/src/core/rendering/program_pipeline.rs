@@ -125,8 +125,8 @@ impl ProgramPipeline {
 
     pub fn set_texture_2d(&self,
                           name: &str,
-                          texture: Texture2D,
-                          sampler: Sampler,
+                          texture: &Texture2D,
+                          sampler: &Sampler,
                           stage: ShaderStage) -> &Self {
         let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
                                                                                     gl::UNIFORM,
@@ -193,9 +193,9 @@ impl ProgramPipeline {
                                                                resource_type,
                                                                c_str.as_ptr() as *const GLchar) };
 
-        if location < 0 {
-            return Err(format!("Uniform: {} is not active or does not exist in shader stage {:?} with ID {}", name, stage, program_id))
-        }
+//        if location < 0 {
+//            return Err(format!("Uniform: {} is not active or does not exist in shader stage {:?} with ID {}", name, stage, program_id))
+//        }
 
         Ok((program_id, location))
     }

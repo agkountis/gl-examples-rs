@@ -24,8 +24,6 @@ out gl_PerVertex {
 layout(location = 0) out vec3 t_OutlightDirection;
 layout(location = 1) out vec3 t_OutViewDirection;
 layout(location = 2) out vec2 outTexcoord;
-layout(location = 3) out vec3 outNormal;
-layout(location = 4) out vec3 outVertexColor;
 
 void main()
 {
@@ -33,13 +31,24 @@ void main()
     vec4 localVertexPosition = vec4(inPosition, 1.0);
     gl_Position = projection * view * model * localVertexPosition;
 
-    //Calculate the normal.
-    outNormal = normalize(mat3(view) * inNormal);
+    mat3 normalMatrix = transpose(inverse(mat3(view * model)));
 
-    vec3 tangent = normalize(mat3(view) * inTangent);
-    vec3 binormal = normalize(cross(outNormal, tangent));
+    //Calculate the normal. Bring it to view space
+    vec3 normal = normalMatrix * inNormal;
 
-    mat3 TBN = transpose(mat3(tangent, binormal, outNormal));
+    // Bring tangent to view space.
+    vec3 tangent = normalize(normalMatrix * inTangent);
+
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+
+    //Calculate the binormal
+    vec3 binormal = normalize(cross(normal, tangent));
+
+    // TBN originally transforms from tangent space to world space
+    // Inversing it will cause it to transform from whatever space the
+    // normals/binormals/tangets are in to tangent space.
+    // Note: TBN is orthogonal, so transposing it is equivalent to inverting it.
+    mat3 TBN = transpose(mat3(tangent, binormal, normal));
 
     //Move the vertex in view space.
     vec3 v_vertexPosition = (view * model * localVertexPosition).xyz;
@@ -47,13 +56,11 @@ void main()
     //Assign the view direction for output.
     t_OutViewDirection = TBN * -v_vertexPosition;
 
-    vec3 v_lightPosition = (vec4(0.0, 0.0, 2.0, 1.0)).xyz;
+    vec3 v_lightPosition = (view * vec4(0.0, 0.0, 1.0, 1.0)).xyz;
 
     //Calculate and assign the light direction for output.
-    t_OutlightDirection = TBN * (v_lightPosition - v_vertexPosition);
+    t_OutlightDirection = TBN * v_lightPosition;
 
     //Assign texture coorinates for output.
     outTexcoord = inTexcoord;
-
-    outVertexColor = inColor;
 }

@@ -79,6 +79,7 @@ impl Window {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
             gl::Enable(gl::MULTISAMPLE);
+            gl::Enable(gl::FRAMEBUFFER_SRGB);
 
             gl::Viewport(0, 0, size.x as i32, size.y as i32);
 
