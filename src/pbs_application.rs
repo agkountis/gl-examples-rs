@@ -1,6 +1,6 @@
 use std::time::Instant;
 use std::rc::Rc;
-use std::cell::{RefCell, Cell};
+use std::cell::Cell;
 
 use pbs_engine::core::Settings;
 use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer, set_vieport};
@@ -94,16 +94,16 @@ impl<'a> Application<'a> {
                             0.1,
                             500.0);
 
-        let albedo = Texture2D::new_from_file("assets/textures/brickwall.jpg", true)
+        let albedo = Texture2D::new_from_file("assets/textures/brickwall.jpg", true, true)
             .expect("Failed to load texture");
 
-        let specular = Texture2D::new_from_file("assets/textures/brickwall_spec.png", true)
+        let specular = Texture2D::new_from_file("assets/textures/brickwall_spec.png", false, true)
             .expect("Failed to load texture");
 
-        let normals = Texture2D::new_from_file("assets/textures/brickwall_normal.jpg", true)
+        let normals = Texture2D::new_from_file("assets/textures/brickwall_normal.jpg", false, true)
             .expect("Failed to load texture");
 
-        let ao = Texture2D::new_from_file("assets/textures/brickwall_ao.png", true)
+        let ao = Texture2D::new_from_file("assets/textures/brickwall_ao.png", false, true)
             .expect("Failed to load texture");
 
         let sampler = Sampler::new(MinificationFilter::LinearMipmapLinear,
@@ -163,9 +163,6 @@ impl<'a> RenderingApplication for Application<'a> {
             }
         });
 
-        let start = Instant::now();
-        let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
-
         self.data.prog.bind();
         self.data.prog.set_texture_2d("diffuse",
                                       &self.data.albedo,
@@ -186,6 +183,9 @@ impl<'a> RenderingApplication for Application<'a> {
                                       &self.data.ao,
                                       &self.data.sampler,
                                       ShaderStage::Fragment);
+
+        let start = Instant::now();
+        let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
 
         while !self.should_close() {
             let delta =  start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0 - prev_time;

@@ -74,17 +74,3 @@ pub enum DataFormat {
     BgraInteger = gl::BGRA_INTEGER
 }
 
-#[repr(u32)]
-#[derive(Debug, Clone, Copy)]
-pub enum TextureStorageFormat {
-    R8 = gl::R8,
-    R16 = gl::R16,
-    Rg8 = gl::RG8,
-    Rgb8 = gl::RGB8,
-    Srgb8 = gl::SRGB8,
-    Rgba8 = gl::RGBA8,
-    Srgb8A8 = gl::SRGB8_ALPHA8,
-    Rgb16f = gl::RGB16F,
-    Rgba32f = gl::RGBA32F
-}
-
