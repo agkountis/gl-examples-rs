@@ -1,10 +1,12 @@
 use image;
 use image::{DynamicImage, GenericImageView, ColorType};
 
+use gli_rs;
+use gli_rs as gli;
+
 use pbs_gl as gl;
 use gl::types::*;
 use std::path::Path;
-use std::f32;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -102,8 +104,7 @@ impl Texture2D {
                          is_srgb: bool,
                          generate_mipmaps: bool) -> Result<Self, String> {
 
-        let img = Utils::open_image_file(path);
-        match image::open(Path::new(path)) {
+        match Utils::open_image_file(path) {
             Ok(img) => {
                 let (width, height) = img.dimensions();
 
@@ -184,5 +185,30 @@ pub struct TextureCube {
 impl TextureCube {
 //    let a = image::hdr::HDRDecoder::new(io::BuffReader::new(File::open(&path).unwrap())).unwrap();
 //            let data = a.read_image_hdr();
+
+    pub fn new_from_file(path: &str, is_srgb: bool, generate_mipmaps: bool) -> Result<Self, String> {
+        // match gli::load::<gli::TextureCube>(Path::new(path)) {
+        //     Ok(Box<img>) => {
+        //         Ok(TextureCube {
+        //             id: 0
+        //         })
+        //     },
+        //     Err(e) => {
+        //         Err(e.to_string())
+        //     }
+        // }
+
+         Ok(TextureCube {
+                    id: 0
+                })
+    }
+}
+
+impl Drop for TextureCube {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteTextures(1, &self.id)
+        }
+    }
 }
 

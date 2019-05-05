@@ -10,4 +10,5 @@ glfw = "0.26.1"
 bitflags = "1.0.4"
 assimp = "0.3.1"
 image = "*"
+gli-rs = "0.3.1"
 pbs_gl = {path = "../pbs_gl"}
