@@ -3,7 +3,8 @@ use std::rc::Rc;
 use std::cell::Cell;
 
 use pbs_engine::core::Settings;
-use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer, set_vieport};
+use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer};
+use pbs_engine::core::rendering::state::StateManager;
 use pbs_engine::core::window::Window;
 use pbs_engine::core::rendering::Draw;
 use pbs_engine::core::rendering::shader::{Shader, ShaderStage};
@@ -11,7 +12,7 @@ use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
 use pbs_engine::core::rendering::mesh::{Mesh, MeshUtilities};
 use pbs_engine::core::math::matrix::{Mat4, translate, perspective, rotate};
 use pbs_engine::core::math::vector::{Vec3, Vec4};
-use pbs_engine::core::rendering::texture::Texture2D;
+use pbs_engine::core::rendering::texture::{Texture2D, TextureCube};
 use pbs_engine::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
 
 
@@ -106,6 +107,15 @@ impl<'a> Application<'a> {
         let ao = Texture2D::new_from_file("assets/textures/brickwall_ao.png", false, true)
             .expect("Failed to load texture");
 
+        let skybox = TextureCube::new_from_file("assets/textures/ktx/skybox/ibl_skybox.ktx")
+            .expect("Failed to load Skybox");
+
+        let irradiance = TextureCube::new_from_file("assets/textures/ktx/irradiance/ibl_irradiance.ktx")
+            .expect("Failed to load Irradiance map");
+
+        let radiance = TextureCube::new_from_file("assets/textures/ktx/radiance/ibl_radiance.ktx")
+            .expect("Failed to load Radiance map");
+
         let sampler = Sampler::new(MinificationFilter::LinearMipmapLinear,
                                    MagnificationFilter::Linear,
                                    WrappingMode::ClampToEdge,
@@ -150,16 +160,32 @@ impl<'a> Application<'a> {
 impl<'a> RenderingApplication for Application<'a> {
     fn run(&mut self) {
 
+        self.setup();
+
+        let start = Instant::now();
+        let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
+
+        while !self.should_close() {
+            let delta =  start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0 - prev_time;
+            prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
+            self.update(delta); //TODO: fix timer
+            self.pre_draw();
+            self.draw();
+            self.post_draw();
+        }
+    }
+
+    fn setup(&mut self) {
         self.window.set_resize_callback({
             let closure_data = Rc::clone(&self.data);
 
             move |w, h| {
-                set_vieport(0, 0, w, h);
+                StateManager::set_viewport(0, 0, w, h);
                 closure_data.proj.set(perspective(w as u32,
-                                                             h as u32,
-                                                             60,
-                                                             0.1,
-                                                             100.0))
+                                                  h as u32,
+                                                  60,
+                                                  0.1,
+                                                  100.0))
             }
         });
 
@@ -183,16 +209,18 @@ impl<'a> RenderingApplication for Application<'a> {
                                       &self.data.ao,
                                       &self.data.sampler,
                                       ShaderStage::Fragment);
+    }
 
-        let start = Instant::now();
-        let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
+    fn update(&mut self, dt: f32) {
+        self.handle_events();
 
-        while !self.should_close() {
-            let delta =  start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0 - prev_time;
-            prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
-            self.update(delta); //TODO: fix timer
-            self.draw();
-        }
+        self.data.model.set(rotate(&self.data.model.get(),
+                                   2.0 * 360.0 * dt * 0.01,
+                                   Vec3::new(1.0, 1.0, 0.0)));
+    }
+
+    fn pre_draw(&mut self) {
+
     }
 
     fn draw(&mut self) {
@@ -203,15 +231,9 @@ impl<'a> RenderingApplication for Application<'a> {
         self.data.prog.set_matrix4f("projection", &self.data.proj.get(), ShaderStage::Vertex);
 
         self.data.mesh.draw();
-
-        self.swap_buffers()
     }
 
-    fn update(&mut self, dt: f32) {
-        self.handle_events();
-
-        self.data.model.set(rotate(&self.data.model.get(),
-                                   2.0 * 360.0 * dt * 0.01,
-                                   Vec3::new(1.0, 1.0, 0.0)));
+    fn post_draw(&mut self) {
+        self.swap_buffers()
     }
 }

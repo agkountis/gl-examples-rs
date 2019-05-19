@@ -80,6 +80,7 @@ impl Window {
             gl::Enable(gl::CULL_FACE);
             gl::Enable(gl::MULTISAMPLE);
             gl::Enable(gl::FRAMEBUFFER_SRGB);
+            gl::Enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
 
             gl::Viewport(0, 0, size.x as i32, size.y as i32);
 

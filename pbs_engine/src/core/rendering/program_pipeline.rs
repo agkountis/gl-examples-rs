@@ -184,7 +184,8 @@ impl ProgramPipeline {
         let program_id = match self.shader_programs[program_index] {
             Some(id) => id,
             _ => {
-                return Err(format!("Shader of type {:?} is not present in the program pipeline", stage));
+                return Err(format!("Shader of type {:?} is not present in the program pipeline",
+                                   stage));
             }
         };
 
@@ -193,9 +194,10 @@ impl ProgramPipeline {
                                                                resource_type,
                                                                c_str.as_ptr() as *const GLchar) };
 
-//        if location < 0 {
-//            return Err(format!("Uniform: {} is not active or does not exist in shader stage {:?} with ID {}", name, stage, program_id))
-//        }
+        if location < 0 {
+            println!("Uniform: {} is not active or does not exist \
+            in shader stage {:?} with ID {}", name, stage, program_id)
+        }
 
         Ok((program_id, location))
     }

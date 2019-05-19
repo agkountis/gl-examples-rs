@@ -1,8 +1,8 @@
 use image;
 use image::{DynamicImage, GenericImageView, ColorType};
 
-use gli_rs;
 use gli_rs as gli;
+use gli::GliTexture;
 
 use pbs_gl as gl;
 use gl::types::*;
@@ -19,6 +19,8 @@ enum SizedTextureFormat {
     Rgba8 = gl::RGBA8,
     Srgb8A8 = gl::SRGB8_ALPHA8,
     Rgb16f = gl::RGB16F,
+    Rgba16f = gl::RGBA16F,
+    Rgb32f = gl::RGB32F,
     Rgba32f = gl::RGBA32F
 }
 
@@ -72,33 +74,6 @@ pub struct Texture2D {
 }
 
 impl Texture2D {
-
-//    pub fn new(width: u32, height: u32, format: SizedTextureFormat) -> Self {
-//        let mut id: GLuint = 0;
-//        unsafe {
-//            gl::CreateTextures(gl::TEXTURE_2D, 1, &id);
-//
-//            gl::TextureStorage2D(id, 1, format as u32, width as i32, height as i32)
-//        }
-//
-//        let mut img;
-//        match format {
-//            SizedTextureFormat::R8 => img = DynamicImage::new_luma8(width, height),
-//            SizedTextureFormat::R16 => img = DynamicImage::new_,
-//            SizedTextureFormat::Rg8 => {},
-//            SizedTextureFormat::Rgb8 => {},
-//            SizedTextureFormat::Srgb8 => {},
-//            SizedTextureFormat::Rgba8 => {},
-//            SizedTextureFormat::Srgb8A8 => {},
-//            SizedTextureFormat::Rgb16f => {},
-//            SizedTextureFormat::Rgba32f => {},
-//        }
-//
-//        Texture2D {
-//            id: id,
-//            image: DynamicImage::
-//        }
-//    }
 
     pub fn new_from_file(path: &str,
                          is_srgb: bool,
@@ -183,24 +158,91 @@ pub struct TextureCube {
 }
 
 impl TextureCube {
-//    let a = image::hdr::HDRDecoder::new(io::BuffReader::new(File::open(&path).unwrap())).unwrap();
-//            let data = a.read_image_hdr();
 
-    pub fn new_from_file(path: &str, is_srgb: bool, generate_mipmaps: bool) -> Result<Self, String> {
-        // match gli::load::<gli::TextureCube>(Path::new(path)) {
-        //     Ok(Box<img>) => {
-        //         Ok(TextureCube {
-        //             id: 0
-        //         })
-        //     },
-        //     Err(e) => {
-        //         Err(e.to_string())
-        //     }
-        // }
+    pub fn new_from_file(path: &str) -> Result<Self, String> {
+        let result: gli::Result<gli::TextureCube> = gli::load(Path::new(path));
+         match result {
+             Ok(tex) => {
 
-         Ok(TextureCube {
-                    id: 0
-                })
+                 println!("Cube load ok!");
+                 println!("KTX Texture info:");
+                 println!("\tExtent: ({}, {})", tex.extent(0).width, tex.extent(0).height);
+                 println!("\tFaces  count: {}", tex.faces());
+                 println!("\tLayers count: {}", tex.layers());
+                 println!("\tLevels count: {}", tex.levels());
+                 println!("\tSize: {}", tex.size());
+                 println!("\tAddress: {:?}", tex.data());
+                 println!("\tFormat: {}", tex.format());
+                 println!("\tTarget: {}", tex.target());
+                 println!();
+
+                 let (internal_format, external_format, data_type) =
+                     Self::translate_gli_format_info(tex.format());
+
+
+                 let mut id: GLuint = 0;
+                 unsafe {
+                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
+
+                     let width = tex.extent(0).width;
+                     let height = tex.extent(0).height;
+                     gl::TextureStorage2D(id,
+                                          tex.levels() as i32,
+                                          internal_format as u32,
+                                          tex.extent(0).width as i32,
+                                          tex.extent(0).height as i32);
+
+                     for layer in 0..tex.layers() {
+
+                         for face in 0..tex.faces() {
+
+                             let gl_face = gl::TEXTURE_CUBE_MAP_POSITIVE_X + face as u32;
+                             let face_tex = tex.get_face(face);
+
+                             for level in 0..tex.levels() {
+
+                                 let image = face_tex.get_level(level);
+
+                                 // Cubemaps + DSA = TextureSubImage3D using zOffset as the face index
+                                 gl::TextureSubImage3D(id,
+                                                       level as i32,
+                                                       0,
+                                                       0,
+                                                       face as i32,
+                                                       image.extent().width as i32,
+                                                       image.extent().height as i32,
+                                                       1,
+                                                       external_format as u32,
+                                                       data_type,
+                                                       image.data());
+                             }
+                         }
+                     }
+                 }
+
+                 Ok(TextureCube {
+                     id
+                 })
+             },
+             Err(e) => {
+                 Err(e.to_string())
+             }
+         }
+    }
+
+    pub fn get_id(&self) -> GLuint {
+        self.id
+    }
+
+    fn translate_gli_format_info(format: gli::Format) -> (SizedTextureFormat, TextureFormat, GLenum) {
+        match format {
+            gli::Format::RGB16_SFLOAT_PACK16 => (SizedTextureFormat::Rgb16f, TextureFormat::Rgb, gl::HALF_FLOAT),
+            gli::Format::RGBA16_SFLOAT_PACK16 => (SizedTextureFormat::Rgba16f, TextureFormat::Rgba, gl::HALF_FLOAT),
+            gli::Format::RGB8_UNORM_PACK8 => (SizedTextureFormat::Rgb8, TextureFormat::Rgb, gl::UNSIGNED_INT),
+            gli::Format::RGBA32_SFLOAT_PACK32 => (SizedTextureFormat::Rgba32f, TextureFormat::Rgba, gl::FLOAT),
+            gli::Format::RGB32_SFLOAT_PACK32 => (SizedTextureFormat::Rgb32f, TextureFormat::Rgb, gl::FLOAT),
+            _ => (SizedTextureFormat::Rgba8, TextureFormat::Rgba, gl::UNSIGNED_INT)
+        }
     }
 }
 
