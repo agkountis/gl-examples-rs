@@ -10,7 +10,7 @@ use std::path::Path;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
-enum SizedTextureFormat {
+pub enum SizedTextureFormat {
     R8 = gl::R8,
     R16 = gl::R16,
     Rg8 = gl::RG8,
@@ -21,7 +21,14 @@ enum SizedTextureFormat {
     Rgb16f = gl::RGB16F,
     Rgba16f = gl::RGBA16F,
     Rgb32f = gl::RGB32F,
-    Rgba32f = gl::RGBA32F
+    Rgba32f = gl::RGBA32F,
+    Depth16 = gl::DEPTH_COMPONENT16,
+    Depth24 = gl::DEPTH_COMPONENT24,
+    Depth32 = gl::DEPTH_COMPONENT32,
+    Depth32f = gl::DEPTH_COMPONENT32F,
+    Depth32fStencil8 = gl::DEPTH32F_STENCIL8,
+    Depth24Stencil8 = gl::DEPTH24_STENCIL8,
+    StencilIndex8 = gl::STENCIL_INDEX8
 }
 
 #[repr(u32)]

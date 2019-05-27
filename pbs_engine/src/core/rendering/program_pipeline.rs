@@ -7,9 +7,8 @@ use super::shader::Shader;
 use crate::core::rendering::shader::ShaderStage;
 use crate::core::math::matrix::Mat4;
 use crate::core::math::utilities;
-use crate::core::rendering::texture::Texture2D;
+use crate::core::rendering::texture::{Texture2D, TextureCube};
 use crate::core::rendering::sampler::Sampler;
-
 
 
 pub struct ProgramPipeline {
@@ -129,8 +128,26 @@ impl ProgramPipeline {
                           sampler: &Sampler,
                           stage: ShaderStage) -> &Self {
         let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
-                                                                                    gl::UNIFORM,
-                                                                                    name)
+                                                                           gl::UNIFORM,
+                                                                           name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe {
+            gl::BindTextureUnit(location as GLuint, texture.get_id());
+            gl::BindSampler(location as GLuint, sampler.id)
+        }
+
+        self
+    }
+
+    pub fn set_texture_cube(&self,
+                            name: &str,
+                            texture: &TextureCube,
+                            sampler: &Sampler,
+                            stage: ShaderStage) -> &Self {
+        let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
+                                                                           gl::UNIFORM,
+                                                                           name)
             .expect("Failed to get program id or uniform location");
 
         unsafe {

@@ -1,4 +1,3 @@
-use std::time::Instant;
 use std::rc::Rc;
 use std::cell::Cell;
 
@@ -6,14 +5,16 @@ use pbs_engine::core::Settings;
 use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer};
 use pbs_engine::core::rendering::state::StateManager;
 use pbs_engine::core::window::Window;
+use pbs_engine::core::timer::Timer;
 use pbs_engine::core::rendering::Draw;
 use pbs_engine::core::rendering::shader::{Shader, ShaderStage};
 use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
 use pbs_engine::core::rendering::mesh::{Mesh, MeshUtilities};
 use pbs_engine::core::math::matrix::{Mat4, translate, perspective, rotate};
-use pbs_engine::core::math::vector::{Vec3, Vec4};
-use pbs_engine::core::rendering::texture::{Texture2D, TextureCube};
+use pbs_engine::core::math::vector::{Vec3, Vec4, UVec2};
+use pbs_engine::core::rendering::texture::{Texture2D, TextureCube, SizedTextureFormat};
 use pbs_engine::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
+use pbs_engine::core::rendering::framebuffer::{Framebuffer, FramebufferAttachmentCreateInfo};
 
 
 struct RenderingData {
@@ -66,6 +67,7 @@ impl RenderingData {
 pub struct Application<'a> {
     window: Window,
     settings: Settings<'a>,
+    timer: Timer,
     data: Rc<RenderingData>
 }
 
@@ -123,9 +125,19 @@ impl<'a> Application<'a> {
                                    WrappingMode::ClampToEdge,
                                    Vec4::new(0.0, 0.0, 0.0, 0.0));
 
+        let fb = Framebuffer::new(vec![
+            FramebufferAttachmentCreateInfo::new(UVec2::new(512, 512),
+                                                 SizedTextureFormat::Rgba16f),
+            FramebufferAttachmentCreateInfo::new(UVec2::new(512, 512),
+                                                 SizedTextureFormat::Depth24Stencil8)
+        ]).unwrap_or_else(|error|{
+            panic!("Framebuffer creation error: {}", error)
+        });
+
         Application {
             window,
             settings,
+            timer: Timer::new(),
             data: Rc::new(RenderingData::new(mesh,
                                              vertex_shader,
                                              fragment_shader,
@@ -162,13 +174,9 @@ impl<'a> RenderingApplication for Application<'a> {
 
         self.setup();
 
-        let start = Instant::now();
-        let mut prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
-
         while !self.should_close() {
-            let delta =  start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0 - prev_time;
-            prev_time = start.elapsed().as_secs() as f32 + start.elapsed().subsec_nanos() as f32 / 1_000_000_000.0;
-            self.update(delta); //TODO: fix timer
+            let delta = self.timer.get_delta();
+            self.update(delta);
             self.pre_draw();
             self.draw();
             self.post_draw();

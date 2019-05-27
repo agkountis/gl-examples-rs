@@ -74,3 +74,14 @@ pub enum DataFormat {
     BgraInteger = gl::BGRA_INTEGER
 }
 
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum DepthFormat {
+    Depth16 = gl::DEPTH_COMPONENT16,
+    Depth24 = gl::DEPTH_COMPONENT24,
+    Depth32 = gl::DEPTH_COMPONENT32,
+    Depth32f = gl::DEPTH_COMPONENT32F,
+    Depth32fStencil8 = gl::DEPTH32F_STENCIL8,
+    Depth24Stencil8 = gl::DEPTH24_STENCIL8,
+    StencilIndex8 = gl::STENCIL_INDEX8
+}

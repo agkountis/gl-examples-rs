@@ -12,6 +12,7 @@ pub mod window;
 pub mod scene;
 pub mod camera;
 pub mod entity;
+pub mod timer;
 
 use self::math::vector::UVec2;
 use crate::core::math::vector::Vec4;
@@ -46,4 +47,23 @@ pub struct Settings<'a> {
     pub msaa: Msaa,
     pub vsync: bool,
     pub default_clear_color: Vec4
+}
+
+#[derive(Debug)]
+pub struct Rectangle {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32
+}
+
+impl Rectangle {
+    pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        Rectangle {
+            x,
+            y,
+            width,
+            height
+        }
+    }
 }
