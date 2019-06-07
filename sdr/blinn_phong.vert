@@ -18,9 +18,13 @@ out gl_PerVertex {
 };
 
 // Varying variables
-// prefixes: m -> model space
-//           v -> view space
-//           t -> tangent space
+// prefixes: m_ -> model space
+//           v_ -> view space
+//           t_ -> tangent space
+//layout(location = 0) out vec3 t_OutlightDirection;
+//layout(location = 1) out vec3 t_OutViewDirection;
+//layout(location = 2) out vec2 outTexcoord;
+
 out VsOut {
     vec3 tLightDirection;
     vec3 tViewDirection;
@@ -56,11 +60,13 @@ void main()
     vec3 v_vertexPosition = (view * model * localVertexPosition).xyz;
 
     //Assign the view direction for output.
+    //    t_OutViewDirection = TBN * -v_vertexPosition;
     vsOut.tViewDirection = TBN * -v_vertexPosition;
 
     vec3 v_lightPosition = (view * vec4(0.0, 0.0, 1.0, 1.0)).xyz;
 
     //Calculate and assign the light direction for output.
+    //    t_OutlightDirection = TBN * v_lightPosition;
     vsOut.tLightDirection = TBN * v_lightPosition;
 
     //Assign texture coorinates for output.

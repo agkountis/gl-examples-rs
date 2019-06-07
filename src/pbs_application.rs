@@ -14,7 +14,8 @@ use pbs_engine::core::math::matrix::{Mat4, translate, perspective, rotate};
 use pbs_engine::core::math::vector::{Vec3, Vec4, UVec2};
 use pbs_engine::core::rendering::texture::{Texture2D, TextureCube, SizedTextureFormat};
 use pbs_engine::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
-use pbs_engine::core::rendering::framebuffer::{Framebuffer, FramebufferAttachmentCreateInfo};
+use pbs_engine::core::rendering::framebuffer::{Framebuffer, FramebufferAttachmentCreateInfo, AttachmentType};
+use pbs_engine::core::rendering::shader::ShaderStage::Fragment;
 
 
 struct RenderingData {
@@ -27,7 +28,8 @@ struct RenderingData {
     specular: Texture2D,
     normals: Texture2D,
     ao: Texture2D,
-    sampler: Sampler
+    sampler: Sampler,
+    fb: Framebuffer
 }
 
 impl RenderingData {
@@ -42,7 +44,8 @@ impl RenderingData {
                specular: Texture2D,
                normals: Texture2D,
                ao: Texture2D,
-               sampler: Sampler) -> RenderingData {
+               sampler: Sampler,
+               fb: Framebuffer) -> RenderingData {
 
         let prog = ProgramPipeline::new().add_shader(&vert)
             .add_shader(&frag)
@@ -58,7 +61,8 @@ impl RenderingData {
             specular,
             normals,
             ao,
-            sampler
+            sampler,
+            fb
         }
     }
 
@@ -82,10 +86,10 @@ impl<'a> Application<'a> {
                                  &settings.msaa);
 
         let vertex_shader = Shader::new_from_text(ShaderStage::Vertex,
-                                              "sdr/pbs.vert").unwrap();
+                                              "sdr/blinn_phong.vert").unwrap();
 
         let fragment_shader = Shader::new_from_text(ShaderStage::Fragment,
-                                                "sdr/pbs.frag").unwrap();
+                                                "sdr/blinn_phong.frag").unwrap();
 
         let mesh = MeshUtilities::generate_cube(1.0);
 
@@ -125,14 +129,16 @@ impl<'a> Application<'a> {
                                    WrappingMode::ClampToEdge,
                                    Vec4::new(0.0, 0.0, 0.0, 0.0));
 
-        let fb = Framebuffer::new(vec![
-            FramebufferAttachmentCreateInfo::new(UVec2::new(512, 512),
-                                                 SizedTextureFormat::Rgba16f),
-            FramebufferAttachmentCreateInfo::new(UVec2::new(512, 512),
-                                                 SizedTextureFormat::Depth24Stencil8)
-        ]).unwrap_or_else(|error|{
-            panic!("Framebuffer creation error: {}", error)
-        });
+        let fb = Framebuffer::new(UVec2::new(window.get_width(), window.get_height()),
+                                  vec![
+                                      FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
+                                                 AttachmentType::Texture),
+                                      FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Depth24Stencil8,
+                                                 AttachmentType::Renderbuffer)
+                                  ])
+            .unwrap_or_else(|error|{
+                panic!("Framebuffer creation error: {}", error)
+            });
 
         Application {
             window,
@@ -148,7 +154,8 @@ impl<'a> Application<'a> {
                                              specular,
                                              normals,
                                              ao,
-                                             sampler))
+                                             sampler,
+                                             fb))
         }
     }
 
@@ -228,20 +235,28 @@ impl<'a> RenderingApplication for Application<'a> {
     }
 
     fn pre_draw(&mut self) {
-
+        self.data.fb.bind();
     }
 
     fn draw(&mut self) {
         clear_default_framebuffer(&self.get_settings().default_clear_color);
 
-        self.data.prog.set_matrix4f("model", &self.data.model.get(), ShaderStage::Vertex);
-        self.data.prog.set_matrix4f("view", &self.data.view.get(), ShaderStage::Vertex);
-        self.data.prog.set_matrix4f("projection", &self.data.proj.get(), ShaderStage::Vertex);
+        self.data.prog.set_matrix4f("model",
+                                    &self.data.model.get(),
+                                    ShaderStage::Vertex);
+        self.data.prog.set_matrix4f("view",
+                                    &self.data.view.get(),
+                                    ShaderStage::Vertex);
+        self.data.prog.set_matrix4f("projection",
+                                    &self.data.proj.get(),
+                                    ShaderStage::Vertex);
 
         self.data.mesh.draw();
     }
 
     fn post_draw(&mut self) {
+        self.data.fb.unbind();
+        Framebuffer::blit_to_default(&self.data.fb, UVec2::new(self.window.get_width(), self.window.get_height()));
         self.swap_buffers()
     }
 }

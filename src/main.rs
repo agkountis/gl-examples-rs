@@ -21,7 +21,7 @@ fn main() {
             minor: 5,
             patch: 0,
         },
-        window_size: UVec2::new(1024, 764),
+        window_size: UVec2::new(1920, 1080),
         window_mode: WindowMode::Windowed,
         msaa: Msaa::X4,
         vsync: true,
