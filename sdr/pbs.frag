@@ -4,6 +4,7 @@
 const float EPSILON = 0.001;
 const float F0_DIELECTRIC = 0.04;
 const float PI = 3.14159265359;
+const float ONE_OVER_PI = 0.318309886;
 
 in VsOut {
     vec3 mLightDirection;
@@ -84,9 +85,9 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0)
 
 float DistributionGGX(float NdotH, float roughness)
 {
-    float a      = roughness*roughness;
-    float a2     = a*a;
-    float NdotH2 = NdotH*NdotH;
+    float a      = roughness * roughness;
+    float a2     = a * a;
+    float NdotH2 = NdotH * NdotH;
 
     float num   = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
@@ -97,8 +98,8 @@ float DistributionGGX(float NdotH, float roughness)
 
 float GeometrySchlickGGX(float NdotV, float roughness)
 {
-    float r = (roughness + 1.0);
-    float k = (r*r) / 8.0;
+    float r = roughness + 1.0;
+    float k = r * r * 0.125; // 1.0 / 8.0 = 0.125
 
     float num   = NdotV;
     float denom = NdotV * (1.0 - k) + k;
@@ -128,7 +129,7 @@ vec3 BRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metallic, float ro
     float G = GeometrySmith(NdotV, NdotL, roughness);
 
     vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * clamp(dot(N, V), 0.0, 1.0) * clamp(dot(N, L), 0.0, 1.0);
+    float denominator = 4.0 * NdotV * NdotL;
 
     vec3 specular = numerator / max(denominator, EPSILON);
 
@@ -136,7 +137,7 @@ vec3 BRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metallic, float ro
     vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-    return (kD * albedo / PI + specular) * lightColor * NdotL;
+    return (kD * albedo * ONE_OVER_PI + specular) * lightColor * NdotL;
 }
 
 // --------------------
