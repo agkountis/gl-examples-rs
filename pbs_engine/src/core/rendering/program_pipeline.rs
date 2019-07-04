@@ -9,6 +9,7 @@ use crate::core::math::matrix::Mat4;
 use crate::core::math::utilities;
 use crate::core::rendering::texture::{Texture2D, TextureCube};
 use crate::core::rendering::sampler::Sampler;
+use crate::core::math::vector::Vec3;
 
 
 pub struct ProgramPipeline {
@@ -37,7 +38,7 @@ impl ProgramPipeline {
         let idx = Self::shader_type_to_array_index(shader.get_type());
 
         if let Some(ref sdr) = self.shaders[idx] {
-            eprintln!("Shader of type {:?} already exists in the program pipeline... Replacing...", shader.get_type())
+            println!("Shader of type {:?} already exists in the program pipeline... Replacing...", shader.get_type())
         }
 
         self.shaders[idx] = Some((shader.get_type(), shader.get_id()));
@@ -49,59 +50,69 @@ impl ProgramPipeline {
 
         unsafe {
             for option in self.shaders.iter() {
-                match option {
-                    Some(shader) => {
-                        let program_id = gl::CreateProgram();
+                if let Some(shader) = option {
+                    let program_id = gl::CreateProgram();
 
-                        //must be called before linking
-                        gl::ProgramParameteri(program_id, gl::PROGRAM_SEPARABLE, gl::TRUE as i32);
+                    //must be called before linking
+                    gl::ProgramParameteri(program_id, gl::PROGRAM_SEPARABLE, gl::TRUE as i32);
 
-                        gl::AttachShader(program_id, shader.1);
+                    gl::AttachShader(program_id, shader.1);
 
-                        gl::LinkProgram(program_id);
+                    gl::LinkProgram(program_id);
 
-                        let mut link_status: GLint = 0;
-                        gl::GetProgramiv(program_id, gl::LINK_STATUS, &mut link_status);
+                    let mut link_status: GLint = 0;
+                    gl::GetProgramiv(program_id, gl::LINK_STATUS, &mut link_status);
 
-                        if link_status != gl::TRUE as i32 {
-                            let mut message_size = 0;
+                    if link_status != gl::TRUE as i32 {
+                        let mut message_size = 0;
 
-                            gl::GetProgramiv(program_id,
-                                             gl::INFO_LOG_LENGTH,
-                                             &mut message_size);
+                        gl::GetProgramiv(program_id,
+                                         gl::INFO_LOG_LENGTH,
+                                         &mut message_size);
 
-                            //+1 for nul termination
-                            let mut buffer =
-                                Vec::with_capacity(message_size as usize + 1);
+                        //+1 for nul termination
+                        let mut buffer =
+                            Vec::with_capacity(message_size as usize + 1);
 
-                            buffer.extend([b' ']
-                                .iter()
-                                .cycle()
-                                .take(message_size as usize));
+                        buffer.extend([b' '].iter().cycle().take(message_size as usize));
 
-                            let message = CString::from_vec_unchecked(buffer);
+                        let message = CString::from_vec_unchecked(buffer);
 
-                            gl::GetProgramInfoLog(program_id,
-                                                  message_size as i32,
-                                                  ptr::null_mut(),
-                                                  message.as_ptr() as *mut GLchar);
+                        gl::GetProgramInfoLog(program_id,
+                                              message_size as i32,
+                                              ptr::null_mut(),
+                                              message.as_ptr() as *mut GLchar);
 
-                            return Err(message.to_string_lossy().into_owned());
-                        }
+                        return Err(message.to_string_lossy().into_owned());
+                    }
 
-                        let idx = Self::shader_type_to_array_index(shader.0);
-                        self.shader_programs[idx] = Some(program_id);
+                    let idx = Self::shader_type_to_array_index(shader.0);
+                    self.shader_programs[idx] = Some(program_id);
 
-                        gl::UseProgramStages(self.id,
-                                             Self::shader_stage_to_gl_bitfield(shader.0),
-                                             program_id)
-                    },
-                    _ => {}
+                    gl::UseProgramStages(self.id,
+                                         Self::shader_stage_to_gl_bitfield(shader.0),
+                                         program_id)
                 }
             }
         }
 
         Ok(self)
+    }
+
+    pub fn set_vector3f(&self, name: &str, value: &Vec3, stage: ShaderStage) -> &Self {
+        let (program_id, location) = self.get_shader_stage_id_and_resource_location(stage,
+                                                                                    gl::UNIFORM,
+                                                                                    name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe {
+            gl::ProgramUniform3fv(program_id,
+                                  location,
+                                  1,
+                                  utilities::value_ptr(value))
+        }
+
+        self
     }
 
     pub fn set_matrix4f(&self, name: &str, value: &Mat4, stage: ShaderStage) -> &Self {
@@ -226,7 +237,7 @@ impl ProgramPipeline {
             ShaderStage::TesselationEvaluation => gl::TESS_EVALUATION_SHADER_BIT,
             ShaderStage::Geometry => gl::GEOMETRY_SHADER_BIT,
             ShaderStage::Fragment => gl::FRAGMENT_SHADER_BIT,
-            ShaderStage::Compute => gl::COMPUTE_SHADER_BIT,
+            ShaderStage::Compute => gl::COMPUTE_SHADER_BIT
         }
     }
 }
@@ -234,7 +245,7 @@ impl ProgramPipeline {
 impl Drop for ProgramPipeline {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteProgramPipelines(1, &mut self.id)
+            gl::DeleteProgramPipelines(1, &self.id)
         }
     }
 }

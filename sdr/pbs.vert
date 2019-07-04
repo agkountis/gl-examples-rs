@@ -13,55 +13,50 @@ layout(location = 5) uniform mat4 model;
 layout(location = 6) uniform mat4 view;
 layout(location = 7) uniform mat4 projection;
 
+layout(location = 8) uniform vec3 eyePosition;
+
 out gl_PerVertex {
     vec4 gl_Position;
 };
 
 // Varying variables
-// prefixes: m -> model space
+// prefixes: w -> world space
 //           v -> view space
 //           t -> tangent space
+//           l -> local space
 out VsOut {
-    vec3 tLightDirection;
-    vec3 tViewDirection;
+    vec3 wLightDirection;
+    vec3 wViewDirection;
     vec2 texcoord;
+    mat3 TBN;
 } vsOut;
 
 void main()
 {
     //Transform vertex to clipspace.
-    vec4 localVertexPosition = vec4(inPosition, 1.0);
-    gl_Position = projection * view * model * localVertexPosition;
+    vec4 lVertexPosition = vec4(inPosition, 1.0);
+    vec4 wVertexPosition = model * lVertexPosition;
+    gl_Position = projection * view * wVertexPosition;
 
-    mat3 normalMatrix = transpose(inverse(mat3(view * model)));
+    // Calculate the normal matrix.
+    mat3 normalMatrix = transpose(inverse(mat3(model)));
 
-    //Calculate the normal. Bring it to view space
-    vec3 normal = normalMatrix * inNormal;
+    //Calculate the normal. Bring it to world space
+    vec3 wNormal = normalMatrix * inNormal;
 
-    // Bring tangent to view space.
-    vec3 tangent = normalize(normalMatrix * inTangent);
+    // Bring tangent to world space.
+    vec3 wTangent = normalize(normalMatrix * inTangent);
 
-    tangent = normalize(tangent - dot(tangent, normal) * normal);
+    wTangent = normalize(wTangent - dot(wTangent, wNormal) * wNormal);
 
     //Calculate the binormal
-    vec3 binormal = normalize(cross(normal, tangent));
+    vec3 wBinormal = normalize(cross(wNormal, wTangent));
 
-    // TBN originally transforms from tangent space to world space
-    // Inversing it will cause it to transform from whatever space the
-    // normals/binormals/tangets are in to tangent space.
-    // Note: TBN is orthogonal, so transposing it is equivalent to inverting it.
-    mat3 TBN = transpose(mat3(tangent, binormal, normal));
-
-    //Move the vertex in view space.
-    vec3 v_vertexPosition = (view * model * localVertexPosition).xyz;
+    // Pass the TBN matrix to the fragment shader.
+    vsOut.TBN = mat3(wTangent, wBinormal, wNormal);
 
     //Assign the view direction for output.
-    vsOut.tViewDirection = TBN * -v_vertexPosition;
-
-    vec3 v_lightPosition = (view * vec4(0.0, 0.0, 1.0, 1.0)).xyz;
-
-    //Calculate and assign the light direction for output.
-    vsOut.tLightDirection = TBN * v_lightPosition;
+    vsOut.wViewDirection = eyePosition - wVertexPosition.xyz;
 
     //Assign texture coorinates for output.
     vsOut.texcoord = inTexcoord;

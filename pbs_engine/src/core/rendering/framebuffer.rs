@@ -2,9 +2,10 @@ use pbs_gl as gl;
 use gl::types::*;
 use std::fmt;
 
-use crate::core::math::vector::UVec2;
+use crate::core::math::vector::{UVec2, Vec4};
+use crate::core::math;
 use crate::core::rendering::texture::SizedTextureFormat;
-use crate::core::Rectangle;
+use crate::core::rendering::state::StateManager;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -45,11 +46,22 @@ pub enum AttachmentType {
 
 #[derive(Debug, Clone, Copy)]
 enum AttachmentBindPoint {
-    ColorAttachment(GLenum),
+    ColorAttachment(GLenum, i32),
     DepthAttachment(GLenum),
     DepthStencilAttachment(GLenum),
-    StencilAttachment(GLenum),
-    UnsupportedAttachmentBindPoint
+    StencilAttachment(GLenum)
+
+}
+
+impl AttachmentBindPoint {
+    fn to_gl_enum(&self) -> GLenum {
+        match *self {
+            AttachmentBindPoint::ColorAttachment(n, _) => n,
+            AttachmentBindPoint::DepthAttachment(n) => n,
+            AttachmentBindPoint::DepthStencilAttachment(n) => n,
+            AttachmentBindPoint::StencilAttachment(n) => n
+        }
+    }
 }
 
 pub struct FramebufferAttachmentCreateInfo {
@@ -157,7 +169,7 @@ impl Framebuffer {
             texture_attachment_create_infos
                 .iter()
                 .zip(texture_attachment_ids.iter())
-                .for_each(|(create_info, id)| {
+                .for_each(|(&create_info, id)| {
 
                     unsafe {
                         gl::TextureStorage2D(*id,
@@ -167,13 +179,10 @@ impl Framebuffer {
                                              size.y as i32)
                     }
 
-                    let (is_depth_attachment, gl_attachment_type) = Self::is_depth_stencil(create_info.get_format());
-
-                    if is_depth_attachment && !has_depth_attachment {
-
+                    if let Some(attachment_bind_point) = Self::is_depth_stencil_attachment(create_info.get_format()) {
                         unsafe {
                             gl::NamedFramebufferTexture(framebuffer_id,
-                                                        gl_attachment_type,
+                                                        attachment_bind_point.to_gl_enum(),
                                                         *id,
                                                         0)
                         }
@@ -184,12 +193,7 @@ impl Framebuffer {
                                                                             size,
                                                                             create_info.get_format(),
                                                                             create_info.get_type(),
-                        match gl_attachment_type {
-                            gl::DEPTH_ATTACHMENT => AttachmentBindPoint::DepthAttachment(gl::DEPTH_ATTACHMENT),
-                            gl::DEPTH_STENCIL_ATTACHMENT => AttachmentBindPoint::DepthStencilAttachment(gl::DEPTH_STENCIL_ATTACHMENT),
-                            gl::STENCIL_ATTACHMENT => AttachmentBindPoint::StencilAttachment(gl::STENCIL_ATTACHMENT),
-                            _ => AttachmentBindPoint::UnsupportedAttachmentBindPoint
-                        }))
+                                                                            attachment_bind_point))
                     }
                     else {
                         let output_location = gl::COLOR_ATTACHMENT0 + color_attachment_count;
@@ -206,13 +210,14 @@ impl Framebuffer {
                         texture_attachments.push(FramebufferAttachment::new(*id,
                                                                             size,
                                                                             create_info.get_format(),
-                                                                            create_info.get_type(), AttachmentBindPoint::ColorAttachment(output_location)))
+                                                                            create_info.get_type(),
+                                                                            AttachmentBindPoint::ColorAttachment(output_location, color_attachment_count as i32)))
                     }
                 });
         }
 
         let renderbuffer_attachment_create_infos = attachment_create_infos.iter()
-            .filter(|create_info|{
+            .filter(|&create_info|{
                 match create_info.get_type() {
                     AttachmentType::Renderbuffer => true,
                     _ => false
@@ -239,13 +244,11 @@ impl Framebuffer {
                                                      size.y as i32)
                     }
 
-                    let (is_depth_attachment, gl_attachment_type) = Self::is_depth_stencil(create_info.get_format());
-
-                    if is_depth_attachment && !has_depth_attachment {
+                    if let Some(attachment_bind_point) = Self::is_depth_stencil_attachment(create_info.get_format()) {
 
                         unsafe {
                             gl::NamedFramebufferRenderbuffer(framebuffer_id,
-                                                             gl_attachment_type,
+                                                             attachment_bind_point.to_gl_enum(),
                                                              gl::RENDERBUFFER,
                                                              *id)
                         }
@@ -256,12 +259,8 @@ impl Framebuffer {
                                                                                  size,
                                                                                  create_info.get_format(),
                                                                                  create_info.get_type(),
-                                                                                 match gl_attachment_type {
-                                                                                     gl::DEPTH_ATTACHMENT => AttachmentBindPoint::DepthAttachment(gl::DEPTH_ATTACHMENT),
-                                                                                     gl::DEPTH_STENCIL_ATTACHMENT => AttachmentBindPoint::DepthStencilAttachment(gl::DEPTH_STENCIL_ATTACHMENT),
-                                                                                     gl::STENCIL_ATTACHMENT => AttachmentBindPoint::StencilAttachment(gl::STENCIL_ATTACHMENT),
-                                                                                     _ => AttachmentBindPoint::UnsupportedAttachmentBindPoint
-                                                                                 }))
+                                                                                 attachment_bind_point
+                                                                                 ))
                     }
                     else {
                         let output_location = gl::COLOR_ATTACHMENT0 + color_attachment_count;
@@ -279,7 +278,7 @@ impl Framebuffer {
                                                                                  size,
                                                                                  create_info.get_format(),
                                                                                  create_info.get_type(),
-                                                                                 AttachmentBindPoint::ColorAttachment(output_location)))
+                                                                                 AttachmentBindPoint::ColorAttachment(output_location, color_attachment_count as i32)))
                     }
                 })
         }
@@ -304,9 +303,49 @@ impl Framebuffer {
         }
     }
 
+    pub fn clear(&self, clear_color: &Vec4) {
+        //TODO: Clear ALL attachments
+        self.texture_attachments
+            .iter()
+            .chain(self.renderbuffer_attachments.iter())
+            .for_each(|attachment| {
+                match attachment.attachment_bind_point {
+                    AttachmentBindPoint::ColorAttachment(_, i) => {
+                        unsafe {
+                            gl::ClearNamedFramebufferfv(self.id,
+                                                        gl::COLOR,
+                                                        i,
+                                                        math::utilities::value_ptr(clear_color))
+                        }
+                    },
+                    AttachmentBindPoint::DepthAttachment(_) => {
+                        unsafe {
+                            let depth_clear_val: f32 = 1.0;
+                            gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val)
+                        }
+                    },
+                    AttachmentBindPoint::DepthStencilAttachment(_) => {
+                        unsafe {
+                            gl::ClearNamedFramebufferfi(self.id, gl::DEPTH_STENCIL, 0, 1.0, 0)
+                        }
+                    },
+                    AttachmentBindPoint::StencilAttachment(_) => {
+                        unsafe {
+                            let stencil_clear_val = 1;
+                            gl::ClearNamedFramebufferiv(self.id, gl::STENCIL, 0, &stencil_clear_val)
+                        }
+                    }
+                }
+            });
+    }
+
     pub fn bind(&self) {
         unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, self.id)
+            gl::BindFramebuffer(gl::FRAMEBUFFER, self.id);
+            StateManager::set_viewport(0, 
+                                       0, 
+                                       self.size.x as i32, 
+                                       self.size.y as i32);
         }
     }
 
@@ -317,11 +356,10 @@ impl Framebuffer {
                     .iter()
                     .map(|a|{
                         match a.attachment_bind_point {
-                            AttachmentBindPoint::ColorAttachment(n) => n,
+                            AttachmentBindPoint::ColorAttachment(n, _) => n,
                             AttachmentBindPoint::DepthAttachment(n) => n,
                             AttachmentBindPoint::DepthStencilAttachment(n) => n,
-                            AttachmentBindPoint::StencilAttachment(n) => n,
-                            AttachmentBindPoint::UnsupportedAttachmentBindPoint => panic!("Unsupported Attachment Bind Point!!!"),
+                            AttachmentBindPoint::StencilAttachment(n) => n
                         }
                     })
                     .collect::<Vec<_>>();
@@ -399,16 +437,16 @@ impl Framebuffer {
         }
     }
 
-    pub fn is_depth_stencil(format: SizedTextureFormat) -> (bool, GLenum) {
+    fn is_depth_stencil_attachment(format: SizedTextureFormat) -> Option<AttachmentBindPoint> {
         match format {
             SizedTextureFormat::Depth16 |
             SizedTextureFormat::Depth24 |
             SizedTextureFormat::Depth32 |
-            SizedTextureFormat::Depth32f => (true, gl::DEPTH_ATTACHMENT),
+            SizedTextureFormat::Depth32f => Some(AttachmentBindPoint::DepthAttachment(gl::DEPTH_ATTACHMENT)),
             SizedTextureFormat::Depth24Stencil8 |
-            SizedTextureFormat::Depth32fStencil8 => (true, gl::DEPTH_STENCIL_ATTACHMENT),
-            SizedTextureFormat::StencilIndex8 => (true, gl::STENCIL_ATTACHMENT),
-            _ => (false, 0)
+            SizedTextureFormat::Depth32fStencil8 => Some(AttachmentBindPoint::DepthStencilAttachment(gl::DEPTH_STENCIL_ATTACHMENT)),
+            SizedTextureFormat::StencilIndex8 => Some(AttachmentBindPoint::StencilAttachment(gl::STENCIL_ATTACHMENT)),
+            _ => None
         }
     }
 }

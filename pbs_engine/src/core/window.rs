@@ -17,6 +17,7 @@ pub struct Window {
     window: glfw::Window,
     events: Receiver<(f64, glfw::WindowEvent)>,
     size: UVec2,
+    framebuffer_size: UVec2,
     resize_callback: Option<Box<FnMut(i32, i32)>>
 }
 
@@ -46,6 +47,8 @@ impl Window {
                                                             Msaa::X16 => Some(16)
                                                         }));
 
+        glfw.window_hint(glfw::WindowHint::Resizable(false));
+
         if cfg!(debug_assertions) {
             glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true));
         }
@@ -74,6 +77,7 @@ impl Window {
         window.make_current();
 
         window.set_framebuffer_size_polling(true);
+        let (fb_width, fb_height) = window.get_framebuffer_size();
 
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
@@ -96,6 +100,7 @@ impl Window {
             window,
             events,
             size,
+            framebuffer_size: UVec2::new(fb_width as u32, fb_height as u32),
             resize_callback: None
         }
     }
@@ -112,7 +117,7 @@ impl Window {
                     if let Some(resize_cb) = &mut self.resize_callback {
                         resize_cb(w, h)
                     }
-                }
+                },
                 _ => {}
             }
         }
@@ -132,6 +137,14 @@ impl Window {
 
     pub fn get_height(&self) -> u32 {
         self.size.y
+    }
+
+    pub fn get_framebuffer_width(&self) -> u32 {
+        self.framebuffer_size.x
+    }
+
+    pub fn get_framebuffer_height(&self) -> u32 {
+        self.framebuffer_size.y
     }
 
     pub fn set_resize_callback<T>(&mut self, resize_callback: T)

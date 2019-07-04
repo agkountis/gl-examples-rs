@@ -1,6 +1,7 @@
 use pbs_engine;
 
-pub mod pbs_application;
+mod pbs_application;
+mod pbs_scene;
 
 use pbs_application::Application;
 

@@ -32,7 +32,7 @@ pub mod matrix {
     pub type Mat3 = glm::Mat3;
     pub type Mat4 = glm::Mat4;
 
-    pub fn translate(matrix: &Mat4, position: Vec3) -> Mat4 {
+    pub fn translate(matrix: &Mat4, position: &Vec3) -> Mat4 {
         glm::translate(matrix, &position)
     }
 
@@ -44,7 +44,7 @@ pub mod matrix {
         glm::rotate(matrix, angle_deg * glm::pi::<f32>() / 180.0, &axis)
     }
 
-    pub fn scale(matrix: &Mat4, scale: Vec3) -> Mat4 {
+    pub fn scale(matrix: &Mat4, scale: &Vec3) -> Mat4 {
         glm::scale(matrix, &scale)
     }
 
@@ -57,6 +57,10 @@ pub mod matrix {
                          fov_deg as f32 * glm::pi::<f32>() / 180.0,
                          near,
                          far)
+    }
+
+    pub fn look_at(position: &Vec3, target: &Vec3, up: &Vec3) -> Mat4 {
+        glm::look_at(position, target, up)
     }
 }
 

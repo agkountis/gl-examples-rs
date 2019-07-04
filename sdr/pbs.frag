@@ -1,15 +1,19 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
+#define ACES_FITTED
+
 const float EPSILON = 0.001;
 const float F0_DIELECTRIC = 0.04;
 const float PI = 3.14159265359;
 const float ONE_OVER_PI = 0.318309886;
+const float MAX_REFLECTION_LOD = 4.0;
 
 in VsOut {
-    vec3 mLightDirection;
-    vec3 mViewDirection;
+    vec3 wLightDirection;
+    vec3 wViewDirection;
     vec2 texcoord;
+    mat3 TBN;
 } fsIn;
 
 layout(location = 0, binding = 0) uniform sampler2D albedoMap;
@@ -21,6 +25,9 @@ layout(location = 5, binding = 5) uniform sampler2D brdfLUT;
 
 layout(location = 6, binding = 6) uniform samplerCube irradianceMap;
 layout(location = 7, binding = 7) uniform samplerCube radianceMap;
+
+layout(location = 8) uniform vec3 wLightDirection;
+layout(location = 9) uniform vec3 lightColor;
 
 layout(location = 0) out vec4 outColor;
 
@@ -115,16 +122,9 @@ float GeometrySmith(float NdotV, float NdotL, float roughness)
     return ggx1 * ggx2;
 }
 
-vec3 BRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metallic, float roughness)
+vec3 BRDF(float NdotH, float NdotV, float NdotL, float HdotV, vec3 lightColor, vec3 F0, vec3 albedo, float metallic, float roughness)
 {
-    vec3 lightColor = vec3(1.0); //TODO: Replace with proper light uniforms
-    vec3 H = normalize(L + V);
-
-    float NdotH = clamp(dot(N, H), 0.0, 1.0);
-    float NdotV = clamp(dot(N, V), 0.0, 1.0);
-    float NdotL = clamp(dot(N, L), 0.0, 1.0);
-
-    vec3 F = FresnelSchlick(clamp(dot(H, V), 0.0, 1.0), F0);
+    vec3 F = FresnelSchlick(HdotV, F0);
     float NDF = DistributionGGX(NdotH, roughness);
     float G = GeometrySmith(NdotV, NdotL, roughness);
 
@@ -143,15 +143,23 @@ vec3 BRDF(vec3 N, vec3 V, vec3 L, vec3 F0, vec3 albedo, float metallic, float ro
 // --------------------
 
 // IBL-----------------
-vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+vec3 FresnelSchlickRoughness(float NdotV, vec3 F0, float roughness)
 {
-    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - cosTheta, 5.0);
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
 }
 
-vec3 IBL(vec3 albedo, float ao)
+vec3 IBL(float NdotV, vec3 F0, vec3 albedo, float metallic, float roughness, float ao, vec2 brdfLUT, vec3 irradiance, vec3 radiance)
 {
-    //TODO: TEMPORARY
-    return vec3(0.03) * albedo * ao;
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+
+    vec3 kS = F;
+    vec3 kD = 1.0 - kS;
+    kD *= 1.0 - metallic;
+
+    vec3 diffuse = irradiance * albedo;
+    vec3 specular = radiance * (F * brdfLUT.x + brdfLUT.y);
+
+    return (kD * diffuse + specular) * ao;
 }
 // --------------------
 
@@ -159,22 +167,42 @@ vec3 IBL(vec3 albedo, float ao)
 
 void main()
 {
-    vec3 albedo = texture(albedoMap, fsIn.texcoord).rgb;
+    vec4 albedo = texture(albedoMap, fsIn.texcoord);
 
     float roughness = texture(roughnessMap, fsIn.texcoord).r;
     float metallic = texture(metallicMap, fsIn.texcoord).r;
     float ao = texture(aoMap, fsIn.texcoord).r;
 
-    vec3 n = normalize(texture(normalMap, fsIn.texcoord).rgb * 2.0 - 1.0);
+    vec3 n = fsIn.TBN * normalize(texture(normalMap, fsIn.texcoord).rgb * 2.0 - 1.0).rgb;
 
-    vec3 v = normalize(fsIn.mViewDirection);
-    vec3 l = normalize(fsIn.mLightDirection);
+    vec3 v = normalize(fsIn.wViewDirection);
+    vec3 l = normalize(wLightDirection);
+
+    vec3 irradiance = texture(irradianceMap, n).rgb;
+
+    vec3 r = reflect(-v, n);
+    vec3 radiance = textureLod(radianceMap, r, roughness * MAX_REFLECTION_LOD).rgb;
+
+    vec2 lutSample = texture(brdfLUT, fsIn.texcoord).rg;
+
+    vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo.rgb, metallic);
+
+    vec3 h = normalize(l + v);
+
+    float NdotH = clamp(dot(n, h), 0.0, 1.0);
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+    float NdotL = clamp(dot(n, l), 0.0, 1.0);
+    float HdotV = clamp(dot(h, v), 0.0, 1.0);
 
 
-    vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo, metallic);
-
-    vec3 finalColor = BRDF(n, v, l, albedo, F0, roughness) + IBL(albedo, ao);
+    vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor, F0, albedo.rgb, metallic, roughness) +
+                      IBL(NdotV, F0, albedo.rgb, metallic, roughness, ao, lutSample, irradiance, radiance);
 
     // Tone map with ACES filter.
+
+#ifdef ACES_FITTED
     outColor = vec4(ACESFitted(finalColor), albedo.a);
+#else
+    outColor = vec4(ACESFilm(finalColor), albedo.a);
+#endif
 }
