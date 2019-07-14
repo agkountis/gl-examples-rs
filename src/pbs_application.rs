@@ -1,17 +1,7 @@
-use std::rc::Rc;
-use std::cell::Cell;
-
 use pbs_engine::core::Settings;
 use pbs_engine::core::application::{RenderingApplication, clear_default_framebuffer};
 use pbs_engine::core::window::Window;
 use pbs_engine::core::timer::Timer;
-use pbs_engine::core::rendering::shader::{Shader, ShaderStage};
-use pbs_engine::core::rendering::mesh::{Mesh, MeshUtilities};
-use pbs_engine::core::math::matrix::{Mat4, translate, perspective, rotate};
-use pbs_engine::core::math::vector::{Vec3, Vec4, UVec2};
-use pbs_engine::core::rendering::texture::{Texture2D, TextureCube, SizedTextureFormat};
-use pbs_engine::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
-use pbs_engine::core::rendering::framebuffer::{Framebuffer, FramebufferAttachmentCreateInfo, AttachmentType};
 use pbs_engine::core::scene::Scene;
 use crate::pbs_scene::PbsScene;
 

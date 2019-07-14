@@ -150,6 +150,24 @@ impl ProgramPipeline {
 
         self
     }
+    
+    pub fn set_texture_2d_with_id(&self, 
+                                  name: &str, 
+                                  texture_id: u32, 
+                                  sampler: &Sampler, 
+                                  stage: ShaderStage) -> &Self {
+        let (_, location) = self.get_shader_stage_id_and_resource_location(stage,
+                                                                           gl::UNIFORM,
+                                                                           name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe {
+            gl::BindTextureUnit(location as GLuint, texture_id);
+            gl::BindSampler(location as GLuint, sampler.id)
+        }
+
+        self
+    }
 
     pub fn set_texture_cube(&self,
                             name: &str,

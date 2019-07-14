@@ -87,6 +87,11 @@ impl Mesh {
         }
     }
 
+    pub fn draw_fullscreen() {
+        unsafe {
+            gl::DrawArrays(gl::TRIANGLES, 0, 3)
+        }
+    }
 }
 
 impl Draw for Mesh {

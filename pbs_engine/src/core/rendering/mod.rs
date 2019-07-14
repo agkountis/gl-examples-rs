@@ -7,6 +7,7 @@ pub mod program_pipeline;
 pub mod format;
 pub mod state;
 pub mod framebuffer;
+pub mod material;
 
 pub trait Draw {
     fn draw(&self);

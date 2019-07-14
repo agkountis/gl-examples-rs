@@ -7,19 +7,13 @@ use pbs_engine::core::rendering::shader::{ShaderStage, Shader};
 use pbs_engine::core::rendering::framebuffer::{Framebuffer, FramebufferAttachmentCreateInfo, AttachmentType};
 use pbs_engine::core::rendering::texture::{Texture2D, SizedTextureFormat, TextureCube};
 use pbs_engine::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
+use pbs_engine::core::rendering::material::Material;
 use pbs_engine::core::window::Window;
 use pbs_engine::core::math::matrix::{perspective, Mat4, rotate, translate};
 use pbs_engine::core::rendering::Draw;
 use pbs_engine::core::rendering::state::{StateManager, DepthFunction, FaceCulling};
 
-struct Material {
-    pub albedo: Texture2D,
-    pub metallic: Texture2D,
-    pub roughness: Texture2D,
-    pub normals: Texture2D,
-    pub ao: Texture2D,
-    pub ibl_brdf_lut: Texture2D
-}
+
 
 struct EnvironmentMaps {
     pub skybox: TextureCube,
@@ -40,7 +34,10 @@ pub struct PbsScene {
     environment_maps: EnvironmentMaps,
     geometry_program_pipeline: ProgramPipeline,
     skybox_program_pipeline: ProgramPipeline,
+    horizontal_gaussian_pipeline: ProgramPipeline,
+    vertical_gaussian_pipeline: ProgramPipeline,
     framebuffer: Framebuffer,
+    blur_framebuffers: [Framebuffer; 2],
     default_fb_size: UVec2,
     sampler: Sampler,
     projection_matrix: Mat4
@@ -66,6 +63,21 @@ impl PbsScene {
                                                "sdr/skybox.vert").unwrap())
             .add_shader(&Shader::new_from_text(ShaderStage::Fragment,
                                                "sdr/skybox.frag").unwrap())
+            .build()
+            .unwrap();
+
+        let fullscreen_shader = Shader::new_from_text(ShaderStage::Vertex,
+                                                      "sdr/fullscreen.vert").unwrap();
+        let horizontal_gaussian_prog = ProgramPipeline::new()
+            .add_shader(&fullscreen_shader)
+            .add_shader(&Shader::new_from_text(ShaderStage::Fragment,
+                                               "sdr/gaussian_blur_horizontal.frag").unwrap())
+            .build()
+            .unwrap();
+
+        let vertical_gaussian_prog = ProgramPipeline::new().add_shader(&fullscreen_shader)
+            .add_shader(&Shader::new_from_text(ShaderStage::Fragment,
+                                               "sdr/gaussian_blur_vertical.frag").unwrap())
             .build()
             .unwrap();
 
@@ -105,12 +117,31 @@ impl PbsScene {
                                   vec![
                                       FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                            AttachmentType::Texture),
+                                      FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
+                                                                           AttachmentType::Texture),
                                       FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Depth24Stencil8,
                                                                            AttachmentType::Renderbuffer)
                                   ])
             .unwrap_or_else(|error| {
                 panic!("Framebuffer creation error: {}", error)
             });
+
+        let blur_framebuffers: [Framebuffer; 2] =
+            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width(),
+                                          window.get_framebuffer_height()),
+                               vec![
+                                   FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
+                                                                        AttachmentType::Texture)])
+                .unwrap_or_else(|error| {panic!("Framebuffer creation error: {}", error)}),
+                Framebuffer::new(UVec2::new(window.get_framebuffer_width(),
+                                            window.get_framebuffer_height()),
+                                 vec![
+                                     FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
+                                                                          AttachmentType::Texture)])
+                    .unwrap_or_else(|error| {
+                        panic!("Framebuffer creation error: {}", error)
+                    }) ];
+
 
         let sampler = Sampler::new(MinificationFilter::LinearMipmapLinear,
                                    MagnificationFilter::Linear,
@@ -147,7 +178,10 @@ impl PbsScene {
             },
             geometry_program_pipeline: geometry_prog,
             skybox_program_pipeline: skybox_prog,
+            horizontal_gaussian_pipeline: horizontal_gaussian_prog,
+            vertical_gaussian_pipeline: vertical_gaussian_prog,
             framebuffer,
+            blur_framebuffers,
             default_fb_size: UVec2::new(window.get_framebuffer_width(),
                                         window.get_framebuffer_height()),
             sampler,
@@ -178,6 +212,37 @@ impl PbsScene {
         self.geometry_program_pipeline.unbind()
     }
 
+    fn bloom_pass(&self) {
+        //TODO
+        let blur_strength = 10;
+
+        for i in 0..blur_strength {
+            let ping_pong_index = i % 2;
+
+            self.horizontal_gaussian_pipeline.bind();
+
+            let mut attachment_id: u32 = 0;
+            if i == 0 {
+                attachment_id = self.framebuffer.get_texture_attachment(1).get_id();
+            }
+            else if (ping_pong_index == 1) {
+//                attachment_id =
+            }
+
+            self.horizontal_gaussian_pipeline.set_texture_2d_with_id("image",
+                                                                     self.framebuffer.get_texture_attachment(1).get_id(),
+                                                                     &self.sampler,
+                                                                     ShaderStage::Fragment);
+            self.blur_framebuffers[ping_pong_index].bind();
+            Mesh::draw_fullscreen();
+
+        }
+
+
+
+        //self.b
+    }
+
     fn skybox_pass(&self) {
         StateManager::set_depth_function(DepthFunction::LessOrEqual);
         StateManager::set_face_culling(FaceCulling::Front);
@@ -199,6 +264,14 @@ impl PbsScene {
 
         StateManager::set_depth_function(DepthFunction::Less);
         StateManager::set_face_culling(FaceCulling::Back)
+    }
+
+    pub fn tonemap_pass(&self) {
+        //TODO
+    }
+
+    pub fn display_pass(&self) {
+        //TODO
     }
 }
 
@@ -270,7 +343,10 @@ impl Scene for PbsScene {
 
     fn draw(&mut self) {
         self.geometry_pass();
+        //self.bloom_pass();
         self.skybox_pass();
+        self.tonemap_pass();
+        self.display_pass();
     }
 
     fn post_draw(&mut self) {
