@@ -9,7 +9,7 @@ use crate::core::math::matrix::Mat4;
 use crate::core::math::utilities;
 use crate::core::rendering::texture::{Texture2D, TextureCube};
 use crate::core::rendering::sampler::Sampler;
-use crate::core::math::vector::Vec3;
+use crate::core::math::Vec3;
 
 
 pub struct ProgramPipeline {

@@ -1,7 +1,7 @@
 use pbs_gl as gl;
 use gl::types::*;
 
-use crate::core::math::vector::{Vec2, Vec3, Vec4};
+use crate::core::math::{Vec2, Vec3, Vec4};
 use crate::core::rendering::buffer::{Buffer, BufferStorageFlags};
 use std::mem;
 use std::ptr;
@@ -145,7 +145,7 @@ impl MeshUtilities {
 
     pub fn generate_quadrilateral(dimensions: Vec3) -> Mesh {
 
-        let half_dimensions = dimensions / 2.0;
+        let half_dimensions = dimensions * 0.5;
 
         let vertices = vec![
             // front

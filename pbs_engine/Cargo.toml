@@ -6,9 +6,19 @@ edition = "2018"
 
 [dependencies]
 nalgebra-glm = "0.3.0"
-glfw = "0.26.1"
 bitflags = "1.0.4"
-assimp = "0.3.1"
-image = "*"
+image = "0.22.3"
 gli-rs = "0.3.1"
+async-std = "1.0.1"
+async-macros = "2.0.0"
+crossbeam-channel = "0.4"
+assimp = "0.3.1"
 pbs_gl = {path = "../pbs_gl"}
+
+[target.'cfg(windows)'.dependencies.glfw]
+version = "0.34.0"
+default-features = false
+
+[target.'cfg(unix)'.dependencies.glfw]
+version = "0.34.0"
+

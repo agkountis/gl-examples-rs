@@ -1,5 +1,5 @@
 use pbs_gl as gl;
-use crate::core::math::vector::Vec4;
+use crate::core::math::Vec4;
 use crate::core::math::utilities;
 
 use gl::types::GLuint;
