@@ -326,7 +326,9 @@ impl Framebuffer {
                     },
                     AttachmentBindPoint::DepthStencilAttachment(_) => {
                         unsafe {
-                            gl::ClearNamedFramebufferfi(self.id, gl::DEPTH_STENCIL, 0, 1.0, 0)
+                            let depth_clear_val: f32 = 1.0;
+                            let stencil_clear_val: i32 = 0;
+                            gl::ClearNamedFramebufferfi(self.id, gl::DEPTH_STENCIL, 0, depth_clear_val, stencil_clear_val)
                         }
                     },
                     AttachmentBindPoint::StencilAttachment(_) => {
@@ -349,8 +351,8 @@ impl Framebuffer {
         }
     }
 
-    pub fn unbind(&self) {
-        if !self.renderbuffer_attachments.is_empty() {
+    pub fn unbind(&self, invalidate: bool) {
+        if !self.renderbuffer_attachments.is_empty() && invalidate {
             unsafe {
                 let attachment_bind_points = self.renderbuffer_attachments
                     .iter()

@@ -86,12 +86,6 @@ impl Mesh {
             ibo
         }
     }
-
-    pub fn draw_fullscreen() {
-        unsafe {
-            gl::DrawArrays(gl::TRIANGLES, 0, 3)
-        }
-    }
 }
 
 impl Draw for Mesh {
@@ -113,6 +107,34 @@ impl Drop for Mesh {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteVertexArrays(1, &self.vao)
+        }
+    }
+}
+
+pub struct FullscreenMesh {
+    vao: GLuint
+}
+
+impl FullscreenMesh {
+    pub fn new() -> Self {
+        let mut vao: GLuint = 0;
+
+        unsafe {
+            gl::CreateVertexArrays(1, &mut vao)
+        }
+
+        FullscreenMesh {
+            vao
+        }
+    }
+}
+
+impl Draw for FullscreenMesh {
+    fn draw(&self) {
+        unsafe {
+            gl::BindVertexArray(self.vao);
+            gl::DrawArrays(gl::TRIANGLES, 0, 3);
+            gl::BindVertexArray(0);
         }
     }
 }

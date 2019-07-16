@@ -4,6 +4,8 @@
 #define ACES_FITTED
 
 layout(location = 0, binding = 0) uniform sampler2D image;
+layout(location = 1, binding = 1) uniform sampler2D bloomImage;
+layout(location = 2) uniform float exposure;
 
 in VsOut {
     vec2 texcoord;
@@ -63,9 +65,10 @@ vec3 ACESFilm(vec3 x)
 
 void main()
 {
+    vec3 color = (texture(image, fsIn.texcoord).rgb + texture(bloomImage, fsIn.texcoord).rgb) * exposure;
 #ifdef ACES_FITTED
-    outColor = vec4(ACESFitted(texture(image, fsIn.texcoord).rgb), 1.0);
+    outColor = vec4(ACESFitted(color), 1.0);
 #else
-    outColor = vec4(ACESFilm(texture(image, fsIn.texcoord).rgb), 1.0);
+    outColor = vec4(ACESFilm(color), 1.0);
 #endif
 }

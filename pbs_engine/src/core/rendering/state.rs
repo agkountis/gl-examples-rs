@@ -39,6 +39,13 @@ pub enum FaceCulling {
     Back = gl::BACK
 }
 
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum FrontFace {
+    Clockwise = gl::CW,
+    CounterClockwise = gl::CCW
+}
+
 impl StateManager {
     pub fn set_viewport(x: i32, y: i32, width: i32, height: i32) {
         unsafe {
@@ -61,6 +68,12 @@ impl StateManager {
     pub fn set_face_culling(culling: FaceCulling) {
         unsafe {
             gl::CullFace(culling as u32)
+        }
+    }
+
+    pub fn set_front_face(front_face: FrontFace) {
+        unsafe {
+            gl::FrontFace(front_face as u32)
         }
     }
 }
