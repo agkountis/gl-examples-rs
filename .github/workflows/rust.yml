@@ -9,6 +9,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - name: Update Rust
+      run: rustup self update
+      run: rustup update
+    - name: Install Dependencies
+      run: apt install arandr
     - name: Build
       run: cargo build --verbose
     - name: Run tests
