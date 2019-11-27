@@ -2,17 +2,20 @@ use pbs_engine::core::scene::Scene;
 use pbs_engine::core::camera::Camera;
 use pbs_engine::core::rendering::mesh::{Mesh, FullscreenMesh, MeshUtilities};
 use pbs_engine::core::rendering::program_pipeline::ProgramPipeline;
-use pbs_engine::core::math::vector::{Vec3, UVec2, Vec4, UVec4};
+use pbs_engine::core::math::vector::{Vec3, UVec2, Vec4};
 use pbs_engine::core::rendering::shader::{ShaderStage, Shader};
 use pbs_engine::core::rendering::framebuffer::{Framebuffer, FramebufferAttachmentCreateInfo, AttachmentType};
 use pbs_engine::core::rendering::texture::{Texture2D, SizedTextureFormat, TextureCube};
 use pbs_engine::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
-use pbs_engine::core::rendering::material::Material;
+use pbs_engine::core::rendering::material::{Material, PbsMetallicRoughnessMaterial};
 use pbs_engine::core::window::Window;
 use pbs_engine::core::math::matrix::{perspective, Mat4, rotate, translate};
 use pbs_engine::core::rendering::Draw;
 use pbs_engine::core::rendering::state::{StateManager, DepthFunction, FaceCulling, FrontFace};
 use pbs_engine::core::application::clear_default_framebuffer;
+
+use std::rc::Rc;
+use pbs_engine::core::asset::AssetManager;
 
 
 struct EnvironmentMaps {
@@ -31,9 +34,8 @@ pub struct PbsScene {
     model: Model,
     skybox_mesh: Mesh,
     fullscreen_mesh: FullscreenMesh,
-    material: Material,
+    material: Box<dyn Material>,
     environment_maps: EnvironmentMaps,
-    geometry_program_pipeline: ProgramPipeline,
     skybox_program_pipeline: ProgramPipeline,
     horizontal_gaussian_pipeline: ProgramPipeline,
     vertical_gaussian_pipeline: ProgramPipeline,
@@ -43,7 +45,8 @@ pub struct PbsScene {
     default_fb_size: UVec2,
     sampler: Sampler,
     sampler_nearest: Sampler,
-    projection_matrix: Mat4
+    projection_matrix: Mat4,
+    asset_manager: AssetManager
 }
 
 impl PbsScene {
@@ -53,13 +56,7 @@ impl PbsScene {
                        Vec3::new(0.0, 0.0, 1.0),
                        Vec3::new(0.0, 1.0, 0.0));
 
-        let geometry_prog = ProgramPipeline::new()
-            .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
-                                               "sdr/pbs.vert").unwrap())
-            .add_shader(&Shader::new_from_text(ShaderStage::Fragment,
-                                               "sdr/pbs.frag").unwrap())
-            .build()
-            .unwrap();
+        let mut asset_manager = AssetManager::new();
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
@@ -94,22 +91,22 @@ impl PbsScene {
         let mesh = MeshUtilities::generate_cube(1.0);
         let skybox_mesh = MeshUtilities::generate_cube(1.0);
 
-        let albedo = Texture2D::new_from_file("assets/textures/pbs/rusted_iron/albedo.png", true, true)
+        let albedo = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/albedo.png", true, true)
             .expect("Failed to load albedo texture");
 
-        let metallic = Texture2D::new_from_file("assets/textures/pbs/rusted_iron/metallic.png", false, true)
+        let metallic = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/metallic.png", false, true)
             .expect("Failed to load metallic texture");
 
-        let roughness = Texture2D::new_from_file("assets/textures/pbs/rusted_iron/roughness.png", false, true)
+        let roughness = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/roughness.png", false, true)
             .expect("Failed to load roughness texture");
 
-        let normals = Texture2D::new_from_file("assets/textures/pbs/rusted_iron/normal.png", false, true)
+        let normals = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/normal.png", false, true)
             .expect("Failed to load normals texture");
 
-        let ao = Texture2D::new_from_file("assets/textures/pbs/rusted_iron/ao.png", false, true)
+        let ao = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/ao.png", false, true)
             .expect("Failed to load ao texture");
 
-        let ibl_brdf_lut = Texture2D::new_from_file("assets/textures/pbs/ibl_brdf_lut.png", false, false)
+        let ibl_brdf_lut = asset_manager.load_texture_2d("assets/textures/pbs/ibl_brdf_lut.png", false, false)
             .expect("Failed to load BRDF LUT texture");
 
         let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/ibl_skybox.ktx")
@@ -180,20 +177,19 @@ impl PbsScene {
             },
             skybox_mesh,
             fullscreen_mesh: FullscreenMesh::new(),
-            material: Material{
+            material: Box::new(PbsMetallicRoughnessMaterial::new(
                 albedo,
                 metallic,
                 roughness,
                 normals,
                 ao,
                 ibl_brdf_lut
-            },
+            )),
             environment_maps: EnvironmentMaps {
                 skybox,
                 irradiance,
                 radiance
             },
-            geometry_program_pipeline: geometry_prog,
             skybox_program_pipeline: skybox_prog,
             horizontal_gaussian_pipeline: horizontal_gaussian_prog,
             vertical_gaussian_pipeline: vertical_gaussian_prog,
@@ -204,7 +200,8 @@ impl PbsScene {
                                         window.get_framebuffer_height()),
             sampler,
             sampler_nearest,
-            projection_matrix: projection
+            projection_matrix: projection,
+            asset_manager
         }
     }
 
@@ -370,6 +367,10 @@ impl PbsScene {
 }
 
 impl Scene for PbsScene {
+
+    fn name(&self) -> &str {
+        "PBS_SCENE"
+    }
 
     fn setup(&mut self) {
         self.skybox_program_pipeline.bind();

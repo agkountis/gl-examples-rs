@@ -1,5 +1,4 @@
-use crate::core::math::vector::Vec3;
-use crate::core::math::matrix::{Mat4, look_at};
+use crate::core::{math, math::Mat4, math::Vec3};
 
 pub struct Camera {
     position: Vec3,
@@ -13,7 +12,7 @@ impl Camera {
         let position = Vec3::new(0.0, 0.0, 0.0);
         let target = Vec3::new(0.0, 0.0, 1.0);
         let up = Vec3::new(0.0, 1.0, 0.0);
-        let transform = look_at(&position, &target, &up);
+        let transform = math::look_at(&position, &target, &up);
 
         Camera {
             position,
@@ -39,7 +38,7 @@ impl Camera {
         self.position = position;
         self.target = target;
         self.up = up;
-        self.transform = look_at(&position, &target, &up)
+        self.transform = math::look_at(&position, &target, &up)
     }
 
     pub fn set_transform(&mut self, transform: Mat4) {

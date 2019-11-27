@@ -7,6 +7,7 @@ use gli::GliTexture;
 use pbs_gl as gl;
 use gl::types::*;
 use std::path::Path;
+use crate::core::asset::Asset;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -80,11 +81,24 @@ pub struct Texture2D {
     image: DynamicImage
 }
 
-impl Texture2D {
+pub struct Texture2DLoadConfig {
+    pub is_srgb: bool,
+    pub generate_mipmaps: bool
+}
 
-    pub fn new_from_file(path: &str,
-                         is_srgb: bool,
-                         generate_mipmaps: bool) -> Result<Self, String> {
+impl Asset for Texture2D {
+    type Output = Self;
+    type Error = String;
+    type LoadConfig = Texture2DLoadConfig;
+
+    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+        let mut is_srgb= false;
+        let mut generate_mipmaps = false;
+
+        if let Some(config) = load_config {
+            is_srgb = config.is_srgb;
+            generate_mipmaps = config.generate_mipmaps;
+        }
 
         match Utils::open_image_file(path) {
             Ok(img) => {
@@ -128,7 +142,7 @@ impl Texture2D {
                     }
                 }
 
-                Ok(Texture2D{
+                Ok(Texture2D {
                     id,
                     image: img
                 })
@@ -138,9 +152,12 @@ impl Texture2D {
             }
         }
     }
+}
+
+impl Texture2D {
 
     pub fn new_from_bytes(data: &[u8]) -> Result<Self, String> {
-        Err("Bla".to_string())
+        unimplemented!()
     }
 
     pub fn get_id(&self) -> GLuint {
@@ -164,8 +181,86 @@ pub struct TextureCube {
     id: GLuint
 }
 
+impl Asset for TextureCube {
+    type Output = Self;
+    type Error = String;
+    type LoadConfig = ();
+
+    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+        let result: gli::Result<gli::TextureCube> = gli::load(Path::new(path));
+        match result {
+            Ok(tex) => {
+
+                println!("Cube load ok!");
+                println!("KTX Texture info:");
+                println!("\tExtent: ({}, {})", tex.extent(0).width, tex.extent(0).height);
+                println!("\tFaces  count: {}", tex.faces());
+                println!("\tLayers count: {}", tex.layers());
+                println!("\tLevels count: {}", tex.levels());
+                println!("\tSize: {}", tex.size());
+                println!("\tAddress: {:?}", tex.data());
+                println!("\tFormat: {}", tex.format());
+                println!("\tTarget: {}", tex.target());
+                println!();
+
+                let (internal_format, external_format, data_type) =
+                    Self::translate_gli_format_info(tex.format());
+
+
+                let mut id: GLuint = 0;
+                unsafe {
+                    gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
+
+                    let width = tex.extent(0).width;
+                    let height = tex.extent(0).height;
+                    gl::TextureStorage2D(id,
+                                         tex.levels() as i32,
+                                         internal_format as u32,
+                                         tex.extent(0).width as i32,
+                                         tex.extent(0).height as i32);
+
+                    for layer in 0..tex.layers() {
+
+                        for face in 0..tex.faces() {
+
+                            let gl_face = gl::TEXTURE_CUBE_MAP_POSITIVE_X + face as u32;
+                            let face_tex = tex.get_face(face);
+
+                            for level in 0..tex.levels() {
+
+                                let image = face_tex.get_level(level);
+
+                                // Cubemaps + DSA = TextureSubImage3D using zOffset as the face index
+                                gl::TextureSubImage3D(id,
+                                                      level as i32,
+                                                      0,
+                                                      0,
+                                                      face as i32,
+                                                      image.extent().width as i32,
+                                                      image.extent().height as i32,
+                                                      1,
+                                                      external_format as u32,
+                                                      data_type,
+                                                      image.data());
+                            }
+                        }
+                    }
+                }
+
+                Ok(TextureCube {
+                    id
+                })
+            },
+            Err(e) => {
+                Err(e.to_string())
+            }
+        }
+    }
+}
+
 impl TextureCube {
 
+    //TODO: To be removed
     pub fn new_from_file(path: &str) -> Result<Self, String> {
         let result: gli::Result<gli::TextureCube> = gli::load(Path::new(path));
          match result {

@@ -2,7 +2,7 @@ use pbs_gl as gl;
 use gl::types::*;
 use std::fmt;
 
-use crate::core::math::vector::{UVec2, Vec4};
+use crate::core::math::{UVec2, Vec4};
 use crate::core::math;
 use crate::core::rendering::texture::SizedTextureFormat;
 use crate::core::rendering::state::StateManager;
@@ -158,7 +158,7 @@ impl Framebuffer {
 
 
         if !texture_attachment_create_infos.is_empty() {
-            let mut texture_attachment_ids: Vec<GLuint> = vec![0; texture_attachment_create_infos.len()];
+            let texture_attachment_ids: Vec<GLuint> = vec![0; texture_attachment_create_infos.len()];
 
             unsafe {
                 gl::CreateTextures(gl::TEXTURE_2D,
@@ -226,7 +226,7 @@ impl Framebuffer {
 
 
         if !renderbuffer_attachment_create_infos.is_empty() {
-            let mut renderbuffer_attachment_ids: Vec<GLuint> = vec![0; renderbuffer_attachment_create_infos.len()];
+            let renderbuffer_attachment_ids: Vec<GLuint> = vec![0; renderbuffer_attachment_create_infos.len()];
 
             unsafe {
                 gl::CreateRenderbuffers(renderbuffer_attachment_ids.len() as i32,

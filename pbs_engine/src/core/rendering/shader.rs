@@ -137,7 +137,7 @@ impl Shader {
         }
 
         let id: GLuint;
-        let c_string_source = unsafe{ CString::new(text_source).unwrap() };
+        let c_string_source = CString::new(text_source).unwrap();
 
         unsafe {
             id = gl::CreateShader(stage as u32);

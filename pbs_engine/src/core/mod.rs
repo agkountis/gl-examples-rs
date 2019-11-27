@@ -13,27 +13,30 @@ pub mod scene;
 pub mod camera;
 pub mod entity;
 pub mod timer;
+pub mod asset;
 
-use self::math::vector::UVec2;
-use crate::core::math::vector::Vec4;
+mod model_loader;
 
-#[derive(Debug)]
+use self::math::{UVec2, Vec4};
+
+#[derive(Debug, Clone, Copy)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: u32
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum WindowMode {
     Windowed,
     Fullscreen
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Msaa {
     None,
     X4,
+    X8,
     X16
 }
 
@@ -49,7 +52,7 @@ pub struct Settings<'a> {
     pub default_clear_color: Vec4
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Rectangle {
     pub x: i32,
     pub y: i32,

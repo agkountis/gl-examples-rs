@@ -6,7 +6,7 @@ struct ModelLoader;
 
 impl ModelLoader {
     pub fn load(path: &str) -> () {
-        let importer = import::Importer::new();
+        let importer = Importer::new();
 
         let scene = importer.read_file(path);
 

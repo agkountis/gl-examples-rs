@@ -8,7 +8,7 @@ use std::ffi::CStr;
 
 use glfw::Context;
 use super::{WindowMode, Msaa, Version};
-use super::math::vector::UVec2;
+use super::math::UVec2;
 
 
 
@@ -18,7 +18,7 @@ pub struct Window {
     events: Receiver<(f64, glfw::WindowEvent)>,
     size: UVec2,
     framebuffer_size: UVec2,
-    resize_callback: Option<Box<FnMut(i32, i32)>>
+    resize_callback: Option<Box<dyn FnMut(i32, i32)>>
 }
 
 impl Window {

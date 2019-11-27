@@ -1,6 +1,34 @@
 use pbs_gl as gl;
-use crate::core::math::vector::Vec4;
+use crate::core::math::Vec4;
+use crate::core::timer::Timer;
+use crate::core::Settings;
+use crate::core::asset::AssetManager;
+use crate::core::scene::SceneManager;
+use crate::core::window::Window;
 
+pub struct Application<'a> {
+    window: Window,
+    asset_manager: AssetManager,
+    scene_manager: SceneManager,
+    timer: Timer,
+    settings: Settings<'a>
+}
+
+impl<'a> Application<'a> {
+    pub fn new(settings: Settings) -> Self {
+        Self {
+            window: Window::new(settings.name,
+                                settings.window_size,
+                                &settings.graphics_api_version,
+                                &settings.window_mode,
+                                &settings.msaa),
+            asset_manager: AssetManager::new(),
+            scene_manager: SceneManager::new(),
+            timer: Timer::new(),
+            settings
+        }
+    }
+}
 
 pub trait Run {
     fn run(&mut self);
