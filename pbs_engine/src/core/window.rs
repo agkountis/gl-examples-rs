@@ -44,6 +44,7 @@ impl Window {
         glfw.window_hint(glfw::WindowHint::Samples(match msaa {
                                                             Msaa::None => None,
                                                             Msaa::X4 => Some(4),
+                                                            Msaa::X8 => Some(8),
                                                             Msaa::X16 => Some(16)
                                                         }));
 

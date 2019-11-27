@@ -149,7 +149,7 @@ impl Framebuffer {
         let mut has_depth_attachment = false;
 
         let texture_attachment_create_infos = attachment_create_infos.iter()
-            .filter(|create_info|{
+            .filter(|&create_info|{
                 match create_info.get_type() {
                     AttachmentType::Texture => true,
                     _ => false

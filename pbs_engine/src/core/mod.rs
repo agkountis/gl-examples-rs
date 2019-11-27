@@ -14,6 +14,7 @@ pub mod camera;
 pub mod entity;
 pub mod timer;
 pub mod asset;
+pub mod engine;
 
 mod model_loader;
 
@@ -41,8 +42,8 @@ pub enum Msaa {
 }
 
 #[derive(Debug)]
-pub struct Settings<'a> {
-    pub name: &'a str,
+pub struct Settings{
+    pub name: String,
     pub version: Version,
     pub graphics_api_version: Version,
     pub window_size: UVec2,

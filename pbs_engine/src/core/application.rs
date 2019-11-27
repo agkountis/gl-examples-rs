@@ -3,48 +3,40 @@ use crate::core::math::Vec4;
 use crate::core::timer::Timer;
 use crate::core::Settings;
 use crate::core::asset::AssetManager;
-use crate::core::scene::SceneManager;
+use crate::core::scene::{SceneManager, Scene};
 use crate::core::window::Window;
+use crate::core::engine::{Context, LifetimeEvents};
 
-pub struct Application<'a> {
-    window: Window,
-    asset_manager: AssetManager,
-    scene_manager: SceneManager,
-    timer: Timer,
-    settings: Settings<'a>
+pub struct Application {
+    context: Context
 }
 
-impl<'a> Application<'a> {
+impl Application {
     pub fn new(settings: Settings) -> Self {
         Self {
-            window: Window::new(settings.name,
-                                settings.window_size,
-                                &settings.graphics_api_version,
-                                &settings.window_mode,
-                                &settings.msaa),
-            asset_manager: AssetManager::new(),
-            scene_manager: SceneManager::new(),
-            timer: Timer::new(),
-            settings
+            context: Context::new(settings),
         }
     }
-}
 
-pub trait Run {
-    fn run(&mut self);
-}
+    pub fn add_scene<'a, T>(&mut self, f: T) where T: FnMut(&mut Context) -> Box<dyn Scene> + 'a {
+        self.context.scene_manager_mut().add_scene({
+            let mut scene = f(&mut self.context);
+            scene.start(&mut self.context);
+            scene
+        })
+    }
 
-pub trait Update {
-    fn update(&mut self, dt: f32);
-}
+    pub fn run(&mut self) {
+        self.setup();
 
-pub trait RenderingApplication {
-    fn run(&mut self);
-    fn setup(&mut self);
-    fn update(&mut self, dt: f32);
-    fn pre_draw(&mut self);
-    fn draw(&mut self);
-    fn post_draw(&mut self);
+        while !self.context.window().should_close() {
+            self.context.update()
+        }
+    }
+
+    fn setup(&mut self) {
+        unimplemented!()
+    }
 }
 
 pub fn clear_default_framebuffer(color: &Vec4) {

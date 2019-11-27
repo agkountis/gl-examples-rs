@@ -1,11 +1,9 @@
+use crate::core::engine::{LifetimeEvents, Context};
+use std::borrow::BorrowMut;
+use std::ops::DerefMut;
 
-pub trait Scene {
+pub trait Scene: LifetimeEvents {
     fn name(&self) -> &str;
-    fn setup(&mut self);
-    fn update(&mut self, dt: f32);
-    fn pre_draw(&mut self);
-    fn draw(&mut self);
-    fn post_draw(&mut self);
 }
 
 pub struct SceneManager {
@@ -43,5 +41,27 @@ impl SceneManager {
 
     pub fn clear_scenes(&mut self) {
         self.scenes.clear()
+    }
+}
+
+impl LifetimeEvents for SceneManager {
+    fn start(&mut self, context: &mut Context) {
+
+    }
+
+    fn update(&mut self, dt: f32) {
+        self.scenes[self.active_scene_index].update(dt)
+    }
+
+    fn pre_draw(&mut self) {
+        self.scenes[self.active_scene_index].pre_draw()
+    }
+
+    fn draw(&mut self) {
+        self.scenes[self.active_scene_index].draw()
+    }
+
+    fn post_draw(&mut self) {
+        self.scenes[self.active_scene_index].post_draw()
     }
 }
