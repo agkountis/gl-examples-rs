@@ -10,7 +10,7 @@ pub trait Subscriber<T> {
 /// that notify and propagate the messages published to this topic to all subscribers.
 pub struct Topic {
     id: i32,
-    subscribers: Vec<Box<FnMut(&dyn Any)>>,
+    subscribers: Vec<Box<dyn FnMut(&dyn Any)>>,
 }
 
 impl Topic {

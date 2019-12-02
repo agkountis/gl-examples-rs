@@ -1,6 +1,7 @@
 use glfw;
 use pbs_gl as gl;
 use gl::types::*;
+use crossbeam_channel::Sender;
 
 use std::sync::mpsc::Receiver;
 use std::ptr;
@@ -9,7 +10,7 @@ use std::ffi::CStr;
 use glfw::Context;
 use super::{WindowMode, Msaa, Version};
 use super::math::UVec2;
-
+use crate::core::engine::Event;
 
 
 pub struct Window {
@@ -18,7 +19,7 @@ pub struct Window {
     events: Receiver<(f64, glfw::WindowEvent)>,
     size: UVec2,
     framebuffer_size: UVec2,
-    resize_callback: Option<Box<dyn FnMut(i32, i32)>>
+    event_producer: Sender<Event>
 }
 
 impl Window {
@@ -27,7 +28,8 @@ impl Window {
                size: UVec2,
                api_version: &Version,
                window_mode: &WindowMode,
-               msaa: &Msaa) -> Window {
+               msaa: Msaa,
+               event_producer: Sender<Event>) -> Window {
 
         assert!(api_version.major > 3 && api_version.minor > 2,
                 "Only OpenGL version greater than 3.2 are supported");
@@ -51,7 +53,10 @@ impl Window {
         glfw.window_hint(glfw::WindowHint::Resizable(false));
 
         if cfg!(debug_assertions) {
-            glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true));
+            glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true))
+        }
+        else {
+            glfw.window_hint(glfw::WindowHint::ContextNoError(true))
         }
 
 
@@ -102,7 +107,7 @@ impl Window {
             events,
             size,
             framebuffer_size: UVec2::new(fb_width as u32, fb_height as u32),
-            resize_callback: None
+            event_producer
         }
     }
 
@@ -110,17 +115,18 @@ impl Window {
         self.glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(&self.events) {
-            match event {
-                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
-                    self.window.set_should_close(true)
-                },
-                glfw::WindowEvent::FramebufferSize(w, h) => {
-                    if let Some(resize_cb) = &mut self.resize_callback {
-                        resize_cb(w, h)
-                    }
-                },
-                _ => {}
-            }
+//            self.event_producer.send(Event::Window(event)).unwrap()
+//            match event {
+//                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
+//                    self.window.set_should_close(true)
+//                },
+//                glfw::WindowEvent::FramebufferSize(w, h) => {
+//                    if let Some(resize_cb) = &mut self.resize_callback {
+//                        resize_cb(w, h)
+//                    }
+//                },
+//                _ => {}
+//            }
         }
     }
 
@@ -146,11 +152,6 @@ impl Window {
 
     pub fn get_framebuffer_height(&self) -> u32 {
         self.framebuffer_size.y
-    }
-
-    pub fn set_resize_callback<T>(&mut self, resize_callback: T)
-        where T: FnMut(i32, i32) + 'static {
-        self.resize_callback = Some(Box::new(resize_callback));
     }
 
     extern "system" fn debug_callback(source: GLenum,

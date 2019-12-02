@@ -1,41 +1,80 @@
 use pbs_gl as gl;
+use crossbeam_channel::{Sender, Receiver};
+
 use crate::core::math::Vec4;
 use crate::core::timer::Timer;
 use crate::core::Settings;
 use crate::core::asset::AssetManager;
 use crate::core::scene::{SceneManager, Scene};
 use crate::core::window::Window;
-use crate::core::engine::{Context, LifetimeEvents};
+use crate::core::engine::{Context, Event};
+use std::error::Error;
 
-pub struct Application {
-    context: Context
+pub struct Application<T> {
+    window: Window,
+    scene_manager: SceneManager<T>,
+    asset_manager: AssetManager,
+    timer: Timer,
+    settings: Settings,
+    event_consumer: Receiver<Event>,
+    event_producer: Sender<Event>,
+    user_data: T
 }
 
-impl Application {
-    pub fn new(settings: Settings) -> Self {
+impl<T> Application<T> {
+    pub fn new(settings: Settings, initial_scene: Box<dyn Scene<T>>, user_data: T) -> Self {
+
+        let (producer, consumer) = crossbeam_channel::bounded(250);
+
+        let mut scene_manager = SceneManager::new(initial_scene);
+
         Self {
-            context: Context::new(settings),
+            window: Window::new(&settings.name,
+                                settings.window_size,
+                                &settings.graphics_api_version,
+                                &settings.window_mode,
+                                settings.msaa,
+                                producer.clone()),
+            scene_manager,
+            asset_manager: AssetManager::new(),
+            timer: Timer::new(),
+            settings,
+            event_consumer: consumer,
+            event_producer: producer,
+            user_data
         }
     }
 
-    pub fn add_scene<'a, T>(&mut self, f: T) where T: FnMut(&mut Context) -> Box<dyn Scene> + 'a {
-        self.context.scene_manager_mut().add_scene({
-            let mut scene = f(&mut self.context);
-            scene.start(&mut self.context);
-            scene
-        })
-    }
+    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+        self.initialize();
 
-    pub fn run(&mut self) {
-        self.setup();
+        while !self.window.should_close() {
+            self.window.handle_events();
 
-        while !self.context.window().should_close() {
-            self.context.update()
+            for event in self.event_consumer.try_iter() {
+                self.scene_manager.handle_event(Context::new(&mut self.window,
+                                                             &mut self.asset_manager,
+                                                             &mut self.timer,
+                                                             &mut self.settings,
+                                                             &mut self.user_data), event)
+            }
+
+            self.scene_manager.update(Context::new(&mut self.window,
+                                                   &mut self.asset_manager,
+                                                   &mut self.timer,
+                                                   &mut self.settings,
+                                                   &mut self.user_data));
         }
+
+        Ok(())
     }
 
-    fn setup(&mut self) {
-        unimplemented!()
+    fn initialize(&mut self) {
+        self.scene_manager.initialize(Context::new(&mut self.window,
+                                                   &mut self.asset_manager,
+                                                   &mut self.timer,
+                                                   &mut self.settings,
+                                                   &mut self.user_data))
     }
 }
 

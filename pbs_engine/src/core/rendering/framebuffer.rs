@@ -50,7 +50,6 @@ enum AttachmentBindPoint {
     DepthAttachment(GLenum),
     DepthStencilAttachment(GLenum),
     StencilAttachment(GLenum)
-
 }
 
 impl AttachmentBindPoint {
@@ -128,6 +127,18 @@ pub struct Framebuffer {
     texture_attachments: Vec<FramebufferAttachment>,
     renderbuffer_attachments: Vec<FramebufferAttachment>,
     has_depth: bool
+}
+
+impl Default for Framebuffer {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            size: UVec2::new(0, 0),
+            texture_attachments: vec![],
+            renderbuffer_attachments: vec![],
+            has_depth: false
+        }
+    }
 }
 
 impl Framebuffer {

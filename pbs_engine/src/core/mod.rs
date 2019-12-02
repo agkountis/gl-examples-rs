@@ -17,6 +17,7 @@ pub mod asset;
 pub mod engine;
 
 mod model_loader;
+mod messaging;
 
 use self::math::{UVec2, Vec4};
 
