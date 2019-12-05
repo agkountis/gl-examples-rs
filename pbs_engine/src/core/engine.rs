@@ -362,7 +362,7 @@ pub struct Context<'a, T> {
 }
 
 
-impl<'a, T> Context<'a, T> {
+impl<'a, T> Context<'a, T> where T: 'a {
     pub fn new(window: &'a mut Window,
                asset_manager: &'a mut AssetManager,
                timer: &'a mut Timer,

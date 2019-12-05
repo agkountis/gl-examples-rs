@@ -15,10 +15,12 @@ crossbeam-channel = "0.4"
 assimp = "0.3.1"
 pbs_gl = {path = "../pbs_gl"}
 
-[target.'cfg(windows)'.dependencies.glfw]
+[dependencies.glfw]
 version = "0.34.0"
 default-features = false
 
-[target.'cfg(unix)'.dependencies.glfw]
-version = "0.34.0"
+
+
+#[target.'cfg(target_os = "unix")'.dependencies.glfw]
+#version = "0.34.0"
 

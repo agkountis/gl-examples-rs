@@ -51,7 +51,7 @@ impl Window {
                                                             Msaa::X16 => Some(16)
                                                         }));
 
-        glfw.window_hint(glfw::WindowHint::Resizable(false));
+        glfw.window_hint(glfw::WindowHint::Resizable(true));
 
         if cfg!(debug_assertions) {
             glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true))
@@ -80,7 +80,7 @@ impl Window {
 
         gl::load_with(|s| window.get_proc_address(s) as *const _);
 
-        window.set_key_polling(true);
+        window.set_all_polling(true);
         window.make_current();
 
         window.set_framebuffer_size_polling(true);

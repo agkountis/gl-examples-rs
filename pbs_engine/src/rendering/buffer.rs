@@ -2,7 +2,7 @@ use std::ptr;
 use pbs_gl as gl;
 use gl::types::*;
 use std::mem;
-use crate::core::rendering::format::{BufferInternalFormat, DataFormat, DataType};
+use crate::rendering::format::{BufferInternalFormat, DataFormat, DataType};
 
 
 bitflags! {

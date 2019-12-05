@@ -4,11 +4,11 @@ use std::ffi::CString;
 use std::ptr;
 
 use super::shader::Shader;
-use crate::core::rendering::shader::ShaderStage;
+use crate::rendering::shader::ShaderStage;
 use crate::core::math::matrix::Mat4;
 use crate::core::math::utilities;
-use crate::core::rendering::texture::{Texture2D, TextureCube};
-use crate::core::rendering::sampler::Sampler;
+use crate::rendering::texture::{Texture2D, TextureCube};
+use crate::rendering::sampler::Sampler;
 use crate::core::math::Vec3;
 
 

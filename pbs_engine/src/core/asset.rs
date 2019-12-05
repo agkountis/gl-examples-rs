@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use crate::core::rendering::texture::{Texture2D, TextureCube, Texture2DLoadConfig};
-use crate::core::rendering::mesh::Mesh;
+use crate::rendering::texture::{Texture2D, TextureCube, Texture2DLoadConfig};
+use crate::rendering::mesh::Mesh;
 use std::path::Path;
 
 pub trait Asset {
