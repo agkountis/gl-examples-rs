@@ -7,8 +7,9 @@ use crate::core::Settings;
 use crate::core::asset::AssetManager;
 use crate::core::scene::{SceneManager, Scene};
 use crate::core::window::Window;
-use crate::core::engine::{Context, Event};
+use crate::core::engine::Context;
 use std::error::Error;
+use crate::engine::event::Event;
 
 pub struct Application<T> {
     window: Window,
@@ -50,6 +51,7 @@ impl<T> Application<T> {
 
         while !self.window.should_close() {
             self.window.handle_events();
+            clear_default_framebuffer(&Vec4::new(1.0, 0.0, 0.0, 1.0));
 
             for event in self.event_consumer.try_iter() {
                 self.scene_manager.handle_event(Context::new(&mut self.window,
@@ -64,6 +66,8 @@ impl<T> Application<T> {
                                                    &mut self.timer,
                                                    &mut self.settings,
                                                    &mut self.user_data));
+
+            self.window.swap_buffers()
         }
 
         Ok(())

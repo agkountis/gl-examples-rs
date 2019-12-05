@@ -1,4 +1,4 @@
-use crate::core::engine::{Context, Event};
+use crate::core::engine::{Context, event::Event};
 use std::borrow::BorrowMut;
 use std::ops::DerefMut;
 

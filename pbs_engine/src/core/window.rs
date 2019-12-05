@@ -10,7 +10,8 @@ use std::ffi::CStr;
 use glfw::Context;
 use super::{WindowMode, Msaa, Version};
 use super::math::UVec2;
-use crate::core::engine::Event;
+use crate::engine::event::Event;
+use crate::engine::input::Action;
 
 
 pub struct Window {
@@ -115,18 +116,7 @@ impl Window {
         self.glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(&self.events) {
-//            self.event_producer.send(Event::Window(event)).unwrap()
-//            match event {
-//                glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
-//                    self.window.set_should_close(true)
-//                },
-//                glfw::WindowEvent::FramebufferSize(w, h) => {
-//                    if let Some(resize_cb) = &mut self.resize_callback {
-//                        resize_cb(w, h)
-//                    }
-//                },
-//                _ => {}
-//            }
+            self.event_producer.send(event.into()).unwrap();
         }
     }
 

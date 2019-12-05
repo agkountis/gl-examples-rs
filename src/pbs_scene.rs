@@ -24,10 +24,11 @@ use pbs_engine::application::clear_default_framebuffer;
 
 
 use pbs_engine::core::asset::AssetManager;
-use pbs_engine::core::engine::Event;
+use pbs_engine::core::engine::event::Event;
 use pbs_engine::engine::Context;
 use pbs_engine::core::scene::Transition;
 use crate::ApplicationData;
+use pbs_engine::core::engine::input::Key::P;
 
 
 struct EnvironmentMaps {
@@ -437,11 +438,23 @@ impl Scene<ApplicationData> for PbsScene {
     }
 
     fn handle_event(&mut self, context: Context<ApplicationData>, event: Event) -> Transition<ApplicationData> {
+        match event {
+            Event::MouseButton(button, action, modifiers) => {
+                println!("{:?} : {:?}", button, action)
+            },
+            Event::Key(key, action, _) => {
+                println!("{:?} : {:?}", key, action)
+            },
+            Event::CursorPosition(x, y) => {
+                println!("Cursor position: {}, {}", x, y)
+            },
+            _ => ()
+        }
         Transition::None
     }
 
     fn update(&mut self, context: Context<ApplicationData>) -> Transition<ApplicationData> {
-        println!("{} {}", context.timer.get_delta(), context.user_data.foo);
+//        println!("{} {}", context.timer.get_delta(), context.user_data.foo);
 
         Transition::None
     }
