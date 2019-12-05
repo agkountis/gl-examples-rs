@@ -29,6 +29,7 @@ use pbs_engine::engine::Context;
 use pbs_engine::core::scene::Transition;
 use crate::ApplicationData;
 use pbs_engine::core::engine::input::Key::P;
+use pbs_engine::core::engine::input::Modifiers;
 
 
 struct EnvironmentMaps {
@@ -442,12 +443,13 @@ impl Scene<ApplicationData> for PbsScene {
             Event::MouseButton(button, action, modifiers) => {
                 println!("{:?} : {:?}", button, action)
             },
-            Event::Key(key, action, _) => {
-                println!("{:?} : {:?}", key, action)
-            },
-            Event::CursorPosition(x, y) => {
-                println!("Cursor position: {}, {}", x, y)
-            },
+            Event::Key(key, action, m) => {
+                if m.intersects(Modifiers::Shift) {
+                    println!("Shift + {:?} : {:?}", key, action)
+                } else {
+                    println!("{:?} : {:?}", key, action)
+                }
+            }
             _ => ()
         }
         Transition::None
