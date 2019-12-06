@@ -31,7 +31,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         msaa: Msaa::X4,
         vsync: true,
         default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
-    }, Box::new(PbsScene::new(20)), ApplicationData{foo: 10});
+    }, ApplicationData{foo: 10}, |context| {
+        Box::new(PbsScene::new(context))
+    });
 
     app.run()
 }

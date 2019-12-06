@@ -1,13 +1,5 @@
-#[macro_use]
-macro_rules! offset_of {
-    ($ty:ty, $field:ident) => {
-        unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
-    }
-}
-
 pub mod application;
 pub mod math;
-pub mod rendering;
 pub mod window;
 pub mod scene;
 pub mod camera;

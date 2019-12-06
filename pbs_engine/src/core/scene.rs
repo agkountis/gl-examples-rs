@@ -24,19 +24,22 @@ pub trait Scene<T> {
 
 pub struct SceneManager<T> {
     scenes: Vec<Box<dyn Scene<T>>>,
-    active_scene_index: usize
+    active_scene_index: usize,
+    is_running: bool
 }
 
 impl<T> SceneManager<T> {
     pub fn new(initial_scene: Box<dyn Scene<T>>) -> Self {
         Self {
             scenes: vec![initial_scene],
-            active_scene_index: 0
+            active_scene_index: 0,
+            is_running: false
         }
     }
 
     pub fn initialize(&mut self, context: Context<T>) {
-        self.scenes.last_mut().unwrap().start(context)
+        self.scenes.last_mut().unwrap().start(context);
+        self.is_running = true
     }
 
     pub fn handle_event(&mut self, context: Context<T>, event: Event) {
@@ -54,11 +57,21 @@ impl<T> SceneManager<T> {
                                                                                         settings,
                                                                                         user_data),
                                                                            event);
-        self.handle_transition(transition, Context::new(window,
-                                                        asset_manager,
-                                                        timer,
-                                                        settings,
-                                                        user_data))
+
+        match transition {
+            Transition::Quit => self.stop(Context::new(window,
+                                                       asset_manager,
+                                                       timer,
+                                                       settings,
+                                                       user_data)),
+            _ => {
+                self.handle_transition(transition, Context::new(window,
+                                                                asset_manager,
+                                                                timer,
+                                                                settings,
+                                                                user_data))
+            }
+        }
     }
 
     pub fn update(&mut self, context: Context<T>) {
@@ -80,6 +93,10 @@ impl<T> SceneManager<T> {
                                                         timer,
                                                         settings,
                                                         user_data))
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running
     }
 
     fn handle_transition(&mut self, transition: Transition<T>, context: Context<T>) {
@@ -115,5 +132,23 @@ impl<T> SceneManager<T> {
                                                            timer,
                                                            settings,
                                                            user_data))
+    }
+
+    pub(crate) fn stop(&mut self, context: Context<T>) {
+        if self.is_running {
+            let Context {
+                window,
+                asset_manager,
+                timer,
+                settings,
+                user_data
+            } = context;
+
+            while let Some(mut scene) = self.scenes.pop() {
+                scene.stop(Context::new(window, asset_manager, timer, settings, user_data))
+            }
+
+            self.is_running = false;
+        }
     }
 }

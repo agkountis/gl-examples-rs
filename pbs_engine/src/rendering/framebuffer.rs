@@ -4,8 +4,8 @@ use std::fmt;
 
 use crate::core::math::{UVec2, Vec4};
 use crate::core::math;
-use crate::core::rendering::texture::SizedTextureFormat;
-use crate::core::rendering::state::StateManager;
+use crate::rendering::texture::SizedTextureFormat;
+use crate::rendering::state::StateManager;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]

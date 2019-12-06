@@ -51,7 +51,7 @@ impl Window {
                                                             Msaa::X16 => Some(16)
                                                         }));
 
-        glfw.window_hint(glfw::WindowHint::Resizable(false));
+        glfw.window_hint(glfw::WindowHint::Resizable(true));
 
         if cfg!(debug_assertions) {
             glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true))

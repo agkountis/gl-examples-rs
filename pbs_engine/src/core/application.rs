@@ -23,22 +23,29 @@ pub struct Application<T> {
 }
 
 impl<T> Application<T> {
-    pub fn new(settings: Settings, initial_scene: Box<dyn Scene<T>>, user_data: T) -> Self {
+    pub fn new<Cons>(mut settings: Settings, mut user_data: T, mut scene_constructor: Cons) -> Self
+        where Cons: FnMut(Context<T>) -> Box<dyn Scene<T>> {
 
-        let (producer, consumer) = crossbeam_channel::bounded(250);
+        let (producer, consumer) = crossbeam_channel::unbounded();
 
+        let mut window = Window::new(&settings.name,
+                                 settings.window_size,
+                                 &settings.graphics_api_version,
+                                 &settings.window_mode,
+                                 settings.msaa,
+                                 producer.clone());
+
+        let mut asset_manager = AssetManager::new();
+        let mut timer = Timer::new();
+
+        let initial_scene = scene_constructor(Context::new(&mut window, &mut asset_manager, &mut timer, &mut settings, &mut user_data));
         let mut scene_manager = SceneManager::new(initial_scene);
 
         Self {
-            window: Window::new(&settings.name,
-                                settings.window_size,
-                                &settings.graphics_api_version,
-                                &settings.window_mode,
-                                settings.msaa,
-                                producer.clone()),
+            window,
             scene_manager,
-            asset_manager: AssetManager::new(),
-            timer: Timer::new(),
+            asset_manager,
+            timer,
             settings,
             event_consumer: consumer,
             event_producer: producer,
@@ -49,7 +56,7 @@ impl<T> Application<T> {
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
         self.initialize();
 
-        while !self.window.should_close() {
+        while !self.window.should_close() && self.scene_manager.is_running() {
             self.window.handle_events();
             clear_default_framebuffer(&Vec4::new(1.0, 0.0, 0.0, 1.0));
 
@@ -58,7 +65,8 @@ impl<T> Application<T> {
                                                              &mut self.asset_manager,
                                                              &mut self.timer,
                                                              &mut self.settings,
-                                                             &mut self.user_data), event)
+                                                             &mut self.user_data),
+                                                event)
             }
 
             self.scene_manager.update(Context::new(&mut self.window,

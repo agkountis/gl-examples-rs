@@ -1,12 +1,13 @@
-use crate::core::rendering::texture::Texture2D;
-use crate::core::rendering::program_pipeline::ProgramPipeline;
-use crate::core::rendering::shader::{Shader, ShaderStage};
-use crate::core::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
+use crate::rendering::texture::Texture2D;
+use crate::rendering::program_pipeline::ProgramPipeline;
+use crate::rendering::shader::{Shader, ShaderStage};
+use crate::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
 use crate::core::math::Vec4;
 
 pub trait Material {
     fn bind(&self);
     fn unbind(&self);
+    fn program_pipeline(&self) -> &ProgramPipeline;
 }
 
 pub struct PbsMetallicRoughnessMaterial<'a> {
@@ -93,5 +94,9 @@ impl Material for PbsMetallicRoughnessMaterial<'_> {
 
     fn unbind(&self) {
         self.program_pipeline.unbind();
+    }
+
+    fn program_pipeline(&self) -> &ProgramPipeline {
+        &self.program_pipeline
     }
 }

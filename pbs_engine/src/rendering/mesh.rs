@@ -2,10 +2,10 @@ use pbs_gl as gl;
 use gl::types::*;
 
 use crate::core::math::{Vec2, Vec3, Vec4};
-use crate::core::rendering::buffer::{Buffer, BufferStorageFlags};
+use crate::rendering::buffer::{Buffer, BufferStorageFlags};
 use std::mem;
 use std::ptr;
-use crate::core::rendering::Draw;
+use crate::rendering::Draw;
 
 
 #[derive(Debug)]
