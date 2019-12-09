@@ -32,8 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         vsync: true,
         default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
     }, ApplicationData{foo: 10}, |context| {
-        let scene = PbsScene::new(context);
-        Box::new(scene)
+        PbsScene::new(context)
     });
 
     app.run()

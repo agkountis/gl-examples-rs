@@ -363,42 +363,6 @@ impl PbsScene {
     }
 }
 
-//impl Scene<ApplicationData> for PbsScene {
-//    fn name(&self) -> &str {
-//        "PBS_SCENE"
-//    }
-//
-//    fn setup(&mut self) {
-//        self.skybox_program_pipeline.bind();
-//        self.skybox_program_pipeline.set_texture_cube("skybox",
-//                                                      &self.environment_maps.skybox,
-//                                                      &self.sampler,
-//                                                      ShaderStage::Fragment);
-//        self.skybox_program_pipeline.unbind();
-//    }
-//
-//    fn update(&mut self, dt: f32) {
-//        let rotation_speed: f32 = 0.08;
-//        self.model.transform = rotate(&self.model.transform,
-//                                      2.0 * 180.0 * rotation_speed * dt,
-//                                      Vec3::new(-1.0, 1.0, 1.0))
-//    }
-//
-//    fn pre_draw(&mut self) {
-//
-//    }
-//
-//    fn draw(&mut self) {
-//        self.geometry_pass();
-//        self.bloom_pass();
-//        self.skybox_pass();
-//        self.tonemap_pass();
-//    }
-//
-//    fn post_draw(&mut self) {
-//    }
-//}
-
 impl Scene<ApplicationData> for PbsScene {
     fn start(&mut self, context: Context<ApplicationData>) {
         self.skybox_program_pipeline.bind();
@@ -440,7 +404,13 @@ impl Scene<ApplicationData> for PbsScene {
                 }
             },
             Event::WindowFramebufferSize(x, y) => {
-                println!("Framebuffer size: {}, {}", x, y)
+                println!("Framebuffer size: {}, {}", x, y);
+                self.projection_matrix = perspective(x as u32,
+                                                     y as u32,
+                                                     60,
+                                                     0.1,
+                                                     100.0);
+                StateManager::set_viewport(0, 0, x, y)
             }
             _ => ()
         }

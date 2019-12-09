@@ -11,9 +11,9 @@ use crate::core::engine::Context;
 use std::error::Error;
 use crate::engine::event::Event;
 
-pub struct Application<T> {
+pub struct Application<'a, T>  {
     window: Window,
-    scene_manager: SceneManager<T>,
+    scene_manager: SceneManager<'a, T>,
     asset_manager: AssetManager,
     timer: Timer,
     settings: Settings,
@@ -22,9 +22,9 @@ pub struct Application<T> {
     user_data: T
 }
 
-impl<T> Application<T> {
-    pub fn new<Cons>(mut settings: Settings, mut user_data: T, mut scene_constructor: Cons) -> Self
-        where Cons: FnMut(Context<T>) -> Box<dyn Scene<T>> {
+impl<'a, T> Application<'a, T> {
+    pub fn new<Cons, S: Scene<T> + 'a>(mut settings: Settings, mut user_data: T, mut scene_constructor: Cons) -> Application<'a, T>
+        where Cons: FnMut(Context<T>) -> S {
 
         let (producer, consumer) = crossbeam_channel::unbounded();
 

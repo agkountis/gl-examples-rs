@@ -22,16 +22,16 @@ pub trait Scene<T> {
     fn post_draw(&mut self, context: Context<T>) {}
 }
 
-pub struct SceneManager<T> {
-    scenes: Vec<Box<dyn Scene<T>>>,
+pub struct SceneManager<'a, T> {
+    scenes: Vec<Box<dyn Scene<T> + 'a>>,
     active_scene_index: usize,
     is_running: bool
 }
 
-impl<T> SceneManager<T> {
-    pub fn new(initial_scene: Box<dyn Scene<T>>) -> Self {
+impl<'a, T> SceneManager<'a, T> {
+    pub fn new<S: Scene<T> + 'a>(initial_scene: S) -> SceneManager<'a, T> {
         Self {
-            scenes: vec![initial_scene],
+            scenes: vec![Box::new(initial_scene)],
             active_scene_index: 0,
             is_running: false
         }
