@@ -58,7 +58,6 @@ impl<T> Application<T> {
 
         while !self.window.should_close() && self.scene_manager.is_running() {
             self.window.handle_events();
-            clear_default_framebuffer(&Vec4::new(1.0, 0.0, 0.0, 1.0));
 
             for event in self.event_consumer.try_iter() {
                 self.scene_manager.handle_event(Context::new(&mut self.window,

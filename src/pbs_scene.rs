@@ -31,7 +31,6 @@ use crate::ApplicationData;
 use pbs_engine::core::engine::input::Key::P;
 use pbs_engine::core::engine::input::Modifiers;
 use pbs_engine::engine::event::Event::Key;
-use std::marker::PhantomData;
 
 
 struct EnvironmentMaps {
@@ -188,12 +187,12 @@ impl PbsScene {
                                                       100.0);
 
         let material = Box::new(PbsMetallicRoughnessMaterial::new(
-            albedo,
-            metallic,
-            roughness,
-            normals,
-            ao,
-            ibl_brdf_lut
+            albedo.clone(),
+            metallic.clone(),
+            roughness.clone(),
+            normals.clone(),
+            ao.clone(),
+            ibl_brdf_lut.clone()
         ));
 
         PbsScene {

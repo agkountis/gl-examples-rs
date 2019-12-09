@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use crate::rendering::texture::{Texture2D, TextureCube, Texture2DLoadConfig};
 use crate::rendering::mesh::Mesh;
 use std::path::Path;
+use std::rc::Rc;
 
 pub trait Asset {
     type Output;
@@ -12,7 +13,7 @@ pub trait Asset {
 }
 
 pub struct AssetManager {
-    textures: HashMap<String, Texture2D>,
+    textures: HashMap<String, Rc<Texture2D>>,
     cube_maps: HashMap<String, TextureCube>,
     meshes: HashMap<String, Mesh>
 }
@@ -26,14 +27,17 @@ impl AssetManager {
         }
     }
 
-    pub fn load_texture_2d(&mut self, path: &str, is_srgb: bool, generate_mipmaps: bool) -> Result<&Texture2D, String> {
+    pub fn load_texture_2d(&mut self, path: &str, is_srgb: bool, generate_mipmaps: bool) -> Result<Rc<Texture2D>, String> {
         match Path::new(path).file_name() {
             Some(fname) => {
-                Ok(self.textures.entry(String::from(fname.to_string_lossy())).or_insert(
-                    Texture2D::load(path, Some(Texture2DLoadConfig {
-                        is_srgb,
-                        generate_mipmaps
-                    }))?))
+                let t = Rc::new(Texture2D::load(path, Some(Texture2DLoadConfig {
+                    is_srgb,
+                    generate_mipmaps
+                }))?);
+
+                self.textures.entry(String::from(fname.to_string_lossy())).or_insert(Rc::clone(&t));
+
+                Ok(t)
             },
             None => {
                 Err(String::from("Invalid file path."))
@@ -41,13 +45,14 @@ impl AssetManager {
         }
     }
 
-    pub fn get_texture_2d(&self, name: &str) -> Option<&Texture2D> {
-        self.textures.get(name)
-    }
-
-    pub fn get_texture_2d_mut(&mut self, name: &str) -> Option<&mut Texture2D> {
-        self.textures.get_mut(name)
-    }
+//    pub fn get_texture_2d(&self, name: &str) -> Option<Rc<Texture2D>> {
+//
+//        Rc::clone(self.textures.get(name))
+//    }
+//
+//    pub fn get_texture_2d_mut(&mut self, name: &str) -> Option<Rc<Texture2D>> {
+//        self.textures.get_mut(name)
+//    }
 
 
 }
