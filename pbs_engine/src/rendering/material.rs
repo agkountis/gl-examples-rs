@@ -3,6 +3,7 @@ use crate::rendering::program_pipeline::ProgramPipeline;
 use crate::rendering::shader::{Shader, ShaderStage};
 use crate::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
 use crate::core::math::Vec4;
+use std::rc::Rc;
 
 pub trait Material {
     fn bind(&self);
@@ -10,24 +11,24 @@ pub trait Material {
     fn program_pipeline(&self) -> &ProgramPipeline;
 }
 
-pub struct PbsMetallicRoughnessMaterial<'a> {
-    pub albedo: &'a Texture2D,
-    pub metallic: &'a Texture2D,
-    pub roughness: &'a Texture2D,
-    pub normals: &'a Texture2D,
-    pub ao: &'a Texture2D,
-    pub ibl_brdf_lut: &'a Texture2D,
+pub struct PbsMetallicRoughnessMaterial {
+    pub albedo: Rc<Texture2D>,
+    pub metallic: Rc<Texture2D>,
+    pub roughness: Rc<Texture2D>,
+    pub normals:  Rc<Texture2D>,
+    pub ao: Rc<Texture2D>,
+    pub ibl_brdf_lut: Rc<Texture2D>,
     sampler: Sampler,
     program_pipeline: ProgramPipeline
 }
 
-impl<'a> PbsMetallicRoughnessMaterial<'a> {
-    pub fn new(albedo: &'a Texture2D,
-               metallic: &'a Texture2D,
-               roughness: &'a Texture2D,
-               normals: &'a Texture2D,
-               ao: &'a Texture2D,
-               ibl_brdf_lut: &'a Texture2D) -> Self {
+impl PbsMetallicRoughnessMaterial {
+    pub fn new(albedo: Rc<Texture2D>,
+               metallic: Rc<Texture2D>,
+               roughness: Rc<Texture2D>,
+               normals: Rc<Texture2D>,
+               ao: Rc<Texture2D>,
+               ibl_brdf_lut: Rc<Texture2D>) -> Self {
 
         let program_pipeline = ProgramPipeline::new()
             .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
@@ -61,33 +62,33 @@ impl<'a> PbsMetallicRoughnessMaterial<'a> {
     }
 }
 
-impl Material for PbsMetallicRoughnessMaterial<'_> {
+impl Material for PbsMetallicRoughnessMaterial{
     fn bind(&self) {
         self.program_pipeline.bind();
 
         self.program_pipeline
             .set_texture_2d("albedoMap",
-                            self.albedo,
+                            &self.albedo,
                             &self.sampler,
                             ShaderStage::Fragment)
             .set_texture_2d("metallicMap",
-                            self.metallic,
+                            &self.metallic,
                             &self.sampler,
                             ShaderStage::Fragment)
             .set_texture_2d("roughnessMap",
-                            self.roughness,
+                            &self.roughness,
                             &self.sampler,
                             ShaderStage::Fragment)
             .set_texture_2d("normalMap",
-                            self.normals,
+                            &self.normals,
                             &self.sampler,
                             ShaderStage::Fragment)
             .set_texture_2d("aoMap",
-                            self.ao,
+                            &self.ao,
                             &self.sampler,
                             ShaderStage::Fragment)
             .set_texture_2d("brdfLUT",
-                            self.ibl_brdf_lut,
+                            &self.ibl_brdf_lut,
                             &self.sampler,
                             ShaderStage::Fragment);
     }

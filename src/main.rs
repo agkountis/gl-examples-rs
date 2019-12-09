@@ -9,7 +9,7 @@ use pbs_engine::{Msaa, Settings, Version, WindowMode};
 use crate::pbs_scene::PbsScene;
 use std::error::Error;
 
-struct ApplicationData {
+pub struct ApplicationData {
     pub foo: i32
 }
 
@@ -32,7 +32,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         vsync: true,
         default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
     }, ApplicationData{foo: 10}, |context| {
-        Box::new(PbsScene::new(context))
+        let scene = PbsScene::new(context);
+        Box::new(scene)
     });
 
     app.run()

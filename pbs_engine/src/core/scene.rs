@@ -92,7 +92,25 @@ impl<T> SceneManager<T> {
                                                         asset_manager,
                                                         timer,
                                                         settings,
-                                                        user_data))
+                                                        user_data));
+
+        self.scenes[self.active_scene_index].pre_draw(Context::new(window,
+                                                                   asset_manager,
+                                                                   timer,
+                                                                   settings,
+                                                                   user_data));
+
+        self.scenes[self.active_scene_index].draw(Context::new(window,
+                                                               asset_manager,
+                                                               timer,
+                                                               settings,
+                                                               user_data));
+
+        self.scenes[self.active_scene_index].post_draw(Context::new(window,
+                                                                    asset_manager,
+                                                                    timer,
+                                                                    settings,
+                                                                    user_data))
     }
 
     pub fn is_running(&self) -> bool {
