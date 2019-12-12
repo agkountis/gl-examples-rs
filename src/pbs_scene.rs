@@ -2,10 +2,7 @@ use pbs_engine::scene::Scene;
 use pbs_engine::camera::Camera;
 use pbs_engine::rendering::mesh::{Mesh, FullscreenMesh, MeshUtilities};
 use pbs_engine::rendering::program_pipeline::ProgramPipeline;
-use pbs_engine::math::{
-    vector::{Vec3, UVec2, Vec4},
-    matrix::{perspective, Mat4, rotate, translate}
-};
+use pbs_engine::math::{vector::{Vec3, UVec2, Vec4}, matrix::{perspective, Mat4, rotate, translate}, scale};
 
 use pbs_engine::rendering::{
     shader::{ShaderStage, Shader},
@@ -31,6 +28,7 @@ use crate::ApplicationData;
 use pbs_engine::core::engine::input::Key::P;
 use pbs_engine::core::engine::input::Modifiers;
 use pbs_engine::engine::event::Event::Key;
+use std::rc::Rc;
 
 
 struct EnvironmentMaps {
@@ -40,7 +38,7 @@ struct EnvironmentMaps {
 }
 
 struct Model {
-    pub mesh: Mesh,
+    pub mesh: Rc<Mesh>,
     pub transform: Mat4
 }
 
@@ -105,22 +103,24 @@ impl PbsScene {
             .unwrap();
 
 
-        let mesh = MeshUtilities::generate_cube(1.0);
+        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus.fbx")
+            .expect("Failed to load mesh");
+
         let skybox_mesh = MeshUtilities::generate_cube(1.0);
 
-        let albedo = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/albedo.png", true, true)
+        let albedo = asset_manager.load_texture_2d("assets/textures/cerberus/Cerberus_A.png", true, true)
             .expect("Failed to load albedo texture");
 
-        let metallic = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/metallic.png", false, true)
+        let metallic = asset_manager.load_texture_2d("assets/textures/cerberus/Cerberus_M.png", false, true)
             .expect("Failed to load metallic texture");
 
-        let roughness = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/roughness.png", false, true)
+        let roughness = asset_manager.load_texture_2d("assets/textures/cerberus/Cerberus_R.png", false, true)
             .expect("Failed to load roughness texture");
 
-        let normals = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/normal.png", false, true)
+        let normals = asset_manager.load_texture_2d("assets/textures/cerberus/Cerberus_N.png", false, true)
             .expect("Failed to load normals texture");
 
-        let ao = asset_manager.load_texture_2d("assets/textures/pbs/rusted_iron/ao.png", false, true)
+        let ao = asset_manager.load_texture_2d("assets/textures/cerberus/Cerberus_AO.png", false, true)
             .expect("Failed to load ao texture");
 
         let ibl_brdf_lut = asset_manager.load_texture_2d("assets/textures/pbs/ibl_brdf_lut.png", false, false)
@@ -150,14 +150,14 @@ impl PbsScene {
             });
 
         let blur_framebuffers: [Framebuffer; 2] =
-            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 4,
-                                          window.get_framebuffer_height() / 4),
+            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 6,
+                                          window.get_framebuffer_height() / 6),
                                vec![
                                    FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                         AttachmentType::Texture)])
                 .unwrap_or_else(|error| {panic!("Framebuffer creation error: {}", error)}),
-                Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 4,
-                                            window.get_framebuffer_height() / 4),
+                Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 6,
+                                            window.get_framebuffer_height() / 6),
                                  vec![
                                      FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                           AttachmentType::Texture)])
@@ -199,7 +199,11 @@ impl PbsScene {
             camera,
             model: Model{
                 mesh,
-                transform: translate(&Mat4::identity(), &Vec3::new(0.0, 0.0, 2.0))
+                transform: {
+                    let mut tx = translate(&Mat4::identity(), &Vec3::new(0.0, 0.0, 30.0));
+                    tx = rotate(&tx, -90.0, &Vec3::new(1.0, 0.0, 0.0));
+                    scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
+                }
             },
             skybox_mesh,
             fullscreen_mesh: FullscreenMesh::new(),
@@ -244,7 +248,7 @@ impl PbsScene {
                           &Vec3::new(-0.2, 0.0, -1.0),
                           ShaderStage::Fragment)
             .set_vector3f("lightColor",
-                          &Vec3::new(3.0, 3.0, 3.0),
+                          &Vec3::new(1.0, 1.0, 1.0),
                           ShaderStage::Fragment)
             .set_matrix4f("model",
                           &self.model.transform,
@@ -266,7 +270,7 @@ impl PbsScene {
     }
 
     fn bloom_pass(&self) {
-        let blur_strength = 10;
+        let blur_strength = 8;
 
         for i in 0..blur_strength {
             let ping_pong_index = i % 2;
@@ -342,7 +346,7 @@ impl PbsScene {
 
         self.tonemapping_pipeline.bind();
 
-        let exposure: f32 = 1.0;
+        let exposure: f32 = 2.0;
         self.tonemapping_pipeline.set_texture_2d_with_id("image",
                                                          self.framebuffer.get_texture_attachment(0).get_id(),
                                                          &self.sampler_nearest,
@@ -367,7 +371,7 @@ impl Scene<ApplicationData> for PbsScene {
     fn start(&mut self, context: Context<ApplicationData>) {
         self.skybox_program_pipeline.bind();
         self.skybox_program_pipeline.set_texture_cube("skybox",
-                                                      &self.environment_maps.skybox,
+                                                      &self.environment_maps.radiance,
                                                       &self.sampler,
                                                       ShaderStage::Fragment);
         self.skybox_program_pipeline.unbind();
@@ -418,10 +422,10 @@ impl Scene<ApplicationData> for PbsScene {
     }
 
     fn update(&mut self, context: Context<ApplicationData>) -> Transition<ApplicationData> {
-        let rotation_speed: f32 = 0.08;
+        let rotation_speed: f32 = 0.03;
         self.model.transform = rotate(&self.model.transform,
-                                      2.0 * 180.0 * rotation_speed * context.timer.get_delta(),
-                                      &Vec3::new(-1.0, 1.0, 1.0));
+                                      -2.0 * 180.0 * rotation_speed * context.timer.get_delta(),
+                                      &Vec3::new(0.0, 0.0, 1.0));
         Transition::None
     }
 
