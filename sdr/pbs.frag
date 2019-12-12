@@ -59,7 +59,7 @@ float DistributionGGX(float NdotH, float roughness)
 float GeometrySchlickGGX(float NdotV, float roughness)
 {
     float r = roughness + 1.0;
-    float k = r * r * 0.125; // 1.0 / 8.0 = 0.125
+    float k = (r * r) * 0.125; // 1.0 / 8.0 = 0.125
 
     float num   = NdotV;
     float denom = NdotV * (1.0 - k) + k;
@@ -125,33 +125,27 @@ float ConvertToGrayscale(vec3 color)
 
 void main()
 {
-    vec4 albedo = texture(albedoMap, fsIn.texcoord);
-
-    float roughness = texture(roughnessMap, fsIn.texcoord).r;
-    float metallic = texture(metallicMap, fsIn.texcoord).r;
-    float ao = texture(aoMap, fsIn.texcoord).r;
-
-    vec3 n = fsIn.TBN * normalize(texture(normalMap, fsIn.texcoord).rgb * 2.0 - 1.0).rgb;
-
+    vec3 n = normalize(fsIn.TBN * (texture(normalMap, fsIn.texcoord).rgb * 2.0 - 1.0).rgb);
     vec3 v = normalize(fsIn.wViewDirection);
     vec3 l = normalize(wLightDirection);
-
-    vec3 irradiance = texture(irradianceMap, n).rgb;
-
-    vec3 r = reflect(-v, n);
-    vec3 radiance = textureLod(radianceMap, r, roughness * MAX_REFLECTION_LOD).rgb;
-
-    vec2 lutSample = texture(brdfLUT, fsIn.texcoord).rg;
-
-    vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo.rgb, metallic);
-
     vec3 h = normalize(l + v);
+    vec3 r = reflect(-v, n);
 
     float NdotH = clamp(dot(n, h), 0.0, 1.0);
     float NdotV = clamp(dot(n, v), 0.0, 1.0);
     float NdotL = clamp(dot(n, l), 0.0, 1.0);
     float HdotV = clamp(dot(h, v), 0.0, 1.0);
 
+    vec4 albedo = texture(albedoMap, fsIn.texcoord);
+    float roughness = texture(roughnessMap, fsIn.texcoord).r;
+    float metallic = texture(metallicMap, fsIn.texcoord).r;
+    float ao = texture(aoMap, fsIn.texcoord).r;
+
+    vec3 irradiance = texture(irradianceMap, n).rgb;
+    vec3 radiance = textureLod(radianceMap, r, roughness * MAX_REFLECTION_LOD).rgb;
+    vec2 lutSample = texture(brdfLUT, vec2(NdotV, roughness)).rg;
+
+    vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo.rgb, metallic);
 
     vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor, F0, albedo.rgb, metallic, roughness) +
                       IBL(NdotV, F0, albedo.rgb, metallic, roughness, ao, lutSample, irradiance, radiance);
@@ -160,5 +154,5 @@ void main()
 
     float brightness = ConvertToGrayscale(finalColor);
 
-    outBloomBrightColor = vec4(finalColor * step(1.0, brightness), 1.0);
+    outBloomBrightColor = vec4(finalColor * smoothstep(0.0, 0.2, brightness) * 0.2, 1.0);
 }

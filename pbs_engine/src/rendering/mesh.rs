@@ -6,6 +6,8 @@ use crate::rendering::buffer::{Buffer, BufferStorageFlags};
 use std::mem;
 use std::ptr;
 use crate::rendering::Draw;
+use crate::core::asset::Asset;
+use std::ops::Index;
 
 
 #[derive(Debug)]
@@ -108,6 +110,71 @@ impl Drop for Mesh {
         unsafe {
             gl::DeleteVertexArrays(1, &self.vao)
         }
+    }
+}
+
+impl Asset for Mesh {
+    type Output = Self;
+    type Error = String;
+    type LoadConfig = ();
+
+    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+        use assimp::Importer;
+
+        let mut importer = Importer::new();
+        importer.triangulate(true);
+        importer.calc_tangent_space(|calc| calc.enable = true);
+        importer.gen_uv_coords(true);
+        importer.generate_normals(|x| x.enable = true);
+        importer.flip_uvs(true);
+        //importer.fix_infacing_normals(true);
+
+        if let Ok(scene) = importer.read_file(path) {
+            if scene.num_meshes() > 0 {
+                let ai_mesh = scene.mesh(0).unwrap();
+
+                let mut verts: Vec<Vertex> = Vec::with_capacity(ai_mesh.num_vertices() as usize);
+                for i in 0..ai_mesh.num_vertices() {
+                    let v = ai_mesh.get_vertex(i).unwrap();
+                    let n = ai_mesh.get_normal(i).unwrap();
+                    let t = ai_mesh.get_tangent(i).unwrap();
+                    let tc = ai_mesh.get_texture_coord(0, i).unwrap();
+                    //let vc = ai_mesh.get_vertex_color(0, i).unwrap();
+                    verts.push(Vertex {
+                        position: Vec3::new(v.x, v.y, v.z),
+                        normal: Vec3::new(n.x, n.y, n.z),
+                        tangent: Vec3::new(t.x, t.y, t.z),
+                        tex_coord: Vec2::new(tc.x, tc.y),
+                        color: Vec4::new(1.0, 1.0, 1.0, 1.0)
+                    })
+                }
+//                let mut verts = ai_mesh.vertex_iter()
+//                    .zip(ai_mesh.normal_iter())
+//                    .zip(ai_mesh.tangent_iter())
+//                    .zip(ai_mesh.texture_coords_iter(0))
+//                    .zip(ai_mesh.vertex_color_iter(0))
+//                    .map(|((((v, n), t), tc), vc)| {
+//                        Vertex {
+//                            position: Vec3::new(v.x, v.y, v.z),
+//                            normal: Vec3::new(n.x, n.y, n.z),
+//                            tangent: Vec3::new(t.x, t.y, t.z),
+//                            tex_coord: Vec2::new(tc.x, tc.y),
+//                            color: Vec4::new(vc.r, vc.g, vc.b, vc.a)
+//                        }
+//                    }).collect::<Vec<Vertex>>();
+
+                let mut indices: Vec<u32> = Vec::with_capacity(ai_mesh.num_faces() as usize * 3);
+                for face in ai_mesh.face_iter() {
+                    indices.push(face[0]);
+                    indices.push(face[1]);
+                    indices.push(face[2]);
+                }
+
+                return Ok(Mesh::new(verts, indices))
+            }
+        }
+
+        Err("f".to_string())
     }
 }
 
