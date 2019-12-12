@@ -150,14 +150,14 @@ impl PbsScene {
             });
 
         let blur_framebuffers: [Framebuffer; 2] =
-            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 6,
-                                          window.get_framebuffer_height() / 6),
+            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 4,
+                                          window.get_framebuffer_height() / 4),
                                vec![
                                    FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                         AttachmentType::Texture)])
                 .unwrap_or_else(|error| {panic!("Framebuffer creation error: {}", error)}),
-                Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 6,
-                                            window.get_framebuffer_height() / 6),
+                Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 4,
+                                            window.get_framebuffer_height() / 4),
                                  vec![
                                      FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                           AttachmentType::Texture)])
@@ -270,7 +270,7 @@ impl PbsScene {
     }
 
     fn bloom_pass(&self) {
-        let blur_strength = 8;
+        let blur_strength = 6;
 
         for i in 0..blur_strength {
             let ping_pong_index = i % 2;
