@@ -65,7 +65,7 @@ vec3 ACESFilm(vec3 x)
 
 void main()
 {
-    vec3 color = (texture(image, fsIn.texcoord).rgb + texture(bloomImage, fsIn.texcoord).rgb) * exposure;
+    vec3 color = (texture(image, fsIn.texcoord).rgb + texture(bloomImage, fsIn.texcoord).rgb/*TODO: make this a uniform*/) * exposure;
 #ifdef ACES_FITTED
     outColor = vec4(ACESFitted(color), 1.0);
 #else

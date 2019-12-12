@@ -40,9 +40,9 @@ impl PbsMetallicRoughnessMaterial {
 
         let sampler = Sampler::new(MinificationFilter::LinearMipmapLinear,
                                    MagnificationFilter::Linear,
-                                   WrappingMode::ClampToEdge,
-                                   WrappingMode::ClampToEdge,
-                                   WrappingMode::ClampToEdge,
+                                   WrappingMode::Repeat,
+                                   WrappingMode::Repeat,
+                                   WrappingMode::Repeat,
                                    Vec4::new(0.0, 0.0, 0.0, 0.0));
 
         Self {

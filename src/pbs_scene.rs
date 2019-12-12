@@ -58,7 +58,13 @@ pub struct PbsScene {
     default_fb_size: UVec2,
     sampler: Sampler,
     sampler_nearest: Sampler,
-    projection_matrix: Mat4
+    projection_matrix: Mat4,
+    left_mouse_button_pressed: bool,
+    rot_speed: f32,
+    pitch: f32,
+    yaw: f32,
+    prev_x: f32,
+    prev_y: f32
 }
 
 impl PbsScene {
@@ -126,13 +132,13 @@ impl PbsScene {
         let ibl_brdf_lut = asset_manager.load_texture_2d("assets/textures/pbs/ibl_brdf_lut.png", false, false)
             .expect("Failed to load BRDF LUT texture");
 
-        let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/ibl_skybox.ktx")
+        let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/skybox2.ktx")
             .expect("Failed to load Skybox");
 
-        let irradiance = TextureCube::new_from_file("assets/textures/pbs/ktx/irradiance/ibl_irradiance.ktx")
+        let irradiance = TextureCube::new_from_file("assets/textures/pbs/ktx/irradiance/irradiance2.ktx")
             .expect("Failed to load Irradiance map");
 
-        let radiance = TextureCube::new_from_file("assets/textures/pbs/ktx/radiance/ibl_radiance.ktx")
+        let radiance = TextureCube::new_from_file("assets/textures/pbs/ktx/radiance/radiance2.ktx")
             .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(UVec2::new(window.get_framebuffer_width(),
@@ -150,14 +156,14 @@ impl PbsScene {
             });
 
         let blur_framebuffers: [Framebuffer; 2] =
-            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 6,
-                                          window.get_framebuffer_height() / 6),
+            [ Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 4,
+                                          window.get_framebuffer_height() / 4),
                                vec![
                                    FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                         AttachmentType::Texture)])
                 .unwrap_or_else(|error| {panic!("Framebuffer creation error: {}", error)}),
-                Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 6,
-                                            window.get_framebuffer_height() / 6),
+                Framebuffer::new(UVec2::new(window.get_framebuffer_width() / 4,
+                                            window.get_framebuffer_height() / 4),
                                  vec![
                                      FramebufferAttachmentCreateInfo::new(SizedTextureFormat::Rgba16f,
                                                                           AttachmentType::Texture)])
@@ -199,11 +205,7 @@ impl PbsScene {
             camera,
             model: Model{
                 mesh,
-                transform: {
-                    let mut tx = translate(&Mat4::identity(), &Vec3::new(0.0, 0.0, 30.0));
-                    tx = rotate(&tx, -90.0, &Vec3::new(1.0, 0.0, 0.0));
-                    scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
-                }
+                transform: Mat4::identity()
             },
             skybox_mesh,
             fullscreen_mesh: FullscreenMesh::new(),
@@ -223,7 +225,13 @@ impl PbsScene {
                                         window.get_framebuffer_height()),
             sampler,
             sampler_nearest,
-            projection_matrix: projection
+            projection_matrix: projection,
+            left_mouse_button_pressed: false,
+            rot_speed: 1.0,
+            pitch: 0.0,
+            yaw: 0.0,
+            prev_x: 0.0,
+            prev_y: 0.0
         }
     }
 
@@ -270,7 +278,7 @@ impl PbsScene {
     }
 
     fn bloom_pass(&self) {
-        let blur_strength = 8;
+        let blur_strength = 6;
 
         for i in 0..blur_strength {
             let ping_pong_index = i % 2;
@@ -346,7 +354,7 @@ impl PbsScene {
 
         self.tonemapping_pipeline.bind();
 
-        let exposure: f32 = 2.0;
+        let exposure: f32 = 3.0;
         self.tonemapping_pipeline.set_texture_2d_with_id("image",
                                                          self.framebuffer.get_texture_attachment(0).get_id(),
                                                          &self.sampler_nearest,
@@ -371,7 +379,7 @@ impl Scene<ApplicationData> for PbsScene {
     fn start(&mut self, context: Context<ApplicationData>) {
         self.skybox_program_pipeline.bind();
         self.skybox_program_pipeline.set_texture_cube("skybox",
-                                                      &self.environment_maps.radiance,
+                                                      &self.environment_maps.skybox,
                                                       &self.sampler,
                                                       ShaderStage::Fragment);
         self.skybox_program_pipeline.unbind();
@@ -390,9 +398,41 @@ impl Scene<ApplicationData> for PbsScene {
     }
 
     fn handle_event(&mut self, context: Context<ApplicationData>, event: Event) -> Transition<ApplicationData> {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
         match event {
             Event::MouseButton(button, action, modifiers) => {
-                println!("{:?} : {:?}", button, action)
+                println!("{:?} : {:?}", button, action);
+                match button {
+                    input::MouseButton::Left => {
+                        match action {
+                            input::Action::Press => self.left_mouse_button_pressed = true,
+                            input::Action::Release => self.left_mouse_button_pressed = false,
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
+            },
+            Event::CursorPosition(x, y) => {
+                if self.left_mouse_button_pressed {
+                   let dx = x as f32 - self.prev_x;
+                   let dy = y as f32 - self.prev_y;
+
+                    self.prev_x = x as f32;
+                    self.prev_y = y as f32;
+
+                    self.pitch += dx;
+                    self.yaw += dy;
+
+                    println!("yaw X pitch: {} {}", dx, dy);
+                }
             },
             Event::Key(key, action, m) => {
                 if m.intersects(Modifiers::Shift) {
@@ -423,9 +463,18 @@ impl Scene<ApplicationData> for PbsScene {
 
     fn update(&mut self, context: Context<ApplicationData>) -> Transition<ApplicationData> {
         let rotation_speed: f32 = 0.03;
+        self.model.transform = Mat4::identity();
+        self.model.transform = {
+            let mut tx = translate(&Mat4::identity(), &Vec3::new(0.0, 0.0, 30.0));
+            //tx = rotate(&tx, -90.0, &Vec3::new(1.0, 0.0, 0.0));
+            scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
+        };
         self.model.transform = rotate(&self.model.transform,
-                                      -2.0 * 180.0 * rotation_speed * context.timer.get_delta(),
+                                      self.pitch,
                                       &Vec3::new(0.0, 0.0, 1.0));
+        self.model.transform = rotate(&self.model.transform,
+                                      self.yaw,
+                                      &Vec3::new(0.0, 1.0, 0.0));
         Transition::None
     }
 

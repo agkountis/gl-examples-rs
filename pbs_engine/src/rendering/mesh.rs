@@ -11,7 +11,7 @@ use std::ops::Index;
 
 
 #[derive(Debug)]
-#[repr(C)]
+#[repr(C, packed)]
 pub struct Vertex {
     position: Vec3,
     normal: Vec3,
