@@ -126,13 +126,13 @@ impl PbsScene {
         let ibl_brdf_lut = asset_manager.load_texture_2d("assets/textures/pbs/ibl_brdf_lut.png", false, false)
             .expect("Failed to load BRDF LUT texture");
 
-        let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/ibl_skybox.ktx")
+        let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/skybox2.ktx")
             .expect("Failed to load Skybox");
 
-        let irradiance = TextureCube::new_from_file("assets/textures/pbs/ktx/irradiance/ibl_irradiance.ktx")
+        let irradiance = TextureCube::new_from_file("assets/textures/pbs/ktx/irradiance/irradiance2.ktx")
             .expect("Failed to load Irradiance map");
 
-        let radiance = TextureCube::new_from_file("assets/textures/pbs/ktx/radiance/ibl_radiance.ktx")
+        let radiance = TextureCube::new_from_file("assets/textures/pbs/ktx/radiance/radiance2.ktx")
             .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(UVec2::new(window.get_framebuffer_width(),
@@ -346,7 +346,7 @@ impl PbsScene {
 
         self.tonemapping_pipeline.bind();
 
-        let exposure: f32 = 2.0;
+        let exposure: f32 = 3.0;
         self.tonemapping_pipeline.set_texture_2d_with_id("image",
                                                          self.framebuffer.get_texture_attachment(0).get_id(),
                                                          &self.sampler_nearest,
@@ -371,7 +371,7 @@ impl Scene<ApplicationData> for PbsScene {
     fn start(&mut self, context: Context<ApplicationData>) {
         self.skybox_program_pipeline.bind();
         self.skybox_program_pipeline.set_texture_cube("skybox",
-                                                      &self.environment_maps.radiance,
+                                                      &self.environment_maps.skybox,
                                                       &self.sampler,
                                                       ShaderStage::Fragment);
         self.skybox_program_pipeline.unbind();

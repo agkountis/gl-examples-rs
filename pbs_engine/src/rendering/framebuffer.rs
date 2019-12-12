@@ -215,7 +215,7 @@ impl Framebuffer {
                             gl::NamedFramebufferTexture(framebuffer_id,
                                                         output_location,
                                                         *id,
-                                                        0)
+                                                        0);
                         }
 
                         texture_attachments.push(FramebufferAttachment::new(*id,
