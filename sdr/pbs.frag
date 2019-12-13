@@ -7,7 +7,7 @@ const float EPSILON = 0.001;
 const float F0_DIELECTRIC = 0.04;
 const float PI = 3.14159265359;
 const float ONE_OVER_PI = 0.318309886;
-const float MAX_REFLECTION_LOD = 4.0;
+const float MAX_REFLECTION_LOD = 6.0;
 
 in VsOut {
     vec3 wLightDirection;
@@ -154,5 +154,5 @@ void main()
 
     float brightness = ConvertToGrayscale(finalColor);
 
-    outBloomBrightColor = vec4(finalColor * smoothstep(0.0, 1.0, brightness), 1.0);
+    outBloomBrightColor = vec4(finalColor * smoothstep(0.5, 1.0, brightness/brightness) * step(1.0, brightness), 1.0) * 0.08;
 }
