@@ -26,7 +26,7 @@ void main()
 
     // Trick the depth buffer on thinking that the positions are infinitelly far away
     // by set z = w = 1 = max depth value
-    gl_Position = (projection * v * vec4(inPosition, 1.0)).xyww;
+    gl_Position = (projection * mat4(mat3(v)) * vec4(inPosition, 1.0)).xyww;
 
     // The cube drawn is centered at the origin so
     // each position is a direction from the origin
