@@ -1,14 +1,6 @@
-use crate::core::{
-    math,
-    math::matrix,
-    math::Quat,
-    math::Mat4,
-    math::Vec3,
-    math::Axes
-};
+use crate::core::math::{clamp_scalar, inverse, quat_normalize, rotate_vec3, to_mat4, translate};
+use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
 use crate::math::quaternion;
-use crate::core::math::clamp_scalar;
-
 
 pub struct Camera {
     position: Vec3,
@@ -19,7 +11,7 @@ pub struct Camera {
     orbit_dampening: f32,
     zoom_dampening: f32,
     yaw: f32,
-    pitch: f32
+    pitch: f32,
 }
 
 impl Default for Camera {
@@ -33,36 +25,37 @@ impl Default for Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
-            orbit_speed: 2.0,
-            zoom_speed: 2.0,
-            orbit_dampening: 10.0,
-            zoom_dampening: 6.0,
+            orbit_speed: 6.0,
+            zoom_speed: 0.5,
+            orbit_dampening: 2.0,
+            zoom_dampening: 2.0,
             yaw: 0.0,
-            pitch: 0.0
+            pitch: 0.0,
         }
     }
 }
 
 impl Camera {
-    pub fn new(position: Vec3,
-               target: Vec3,
-               orbit_speed: f32,
-               zoom_speed: f32,
-               orbit_dampening: f32,
-               zoom_dampening: f32) -> Self {
-
+    pub fn new(
+        position: Vec3,
+        target: Vec3,
+        orbit_speed: f32,
+        zoom_speed: f32,
+        orbit_dampening: f32,
+        zoom_dampening: f32,
+    ) -> Self {
         let transform = math::look_at(&position, &target, &Axes::up());
 
         Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
-            orbit_speed: 4.0,
+            orbit_speed: 6.0,
             zoom_speed: 2.0,
-            orbit_dampening: 10.0,
-            zoom_dampening: 6.0,
+            orbit_dampening: 2.0,
+            zoom_dampening: 2.0,
             yaw: 0.0,
-            pitch: 0.0
+            pitch: 0.0,
         }
     }
 
@@ -87,10 +80,10 @@ impl Camera {
     }
 
     pub fn update(&mut self, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
-        println!("{} {}" ,mouse_dx, mouse_dy);
+        println!("{} {}", self.yaw, self.pitch);
         if mouse_dx != 0.0 || mouse_dy != 0.0 {
-            self.pitch += mouse_dx * self.orbit_speed * dt;
-            self.yaw += mouse_dy * self.orbit_speed * dt;
+            self.pitch += mouse_dy * self.orbit_speed * dt;
+            self.yaw += mouse_dx * self.orbit_speed * dt;
 
             self.pitch = clamp_scalar(self.pitch, -90.0, 90.0);
         }
@@ -102,25 +95,13 @@ impl Camera {
             self.position.z = clamp_scalar(self.position.z, 1.5, 50.0)
         }
 
-        let origin = &self.orientation;
         let dest = quaternion::from_euler(self.yaw, self.pitch, 0.0);
+        self.orientation = quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening);
+        self.position = rotate_vec3(&dest, &self.position);
 
-        println!("{:?}", origin);
-        println!("{:?}", dest);
+        self.look_at(self.position, Vec3::new(0.0, 0.0, 0.5), Axes::up());
 
-        let q = quaternion::slerp(&origin,
-                                  &dest,
-                                  dt * self.orbit_dampening);
-
-        println!("{:?}", q);
-
-        self.orientation = q;
-
-        self.position = quaternion::rotate_vec3(&q, &self.position);
-
-        println!("{:?}", self.position);
-
-        self.transform = Mat4::identity();
-        self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up())
+        self.pitch = 0.0;
+        self.yaw = 0.0;
     }
 }
