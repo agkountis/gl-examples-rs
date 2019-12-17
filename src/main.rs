@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             minor: 5,
             patch: 0,
         },
-        window_size: UVec2::new(2560, 1440),
+        window_size: UVec2::new(1024, 768),
         window_mode: WindowMode::Windowed,
         msaa: Msaa::X4,
         vsync: true,

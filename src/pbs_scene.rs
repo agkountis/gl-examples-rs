@@ -2,7 +2,7 @@ use pbs_engine::scene::Scene;
 use pbs_engine::camera::Camera;
 use pbs_engine::rendering::mesh::{Mesh, FullscreenMesh, MeshUtilities};
 use pbs_engine::rendering::program_pipeline::ProgramPipeline;
-use pbs_engine::math::{vector::{Vec3, UVec2, Vec4}, matrix::{perspective, Mat4, rotate, translate}, scale};
+use pbs_engine::math::{clamp_scalar, vector::{Vec3, UVec2, Vec4}, matrix::{perspective, Mat4, rotate, translate}, scale, quaternion};
 
 use pbs_engine::rendering::{
     shader::{ShaderStage, Shader},
@@ -29,6 +29,7 @@ use pbs_engine::core::engine::input::Key::P;
 use pbs_engine::core::engine::input::Modifiers;
 use pbs_engine::engine::event::Event::Key;
 use std::rc::Rc;
+use pbs_engine::core::math::Quat;
 
 
 struct EnvironmentMaps {
@@ -60,11 +61,13 @@ pub struct PbsScene {
     sampler_nearest: Sampler,
     projection_matrix: Mat4,
     left_mouse_button_pressed: bool,
-    rot_speed: f32,
-    pitch: f32,
-    yaw: f32,
+    mouse_x: f32,
+    mouse_y: f32,
+    scroll: f32,
     prev_x: f32,
-    prev_y: f32
+    prev_y: f32,
+    prev_scroll: f32,
+    dt: f32
 }
 
 impl PbsScene {
@@ -74,10 +77,8 @@ impl PbsScene {
 
         let asset_manager = context.asset_manager;
 
-        let mut camera = Camera::new();
-        camera.look_at(Vec3::new(0.0, 0.0, 0.0),
-                       Vec3::new(0.0, 0.0, 1.0),
-                       Vec3::new(0.0, 1.0, 0.0));
+        let mut camera = Camera::default();
+        camera.set_distance(-20.0);
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
@@ -109,7 +110,7 @@ impl PbsScene {
             .unwrap();
 
 
-        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus.fbx")
+        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus2.fbx")
             .expect("Failed to load mesh");
 
         let skybox_mesh = MeshUtilities::generate_cube(1.0);
@@ -190,7 +191,7 @@ impl PbsScene {
                                      window.get_framebuffer_height(),
                                                       60,
                                                       0.1,
-                                                      100.0);
+                                                      500.0);
 
         let material = Box::new(PbsMetallicRoughnessMaterial::new(
             albedo.clone(),
@@ -227,11 +228,13 @@ impl PbsScene {
             sampler_nearest,
             projection_matrix: projection,
             left_mouse_button_pressed: false,
-            rot_speed: 1.0,
-            pitch: 0.0,
-            yaw: 0.0,
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            scroll: 0.0,
             prev_x: 0.0,
-            prev_y: 0.0
+            prev_y: 0.0,
+            prev_scroll: 0.0,
+            dt: 0.0
         }
     }
 
@@ -340,6 +343,11 @@ impl PbsScene {
                                                     &self.projection_matrix,
                                                     ShaderStage::Vertex);
 
+        self.skybox_program_pipeline.set_texture_cube("skybox",
+                                                      &self.environment_maps.radiance,
+                                                      &self.sampler,
+                                                      ShaderStage::Fragment);
+
         self.skybox_mesh.draw();
 
         self.framebuffer.unbind(true);
@@ -350,7 +358,7 @@ impl PbsScene {
     }
 
     pub fn tonemap_pass(&self) {
-        clear_default_framebuffer(&Vec4::new(0.0, 0.0, 0.0, 1.0));
+        clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
 
         self.tonemapping_pipeline.bind();
 
@@ -377,12 +385,10 @@ impl PbsScene {
 
 impl Scene<ApplicationData> for PbsScene {
     fn start(&mut self, context: Context<ApplicationData>) {
-        self.skybox_program_pipeline.bind();
-        self.skybox_program_pipeline.set_texture_cube("skybox",
-                                                      &self.environment_maps.skybox,
-                                                      &self.sampler,
-                                                      ShaderStage::Fragment);
-        self.skybox_program_pipeline.unbind();
+        self.model.transform = {
+            let mut tx = rotate(&&Mat4::identity(), -90.0, &Vec3::new(1.0, 0.0, 0.0));
+            scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
+        };
     }
 
     fn stop(&mut self, context: Context<ApplicationData>) {
@@ -422,17 +428,12 @@ impl Scene<ApplicationData> for PbsScene {
             },
             Event::CursorPosition(x, y) => {
                 if self.left_mouse_button_pressed {
-                   let dx = x as f32 - self.prev_x;
-                   let dy = y as f32 - self.prev_y;
-
-                    self.prev_x = x as f32;
-                    self.prev_y = y as f32;
-
-                    self.pitch += dx;
-                    self.yaw += dy;
-
-                    println!("yaw X pitch: {} {}", dx, dy);
+                    self.mouse_x = x as f32;
+                    self.mouse_y = y as f32;
                 }
+            },
+            Event::Scroll(x, y) => {
+                self.scroll = y as f32; //maybe accumulate?
             },
             Event::Key(key, action, m) => {
                 if m.intersects(Modifiers::Shift) {
@@ -462,19 +463,23 @@ impl Scene<ApplicationData> for PbsScene {
     }
 
     fn update(&mut self, context: Context<ApplicationData>) -> Transition<ApplicationData> {
-        let rotation_speed: f32 = 0.03;
-        self.model.transform = Mat4::identity();
-        self.model.transform = {
-            let mut tx = translate(&Mat4::identity(), &Vec3::new(0.0, 0.0, 30.0));
-            //tx = rotate(&tx, -90.0, &Vec3::new(1.0, 0.0, 0.0));
-            scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
-        };
-        self.model.transform = rotate(&self.model.transform,
-                                      self.pitch,
-                                      &Vec3::new(0.0, 0.0, 1.0));
-        self.model.transform = rotate(&self.model.transform,
-                                      self.yaw,
-                                      &Vec3::new(0.0, 1.0, 0.0));
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
+        self.dt = timer.get_delta();
+        let dx = self.mouse_x - self.prev_x;
+        let dy = self.mouse_y - self.prev_y;
+
+        self.prev_x = self.mouse_x;
+        self.prev_y = self.mouse_y;
+
+        self.camera.update(dx, dy, self.scroll, self.dt);
+
         Transition::None
     }
 
