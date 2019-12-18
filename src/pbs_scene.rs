@@ -347,15 +347,6 @@ impl PbsScene {
                                                     &self.camera.get_transform(),
                                                     ShaderStage::Vertex);
 
-        self.skybox_program_pipeline.set_matrix4f("projection",
-                                                    &self.projection_matrix,
-                                                    ShaderStage::Vertex);
-
-        self.skybox_program_pipeline.set_texture_cube("skybox",
-                                                      &self.environment_maps.radiance,
-                                                      &self.sampler,
-                                                      ShaderStage::Fragment);
-
         self.skybox_mesh.draw();
 
         self.framebuffer.unbind(true);
@@ -397,6 +388,17 @@ impl Scene<ApplicationData> for PbsScene {
             let mut tx = rotate(&&Mat4::identity(), -90.0, &Vec3::new(1.0, 0.0, 0.0));
             scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
         };
+
+        self.skybox_program_pipeline.bind();
+        self.skybox_program_pipeline.set_matrix4f("projection",
+                                                  &self.projection_matrix,
+                                                  ShaderStage::Vertex);
+
+        self.skybox_program_pipeline.set_texture_cube("skybox",
+                                                      &self.environment_maps.radiance,
+                                                      &self.sampler,
+                                                      ShaderStage::Fragment);
+        self.skybox_program_pipeline.unbind();
     }
 
     fn stop(&mut self, context: Context<ApplicationData>) {
@@ -429,8 +431,6 @@ impl Scene<ApplicationData> for PbsScene {
                             input::Action::Press => self.left_mouse_button_pressed = true,
                             input::Action::Release => {
                                 self.left_mouse_button_pressed = false;
-//                                self.mouse_x = 0.0;
-//                                self.mouse_y = 0.0
                             },
                             _ => {}
                         }

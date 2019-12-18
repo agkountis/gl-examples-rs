@@ -123,9 +123,17 @@ float ConvertToGrayscale(vec3 color)
     return dot(color, vec3(0.2125, 0.7154, 0.0721));
 }
 
+vec3 SampleNormalMap(sampler2D normalMap, vec2 texcoords, float strength)
+{
+    vec3 norm = texture(normalMap, texcoords).rgb * 2.0 - 1.0;
+    norm.xy *= strength;
+    return norm;
+}
+
 void main()
 {
-    vec3 n = normalize(fsIn.TBN * (texture(normalMap, fsIn.texcoord).rgb * 2.0 - 1.0).rgb);
+    vec3 n = normalize(fsIn.TBN * SampleNormalMap(normalMap, fsIn.texcoord, 1.0));
+
     vec3 v = normalize(fsIn.wViewDirection);
     vec3 l = normalize(wLightDirection);
     vec3 h = normalize(l + v);
