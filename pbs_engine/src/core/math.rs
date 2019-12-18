@@ -54,7 +54,7 @@ pub mod quaternion {
         let p = glm::quat_angle_axis(pitch.to_radians(), &Axes::right());
         let r = glm::quat_angle_axis(roll.to_radians(), &Axes::forward());
 
-        glm::quat_normalize(&(p * y * r))
+        glm::quat_normalize(&(y * p * r))
     }
 
     pub fn to_mat4(quat: &Quat) -> Mat4 {

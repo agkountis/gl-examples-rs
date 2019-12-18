@@ -5,4 +5,4 @@ authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-pbs_engine = {path = "pbs_engine"}
+pbs_engine = {path = "pbs_engine", version = "0.1.0"}
