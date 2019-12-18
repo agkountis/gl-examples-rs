@@ -110,7 +110,7 @@ impl PbsScene {
             .unwrap();
 
 
-        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus3.fbx")
+        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus.fbx")
             .expect("Failed to load mesh");
 
         let skybox_mesh = MeshUtilities::generate_cube(1.0);
@@ -427,7 +427,11 @@ impl Scene<ApplicationData> for PbsScene {
                     input::MouseButton::Left => {
                         match action {
                             input::Action::Press => self.left_mouse_button_pressed = true,
-                            input::Action::Release => self.left_mouse_button_pressed = false,
+                            input::Action::Release => {
+                                self.left_mouse_button_pressed = false;
+//                                self.mouse_x = 0.0;
+//                                self.mouse_y = 0.0
+                            },
                             _ => {}
                         }
                     },
@@ -487,7 +491,6 @@ impl Scene<ApplicationData> for PbsScene {
         self.prev_y = self.mouse_y;
 
         self.camera.update(dx, dy, self.scroll, self.dt);
-        self.scroll = 0.0;
 
         Transition::None
     }

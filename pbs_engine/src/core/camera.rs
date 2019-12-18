@@ -26,13 +26,13 @@ impl Default for Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
-            orbit_speed: 10.0,
-            zoom_speed: 10.0,
-            orbit_dampening: 2.0,
+            orbit_speed: 15.0,
+            zoom_speed: 1.0,
+            orbit_dampening: 12.0,
             zoom_dampening: 2.0,
             yaw: 0.0,
             pitch: 0.0,
-            distance: -40.0
+            distance: 40.0
         }
     }
 }
@@ -84,13 +84,11 @@ impl Camera {
 
     pub fn update(&mut self, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
 
-        self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());
-
         if mouse_dx != 0.0 || mouse_dy != 0.0 {
             self.pitch += mouse_dy * self.orbit_speed * dt;
             self.yaw += mouse_dx * self.orbit_speed * dt;
 
-            self.pitch = clamp_scalar(self.pitch, -89.0, 89.0);
+            self.pitch = clamp_scalar(self.pitch, -89.99, 89.99);
         }
 
         if mouse_scroll != 0.0 {
@@ -100,7 +98,7 @@ impl Camera {
 
 
             self.distance = math::lerp(self.position.z, self.distance, dt * self.zoom_dampening);
-            self.distance = clamp_scalar(self.distance, 5.0, 50.0)
+            self.distance = clamp_scalar(self.distance, 10.0, 50.0)
         }
 
         println!("distance: {}", self.distance);
@@ -108,6 +106,9 @@ impl Camera {
         let dest = quaternion::from_euler(self.yaw, self.pitch, 0.0);
         self.orientation = quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening);
         self.position = rotate_vec3(&self.orientation, &Vec3::new(0.0, 0.0, self.distance));
-        println!("{:?}", self.position)
+        println!("{:?}", self.position);
+
+        println!("dx: {} dy: {}", mouse_dx, mouse_dy);
+        self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());
     }
 }
