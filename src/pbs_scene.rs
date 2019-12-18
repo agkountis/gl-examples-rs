@@ -78,7 +78,7 @@ impl PbsScene {
         let asset_manager = context.asset_manager;
 
         let mut camera = Camera::default();
-        camera.set_distance(-20.0);
+        camera.set_distance(20.0);
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
@@ -110,7 +110,7 @@ impl PbsScene {
             .unwrap();
 
 
-        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus2.fbx")
+        let mesh = asset_manager.load_mesh("assets/models/cerberus/cerberus3.fbx")
             .expect("Failed to load mesh");
 
         let skybox_mesh = MeshUtilities::generate_cube(1.0);
@@ -238,7 +238,7 @@ impl PbsScene {
         }
     }
 
-    fn geometry_pass(&self) {
+    fn geometry_pass(&self, context: Context<ApplicationData>) {
         self.framebuffer.bind();
         self.framebuffer.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
 
@@ -280,9 +280,11 @@ impl PbsScene {
         self.material.unbind()
     }
 
-    fn bloom_pass(&self) {
+    fn bloom_pass(&self, context: Context<ApplicationData>) {
         let blur_strength = 6;
 
+        let size = self.blur_framebuffers[0].get_size();
+        StateManager::set_viewport(0, 0, size.x as i32, size.y as i32);
         for i in 0..blur_strength {
             let ping_pong_index = i % 2;
 
@@ -327,9 +329,15 @@ impl PbsScene {
         }
     }
 
-    fn skybox_pass(&self) {
+    fn skybox_pass(&self, context: Context<ApplicationData>) {
+        let Context {
+            window,
+           ..
+        } = context;
+
         StateManager::set_depth_function(DepthFunction::LessOrEqual);
         StateManager::set_face_culling(FaceCulling::Front);
+        StateManager::set_viewport(0, 0, window.get_width() as i32, window.get_height() as i32);
 
         self.framebuffer.bind();
 
@@ -357,7 +365,7 @@ impl PbsScene {
         StateManager::set_face_culling(FaceCulling::Back)
     }
 
-    pub fn tonemap_pass(&self) {
+    pub fn tonemap_pass(&self, context: Context<ApplicationData>) {
         clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
 
         self.tonemapping_pipeline.bind();
@@ -479,6 +487,7 @@ impl Scene<ApplicationData> for PbsScene {
         self.prev_y = self.mouse_y;
 
         self.camera.update(dx, dy, self.scroll, self.dt);
+        self.scroll = 0.0;
 
         Transition::None
     }
@@ -488,10 +497,18 @@ impl Scene<ApplicationData> for PbsScene {
     }
 
     fn draw(&mut self, context: Context<ApplicationData>) {
-        self.geometry_pass();
-        self.bloom_pass();
-        self.skybox_pass();
-        self.tonemap_pass();
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
+        self.geometry_pass(Context::new(window, asset_manager, timer, settings, user_data));
+        self.bloom_pass(Context::new(window, asset_manager, timer, settings, user_data));
+        self.skybox_pass(Context::new(window, asset_manager, timer, settings, user_data));
+        self.tonemap_pass(Context::new(window, asset_manager, timer, settings, user_data));
     }
 
     fn post_draw(&mut self, context: Context<ApplicationData>) {

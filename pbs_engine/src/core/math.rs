@@ -17,6 +17,14 @@ pub mod vector {
     pub type UVec4 = glm::UVec4;
     pub type IVec4 = glm::IVec4;
 
+    pub fn vec3_lerp(a: &Vec3, b: &Vec3, t: f32) -> Vec3 {
+        glm::lerp(a, b, t)
+    }
+
+    pub fn vec4_lerp(a: &Vec4, b: &Vec4, t: f32) -> Vec4 {
+        glm::lerp(a, b, t)
+    }
+
     pub struct Axes;
 
     impl Axes {
@@ -136,4 +144,7 @@ pub fn clamp_scalar(x: f32, min: f32, max: f32) -> f32 {
     nalgebra_glm::clamp_scalar(x, min, max)
 }
 
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    (1.0 - t) * a + t * b
+}
 

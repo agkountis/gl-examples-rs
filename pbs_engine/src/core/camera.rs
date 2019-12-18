@@ -1,6 +1,6 @@
-use crate::core::math::{clamp_scalar, inverse, quat_normalize, rotate_vec3, to_mat4, translate};
+use crate::core::math::{clamp_scalar, inverse, rotate_vec3, to_mat4, translate};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
-use crate::math::quaternion;
+use crate::math::{quaternion, vector};
 
 pub struct Camera {
     position: Vec3,
@@ -12,6 +12,7 @@ pub struct Camera {
     zoom_dampening: f32,
     yaw: f32,
     pitch: f32,
+    distance: f32
 }
 
 impl Default for Camera {
@@ -25,12 +26,13 @@ impl Default for Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
-            orbit_speed: 6.0,
-            zoom_speed: 0.5,
+            orbit_speed: 10.0,
+            zoom_speed: 10.0,
             orbit_dampening: 2.0,
             zoom_dampening: 2.0,
             yaw: 0.0,
             pitch: 0.0,
+            distance: -40.0
         }
     }
 }
@@ -56,6 +58,7 @@ impl Camera {
             zoom_dampening: 2.0,
             yaw: 0.0,
             pitch: 0.0,
+            distance: 0.0
         }
     }
 
@@ -80,28 +83,31 @@ impl Camera {
     }
 
     pub fn update(&mut self, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
-        println!("{} {}", self.yaw, self.pitch);
+
+        self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());
+
         if mouse_dx != 0.0 || mouse_dy != 0.0 {
             self.pitch += mouse_dy * self.orbit_speed * dt;
             self.yaw += mouse_dx * self.orbit_speed * dt;
 
-            self.pitch = clamp_scalar(self.pitch, -90.0, 90.0);
+            self.pitch = clamp_scalar(self.pitch, -89.0, 89.0);
         }
 
         if mouse_scroll != 0.0 {
             let mut scroll_amount = mouse_scroll * self.zoom_speed;
-            scroll_amount *= self.position.z * 0.3;
-            self.position.z += scroll_amount * -1.0;
-            self.position.z = clamp_scalar(self.position.z, 1.5, 50.0)
+            scroll_amount *= (self.distance * 0.3);
+            self.distance += -scroll_amount * dt;
+
+
+            self.distance = math::lerp(self.position.z, self.distance, dt * self.zoom_dampening);
+            self.distance = clamp_scalar(self.distance, 5.0, 50.0)
         }
+
+        println!("distance: {}", self.distance);
 
         let dest = quaternion::from_euler(self.yaw, self.pitch, 0.0);
         self.orientation = quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening);
-        self.position = rotate_vec3(&dest, &self.position);
-
-        self.look_at(self.position, Vec3::new(0.0, 0.0, 0.5), Axes::up());
-
-        self.pitch = 0.0;
-        self.yaw = 0.0;
+        self.position = rotate_vec3(&self.orientation, &Vec3::new(0.0, 0.0, self.distance));
+        println!("{:?}", self.position)
     }
 }
