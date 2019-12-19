@@ -133,13 +133,13 @@ impl PbsScene {
         let ibl_brdf_lut = asset_manager.load_texture_2d("assets/textures/pbs/ibl_brdf_lut.png", false, false)
             .expect("Failed to load BRDF LUT texture");
 
-        let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/skybox2.ktx")
+        let skybox = TextureCube::new_from_file("assets/textures/pbs/ktx/skybox/ibl_skybox.ktx")
             .expect("Failed to load Skybox");
 
-        let irradiance = TextureCube::new_from_file("assets/textures/pbs/ktx/irradiance/irradiance2.ktx")
+        let irradiance = TextureCube::new_from_file("assets/textures/pbs/ktx/irradiance/ibl_irradiance.ktx")
             .expect("Failed to load Irradiance map");
 
-        let radiance = TextureCube::new_from_file("assets/textures/pbs/ktx/radiance/radiance2.ktx")
+        let radiance = TextureCube::new_from_file("assets/textures/pbs/ktx/radiance/ibl_radiance.ktx")
             .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(UVec2::new(window.get_framebuffer_width(),
@@ -256,10 +256,10 @@ impl PbsScene {
                               &self.sampler,
                               ShaderStage::Fragment)
             .set_vector3f("wLightDirection",
-                          &Vec3::new(-0.2, 0.0, -1.0),
+                          &Vec3::new(0.4, 0.0, -1.0),
                           ShaderStage::Fragment)
             .set_vector3f("lightColor",
-                          &Vec3::new(1.0, 1.0, 1.0),
+                          &Vec3::new(5.0, 5.0, 5.0),
                           ShaderStage::Fragment)
             .set_matrix4f("model",
                           &self.model.transform,
@@ -361,7 +361,7 @@ impl PbsScene {
 
         self.tonemapping_pipeline.bind();
 
-        let exposure: f32 = 3.0;
+        let exposure: f32 = 1.5;
         self.tonemapping_pipeline.set_texture_2d_with_id("image",
                                                          self.framebuffer.get_texture_attachment(0).get_id(),
                                                          &self.sampler_nearest,
@@ -385,7 +385,7 @@ impl PbsScene {
 impl Scene<ApplicationData> for PbsScene {
     fn start(&mut self, context: Context<ApplicationData>) {
         self.model.transform = {
-            let mut tx = rotate(&&Mat4::identity(), -90.0, &Vec3::new(1.0, 0.0, 0.0));
+            let mut tx = rotate(&Mat4::identity(), -90.0, &Vec3::new(1.0, 0.0, 0.0));
             scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
         };
 
