@@ -1,13 +1,14 @@
 use crate::core::engine::{Context, event::Event};
 use std::borrow::BorrowMut;
 use std::ops::DerefMut;
+use crate::rendering::buffer::BufferTarget::TransformFeedback;
 
 pub enum Transition<T> {
     Push(Box<dyn Scene<T>>),
     Switch(Box<dyn Scene<T>>),
     Pop,
     None,
-    Quit
+    Quit,
 }
 
 pub trait Scene<T> {
@@ -51,26 +52,24 @@ impl<'a, T> SceneManager<'a, T> {
             user_data
         } = context;
 
-        let transition = self.scenes[self.active_scene_index].handle_event(Context::new(window,
-                                                                                        asset_manager,
-                                                                                        timer,
-                                                                                        settings,
-                                                                                        user_data),
-                                                                           event);
+        if self.is_running {
+            let transition = match self.scenes.last_mut() {
+                Some(scene) => {
+                    scene.handle_event(Context::new(window,
+                                                    asset_manager,
+                                                    timer,
+                                                    settings,
+                                                    user_data),
+                                       event)
+                },
+                None => Transition::None
+            };
 
-        match transition {
-            Transition::Quit => self.stop(Context::new(window,
-                                                       asset_manager,
-                                                       timer,
-                                                       settings,
-                                                       user_data)),
-            _ => {
-                self.handle_transition(transition, Context::new(window,
-                                                                asset_manager,
-                                                                timer,
-                                                                settings,
-                                                                user_data))
-            }
+            self.handle_transition(transition, Context::new(window,
+                                                            asset_manager,
+                                                            timer,
+                                                            settings,
+                                                            user_data));
         }
     }
 
@@ -83,34 +82,85 @@ impl<'a, T> SceneManager<'a, T> {
             user_data
         } = context;
 
-        let transition = self.scenes[self.active_scene_index].update(Context::new(window,
-                                                                                  asset_manager,
-                                                                                  timer,
-                                                                                  settings,
-                                                                                  user_data));
-        self.handle_transition(transition, Context::new(window,
-                                                        asset_manager,
-                                                        timer,
-                                                        settings,
-                                                        user_data));
+        if self.is_running {
 
-        self.scenes[self.active_scene_index].pre_draw(Context::new(window,
-                                                                   asset_manager,
-                                                                   timer,
-                                                                   settings,
-                                                                   user_data));
+            let transition = match self.scenes.last_mut() {
+                Some(scene) => {
+                    scene.update(Context::new(window,
+                                              asset_manager,
+                                              timer,
+                                              settings,
+                                              user_data))
+                },
+                None => Transition::None
+            };
 
-        self.scenes[self.active_scene_index].draw(Context::new(window,
-                                                               asset_manager,
-                                                               timer,
-                                                               settings,
-                                                               user_data));
+            self.handle_transition(transition, Context::new(window,
+                                                            asset_manager,
+                                                            timer,
+                                                            settings,
+                                                            user_data))
+        }
+    }
 
-        self.scenes[self.active_scene_index].post_draw(Context::new(window,
-                                                                    asset_manager,
-                                                                    timer,
-                                                                    settings,
-                                                                    user_data))
+    pub fn pre_draw(&mut self, context: Context<T>) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
+        if self.is_running {
+            if let Some(scene) = self.scenes.last_mut() {
+                scene.pre_draw(Context::new(window,
+                                            asset_manager,
+                                            timer,
+                                            settings,
+                                            user_data))
+            }
+        }
+    }
+
+    pub fn draw(&mut self, context: Context<T>) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
+        if self.is_running {
+            if let Some(scene) = self.scenes.last_mut() {
+                scene.draw(Context::new(window,
+                                        asset_manager,
+                                        timer,
+                                        settings,
+                                        user_data))
+            }
+        }
+    }
+
+    pub fn post_draw(&mut self, context: Context<T>) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
+        if self.is_running {
+            if let Some(scene) = self.scenes.last_mut() {
+                scene.post_draw(Context::new(window,
+                                             asset_manager,
+                                             timer,
+                                             settings,
+                                             user_data))
+            }
+        }
     }
 
     pub fn is_running(&self) -> bool {
@@ -118,12 +168,30 @@ impl<'a, T> SceneManager<'a, T> {
     }
 
     fn handle_transition(&mut self, transition: Transition<T>, context: Context<T>) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+            user_data
+        } = context;
+
         match transition {
-            Transition::Push(mut scene) => self.push(scene, context),
+            Transition::Push(mut scene) => self.push(scene, Context::new(window,
+                                                                         asset_manager,
+                                                                         timer,
+                                                                         settings,
+                                                                         user_data)),
             Transition::Switch(_) => {},
             Transition::Pop => {},
             Transition::None => {},
-            Transition::Quit => {},
+            Transition::Quit => {
+                self.stop(Context::new(window,
+                                       asset_manager,
+                                       timer,
+                                       settings,
+                                       user_data))
+            }
         }
     }
 
