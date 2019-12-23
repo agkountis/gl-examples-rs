@@ -39,7 +39,7 @@ impl<'a, T> Application<'a, T> {
         let mut timer = Timer::new();
 
         let initial_scene = scene_constructor(Context::new(&mut window, &mut asset_manager, &mut timer, &mut settings, &mut user_data));
-        let mut scene_manager = SceneManager::new(initial_scene);
+        let scene_manager = SceneManager::new(initial_scene);
 
         Self {
             window,
@@ -73,6 +73,24 @@ impl<'a, T> Application<'a, T> {
                                                    &mut self.timer,
                                                    &mut self.settings,
                                                    &mut self.user_data));
+
+            self.scene_manager.pre_draw(Context::new(&mut self.window,
+                                                     &mut self.asset_manager,
+                                                     &mut self.timer,
+                                                     &mut self.settings,
+                                                     &mut self.user_data));
+
+            self.scene_manager.draw(Context::new(&mut self.window,
+                                                 &mut self.asset_manager,
+                                                 &mut self.timer,
+                                                 &mut self.settings,
+                                                 &mut self.user_data));
+
+            self.scene_manager.post_draw(Context::new(&mut self.window,
+                                                      &mut self.asset_manager,
+                                                      &mut self.timer,
+                                                      &mut self.settings,
+                                                      &mut self.user_data));
 
             self.window.swap_buffers()
         }

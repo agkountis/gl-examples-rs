@@ -11,7 +11,7 @@ use std::ops::Index;
 
 
 #[derive(Debug)]
-#[repr(C, packed)]
+#[repr(C)]
 pub struct Vertex {
     position: Vec3,
     normal: Vec3,
@@ -130,7 +130,7 @@ impl Asset for Mesh {
             if scene.num_meshes() > 0 {
                 let ai_mesh = scene.mesh(0).unwrap();
 
-                let mut verts = ai_mesh.vertex_iter()
+                let verts = ai_mesh.vertex_iter()
                     .zip(ai_mesh.normal_iter())
                     .zip(ai_mesh.tangent_iter())
                     .zip(ai_mesh.texture_coords_iter(0))

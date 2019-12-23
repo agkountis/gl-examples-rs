@@ -2,7 +2,13 @@ use pbs_engine::scene::Scene;
 use pbs_engine::camera::Camera;
 use pbs_engine::rendering::mesh::{Mesh, FullscreenMesh, MeshUtilities};
 use pbs_engine::rendering::program_pipeline::ProgramPipeline;
-use pbs_engine::math::{clamp_scalar, vector::{Vec3, UVec2, Vec4}, matrix::{perspective, Mat4, rotate, translate}, scale, quaternion};
+use pbs_engine::math::{
+    clamp_scalar,
+    vector::{Vec3, UVec2, Vec4},
+    matrix::{perspective, Mat4, rotate, translate},
+    scale,
+    quaternion
+};
 
 use pbs_engine::rendering::{
     shader::{ShaderStage, Shader},
