@@ -1,18 +1,16 @@
+use crossbeam_channel::Sender;
+use gl::types::*;
 use glfw;
 use pbs_gl as gl;
-use gl::types::*;
-use crossbeam_channel::Sender;
 
-use std::sync::mpsc::Receiver;
-use std::ptr;
 use std::ffi::CStr;
+use std::ptr;
+use std::sync::mpsc::Receiver;
 
-use glfw::Context;
-use super::{WindowMode, Msaa, Version};
 use super::math::UVec2;
+use super::{Msaa, Version, WindowMode};
 use crate::engine::event::Event;
-use crate::engine::input::Action;
-
+use glfw::Context;
 
 pub struct Window {
     glfw: glfw::Glfw,
@@ -20,63 +18,64 @@ pub struct Window {
     events: Receiver<(f64, glfw::WindowEvent)>,
     size: UVec2,
     framebuffer_size: UVec2,
-    event_producer: Sender<Event>
+    event_producer: Sender<Event>,
 }
 
 impl Window {
-
-    pub fn new(title: &str,
-               size: UVec2,
-               api_version: &Version,
-               window_mode: &WindowMode,
-               msaa: Msaa,
-               event_producer: Sender<Event>) -> Window {
-
-        assert!(api_version.major > 3 && api_version.minor > 2,
-                "Only OpenGL version greater than 3.2 are supported");
+    pub fn new(
+        title: &str,
+        size: UVec2,
+        api_version: &Version,
+        window_mode: &WindowMode,
+        msaa: Msaa,
+        event_producer: Sender<Event>,
+    ) -> Window {
+        assert!(
+            api_version.major > 3 && api_version.minor > 2,
+            "Only OpenGL version greater than 3.2 are supported"
+        );
 
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
         glfw.window_hint(glfw::WindowHint::ClientApi(glfw::ClientApiHint::OpenGl));
-        glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
-        glfw.window_hint(glfw::WindowHint::ContextVersion(api_version.major,
-                                                               api_version.minor));
+        glfw.window_hint(glfw::WindowHint::OpenGlProfile(
+            glfw::OpenGlProfileHint::Core,
+        ));
+        glfw.window_hint(glfw::WindowHint::ContextVersion(
+            api_version.major,
+            api_version.minor,
+        ));
         glfw.window_hint(glfw::WindowHint::SRgbCapable(true));
         glfw.window_hint(glfw::WindowHint::DoubleBuffer(true));
         glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
         glfw.window_hint(glfw::WindowHint::Samples(match msaa {
-                                                            Msaa::None => None,
-                                                            Msaa::X4 => Some(4),
-                                                            Msaa::X8 => Some(8),
-                                                            Msaa::X16 => Some(16)
-                                                        }));
+            Msaa::None => None,
+            Msaa::X4 => Some(4),
+            Msaa::X8 => Some(8),
+            Msaa::X16 => Some(16),
+        }));
 
         glfw.window_hint(glfw::WindowHint::Resizable(true));
 
         if cfg!(debug_assertions) {
             glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true))
-        }
-        else {
+        } else {
             glfw.window_hint(glfw::WindowHint::ContextNoError(true))
         }
 
-
-        let (mut window, events) =
-            glfw.with_primary_monitor(|glfw, monitor| {
-                glfw.create_window(size.x,
-                                   size.y,
-                                   title,
-                                   monitor.map_or(glfw::WindowMode::Windowed, |m| {
-                                       match window_mode {
-                                           WindowMode::Windowed => {
-                                               glfw::WindowMode::Windowed
-                                            },
-                                            WindowMode::Fullscreen => {
-                                               glfw::WindowMode::FullScreen(m)
-                                            }
-                                        }
-                                   }))
-            }).expect("Failed to create GLFW window.");
+        let (mut window, events) = glfw
+            .with_primary_monitor(|glfw, monitor| {
+                glfw.create_window(
+                    size.x,
+                    size.y,
+                    title,
+                    monitor.map_or(glfw::WindowMode::Windowed, |m| match window_mode {
+                        WindowMode::Windowed => glfw::WindowMode::Windowed,
+                        WindowMode::Fullscreen => glfw::WindowMode::FullScreen(m),
+                    }),
+                )
+            })
+            .expect("Failed to create GLFW window.");
 
         gl::load_with(|s| window.get_proc_address(s) as *const _);
 
@@ -108,7 +107,7 @@ impl Window {
             events,
             size,
             framebuffer_size: UVec2::new(fb_width as u32, fb_height as u32),
-            event_producer
+            event_producer,
         }
     }
 
@@ -144,21 +143,23 @@ impl Window {
         self.framebuffer_size.y
     }
 
-    extern "system" fn debug_callback(source: GLenum,
-                                      message_type: GLenum,
-                                      id: GLuint,
-                                      severity: GLenum,
-                                      length: GLsizei,
-                                      message: *const GLchar,
-                                      user_param: *mut GLvoid) {
-
+    extern "system" fn debug_callback(
+        source: GLenum,
+        message_type: GLenum,
+        id: GLuint,
+        severity: GLenum,
+        length: GLsizei,
+        message: *const GLchar,
+        user_param: *mut GLvoid,
+    ) {
         let msg = unsafe { CStr::from_ptr(message) };
 
-        eprintln!("GL CALLBACK: type = {}, severity = {}, message = {:#?}",
-                  Self::message_type_to_str(message_type),
-                  Self::severity_to_str(severity),
-                  msg )
-
+        eprintln!(
+            "GL CALLBACK: type = {}, severity = {}, message = {:#?}",
+            Self::message_type_to_str(message_type),
+            Self::severity_to_str(severity),
+            msg
+        )
     }
 
     fn message_type_to_str(message_type: GLenum) -> &'static str {
@@ -172,7 +173,7 @@ impl Window {
             gl::DEBUG_TYPE_PORTABILITY => "PORTABILITY",
             gl::DEBUG_TYPE_PUSH_GROUP => "PUSH GROUP",
             gl::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "UNDEFINED BEHAVIOR",
-            _ => "!UNDEFINED ENUM!"
+            _ => "!UNDEFINED ENUM!",
         }
     }
 
@@ -182,7 +183,7 @@ impl Window {
             gl::DEBUG_SEVERITY_MEDIUM => "MEDIUM",
             gl::DEBUG_SEVERITY_LOW => "LOW",
             gl::DEBUG_SEVERITY_NOTIFICATION => "NOTIFICATION",
-            _ => "!UNDEFINED ENUM!"
+            _ => "!UNDEFINED ENUM!",
         }
     }
 }
