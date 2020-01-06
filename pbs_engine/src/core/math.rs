@@ -1,6 +1,6 @@
-pub use vector::*;
-pub use quaternion::*;
 pub use matrix::*;
+pub use quaternion::*;
+pub use vector::*;
 
 pub mod vector {
     use nalgebra_glm as glm;
@@ -43,9 +43,9 @@ pub mod vector {
 }
 
 pub mod quaternion {
-    use nalgebra_glm as glm;
     use crate::math::vector::Axes;
     use crate::math::{Mat4, Vec3};
+    use nalgebra_glm as glm;
 
     pub type Quat = glm::Quat;
 
@@ -66,7 +66,7 @@ pub mod quaternion {
     }
 
     pub fn slerp(a: &Quat, b: &Quat, t: f32) -> Quat {
-        glm::quat_normalize(&glm::quat_slerp(a, b ,t))
+        glm::quat_normalize(&glm::quat_slerp(a, b, t))
     }
 
     pub fn rotate_vec3(quat: &Quat, vec: &Vec3) -> Vec3 {
@@ -75,9 +75,9 @@ pub mod quaternion {
 }
 
 pub mod matrix {
-    use nalgebra_glm as glm;
     use super::vector::Vec3;
     use crate::core::math::Quat;
+    use nalgebra_glm as glm;
 
     pub type Mat4 = glm::Mat4;
 
@@ -102,10 +102,12 @@ pub mod matrix {
     }
 
     pub fn perspective(win_width: u32, win_height: u32, fov_deg: u32, near: f32, far: f32) -> Mat4 {
-        glm::perspective(win_width as f32 / win_height as f32,
-                         f32::to_radians(fov_deg as f32),
-                         near,
-                         far)
+        glm::perspective(
+            win_width as f32 / win_height as f32,
+            f32::to_radians(fov_deg as f32),
+            near,
+            far,
+        )
     }
 
     pub fn look_at(position: &Vec3, target: &Vec3, up: &Vec3) -> Mat4 {
@@ -132,19 +134,22 @@ pub mod matrix {
 pub mod utilities {
     use nalgebra_glm as glm;
 
-    pub fn value_ptr<N: glm::Scalar,
-                     R: glm::Dimension,
-                     C: glm::Dimension>(value: &glm::TMat<N, R, C>) -> *const N
-        where glm::DefaultAllocator: glm::Alloc<N, R, C> {
+    pub fn value_ptr<N: glm::Scalar, R: glm::Dimension, C: glm::Dimension>(
+        value: &glm::TMat<N, R, C>,
+    ) -> *const N
+    where
+        glm::DefaultAllocator: glm::Alloc<N, R, C>,
+    {
         glm::value_ptr(value).as_ptr()
     }
 }
 
+use nalgebra_glm as glm;
+
 pub fn clamp_scalar(x: f32, min: f32, max: f32) -> f32 {
-    nalgebra_glm::clamp_scalar(x, min, max)
+    glm::clamp_scalar(x, min, max)
 }
 
-pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    (1.0 - t) * a + t * b
+pub fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
+    glm::lerp_scalar(a, b, t)
 }
-
