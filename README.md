@@ -15,13 +15,13 @@ A Physically based shading demo app written in Rust using OpenGL 4.6 latest feat
 
 # Samples
 
-| Indoors fitted ACES | Indoors filmic ACES |
+| Indoors ACES | Indoors ACES (simple luminance fit) |
 |:-:|:-:|
 | <img src="images/pbs-rs-aces-fitted-indoors.png"> | <img src="images/pbs-rs-aces-filmic-indoors.png"> |
 
-| Outdoors fitted ACES | Outdoors filmic ACES |
+| Outdoors ACES | Outdoors ACES (simple luminance fit) |
 |:-:|:-:|
-| <img src="images/pbs-rs-aces-fitted.png"> | <img src="images/pbs-rs-aces-fitted.png"> |
+| <img src="images/pbs-rs-aces-fitted.png"> | <img src="images/pbs-rs-aces-filmic.png"> |
 
 # References
 * https://learnopengl.com/
