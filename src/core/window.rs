@@ -9,7 +9,7 @@ use std::sync::mpsc::Receiver;
 
 use super::math::UVec2;
 use super::{Msaa, Version, WindowMode};
-use crate::engine::event::Event;
+use crate::core::event::Event;
 use glfw::Context;
 
 pub struct Window {

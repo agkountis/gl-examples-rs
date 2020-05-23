@@ -1,28 +1,31 @@
 use std::rc::Rc;
 
-use engine::application::clear_default_framebuffer;
-use engine::camera::Camera;
-use engine::core::engine::event::Event;
-use engine::core::engine::input::Modifiers;
-use engine::core::scene::Transition;
-use engine::engine::{input, Context};
-use engine::math::{
-    matrix::{perspective, rotate, Mat4},
-    scale,
-    vector::{UVec2, Vec3, Vec4},
+use engine::{
+    application::clear_default_framebuffer,
+    camera::Camera,
+    event::Event,
+    input,
+    input::Modifiers,
+    math::{
+        matrix::{perspective, rotate, Mat4},
+        scale,
+        vector::{UVec2, Vec3, Vec4},
+    },
+    rendering::{
+        framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
+        material::{Material, PbsMetallicRoughnessMaterial},
+        mesh::{FullscreenMesh, Mesh, MeshUtilities},
+        program_pipeline::ProgramPipeline,
+        sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
+        shader::{Shader, ShaderStage},
+        state::{DepthFunction, FaceCulling, FrontFace, StateManager},
+        texture::{SizedTextureFormat, TextureCube},
+        Draw,
+    },
+    scene::Scene,
+    scene::Transition,
+    Context,
 };
-use engine::rendering::mesh::{FullscreenMesh, Mesh, MeshUtilities};
-use engine::rendering::program_pipeline::ProgramPipeline;
-use engine::rendering::{
-    framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
-    material::{Material, PbsMetallicRoughnessMaterial},
-    sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-    shader::{Shader, ShaderStage},
-    state::{DepthFunction, FaceCulling, FrontFace, StateManager},
-    texture::{SizedTextureFormat, TextureCube},
-    Draw,
-};
-use engine::scene::Scene;
 
 struct EnvironmentMaps {
     pub skybox: TextureCube,
@@ -73,18 +76,28 @@ impl PbsScene {
         let camera = Camera::default();
 
         let skybox_prog = ProgramPipeline::new()
-            .add_shader(&Shader::new_from_text(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert")).unwrap())
-            .add_shader(&Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag")).unwrap())
+            .add_shader(
+                &Shader::new_from_text(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert"))
+                    .unwrap(),
+            )
+            .add_shader(
+                &Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag"))
+                    .unwrap(),
+            )
             .build()
             .unwrap();
 
         let fullscreen_shader =
-            Shader::new_from_text(ShaderStage::Vertex, asset_path.join("sdr/fullscreen.vert")).unwrap();
+            Shader::new_from_text(ShaderStage::Vertex, asset_path.join("sdr/fullscreen.vert"))
+                .unwrap();
         let horizontal_gaussian_prog = ProgramPipeline::new()
             .add_shader(&fullscreen_shader)
             .add_shader(
-                &Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/gaussian_blur_horizontal.frag"))
-                    .unwrap(),
+                &Shader::new_from_text(
+                    ShaderStage::Fragment,
+                    asset_path.join("sdr/gaussian_blur_horizontal.frag"),
+                )
+                .unwrap(),
             )
             .build()
             .unwrap();
@@ -92,15 +105,21 @@ impl PbsScene {
         let vertical_gaussian_prog = ProgramPipeline::new()
             .add_shader(&fullscreen_shader)
             .add_shader(
-                &Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/gaussian_blur_vertical.frag"))
-                    .unwrap(),
+                &Shader::new_from_text(
+                    ShaderStage::Fragment,
+                    asset_path.join("sdr/gaussian_blur_vertical.frag"),
+                )
+                .unwrap(),
             )
             .build()
             .unwrap();
 
         let tonemapping_prog = ProgramPipeline::new()
             .add_shader(&fullscreen_shader)
-            .add_shader(&Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/tonemap.frag")).unwrap())
+            .add_shader(
+                &Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/tonemap.frag"))
+                    .unwrap(),
+            )
             .build()
             .unwrap();
 
@@ -111,39 +130,66 @@ impl PbsScene {
         let skybox_mesh = MeshUtilities::generate_cube(1.0);
 
         let albedo = asset_manager
-            .load_texture_2d(asset_path.join("textures/cerberus/Cerberus_A.png"), true, true)
+            .load_texture_2d(
+                asset_path.join("textures/cerberus/Cerberus_A.png"),
+                true,
+                true,
+            )
             .expect("Failed to load albedo texture");
 
         let metallic = asset_manager
-            .load_texture_2d(asset_path.join("textures/cerberus/Cerberus_M.png"), false, true)
+            .load_texture_2d(
+                asset_path.join("textures/cerberus/Cerberus_M.png"),
+                false,
+                true,
+            )
             .expect("Failed to load metallic texture");
 
         let roughness = asset_manager
-            .load_texture_2d(asset_path.join("textures/cerberus/Cerberus_R.png"), false, true)
+            .load_texture_2d(
+                asset_path.join("textures/cerberus/Cerberus_R.png"),
+                false,
+                true,
+            )
             .expect("Failed to load roughness texture");
 
         let normals = asset_manager
-            .load_texture_2d(asset_path.join("textures/cerberus/Cerberus_N.png"), false, true)
+            .load_texture_2d(
+                asset_path.join("textures/cerberus/Cerberus_N.png"),
+                false,
+                true,
+            )
             .expect("Failed to load normals texture");
 
         let ao = asset_manager
-            .load_texture_2d(asset_path.join("textures/cerberus/Cerberus_AO.png"), false, true)
+            .load_texture_2d(
+                asset_path.join("textures/cerberus/Cerberus_AO.png"),
+                false,
+                true,
+            )
             .expect("Failed to load ao texture");
 
         let ibl_brdf_lut = asset_manager
-            .load_texture_2d(asset_path.join("textures/pbs/ibl_brdf_lut.png"), false, false)
+            .load_texture_2d(
+                asset_path.join("textures/pbs/ibl_brdf_lut.png"),
+                false,
+                false,
+            )
             .expect("Failed to load BRDF LUT texture");
 
-        let skybox = TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/ibl_skybox.ktx"))
-            .expect("Failed to load Skybox");
+        let skybox =
+            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/ibl_skybox.ktx"))
+                .expect("Failed to load Skybox");
 
-        let irradiance =
-            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/irradiance/ibl_irradiance.ktx"))
-                .expect("Failed to load Irradiance map");
+        let irradiance = TextureCube::new_from_file(
+            asset_path.join("textures/pbs/ktx/irradiance/ibl_irradiance.ktx"),
+        )
+        .expect("Failed to load Irradiance map");
 
-        let radiance =
-            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/radiance/ibl_radiance.ktx"))
-                .expect("Failed to load Radiance map");
+        let radiance = TextureCube::new_from_file(
+            asset_path.join("textures/pbs/ktx/radiance/ibl_radiance.ktx"),
+        )
+        .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(
             UVec2::new(
@@ -442,11 +488,7 @@ impl Scene for PbsScene {
 
     fn resume(&mut self, _: Context) {}
 
-    fn handle_event(
-        &mut self,
-        _: Context,
-        event: Event,
-    ) -> Transition {
+    fn handle_event(&mut self, _: Context, event: Event) -> Transition {
         match event {
             Event::MouseButton(button, action, _) => {
                 println!("{:?} : {:?}", button, action);
@@ -491,10 +533,7 @@ impl Scene for PbsScene {
     }
 
     fn update(&mut self, context: Context) -> Transition {
-        let Context {
-            timer,
-            ..
-        } = context;
+        let Context { timer, .. } = context;
 
         self.dt = timer.get_delta();
         let dx = self.mouse_x - self.prev_x;
@@ -513,10 +552,7 @@ impl Scene for PbsScene {
     fn pre_draw(&mut self, _: Context) {}
 
     fn draw(&mut self, context: Context) {
-        let Context {
-            window,
-           ..
-        } = context;
+        let Context { window, .. } = context;
 
         self.geometry_pass();
         self.bloom_pass();

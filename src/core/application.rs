@@ -2,13 +2,13 @@ use crossbeam_channel::{Receiver, Sender};
 use pbs_gl as gl;
 
 use crate::core::asset::AssetManager;
-use crate::core::engine::Context;
+use crate::core::event::Event;
 use crate::core::math::Vec4;
 use crate::core::scene::{Scene, SceneManager};
 use crate::core::timer::Timer;
 use crate::core::window::Window;
+use crate::core::Context;
 use crate::core::Settings;
-use crate::engine::event::Event;
 use std::error::Error;
 
 pub struct Application<'a> {
