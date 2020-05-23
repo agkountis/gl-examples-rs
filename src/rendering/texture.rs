@@ -8,6 +8,7 @@ use pbs_gl as gl;
 use gl::types::*;
 use std::path::Path;
 use crate::core::asset::Asset;
+use std::fmt::Display;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -43,8 +44,8 @@ pub enum TextureFormat {
 pub struct Utils;
 
 impl Utils {
-    fn open_image_file(path: &str) -> Result<DynamicImage, String> {
-        match image::open(Path::new(path)) {
+    fn open_image_file<P: AsRef<Path>>(path: P) -> Result<DynamicImage, String> {
+        match image::open(path.as_ref()) {
             Ok(img) => Ok(img),
             Err(e) => Err(e.to_string()),
         }
@@ -91,7 +92,7 @@ impl Asset for Texture2D {
     type Error = String;
     type LoadConfig = Texture2DLoadConfig;
 
-    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+    fn load<P: AsRef<Path>>(path: P, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
         let mut is_srgb= false;
         let mut generate_mipmaps = false;
 
@@ -100,7 +101,7 @@ impl Asset for Texture2D {
             generate_mipmaps = config.generate_mipmaps;
         }
 
-        match Utils::open_image_file(path) {
+        match Utils::open_image_file(path.as_ref()) {
             Ok(img) => {
                 let (width, height) = img.dimensions();
 
@@ -186,8 +187,8 @@ impl Asset for TextureCube {
     type Error = String;
     type LoadConfig = ();
 
-    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
-        let result: gli::Result<gli::TextureCube> = gli::load(Path::new(path));
+    fn load<P: AsRef<Path>>(path: P, _: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+        let result: gli::Result<gli::TextureCube> = gli::load(path.as_ref());
         match result {
             Ok(tex) => {
 
@@ -206,25 +207,22 @@ impl Asset for TextureCube {
                 let (internal_format, external_format, data_type) =
                     Self::translate_gli_format_info(tex.format());
 
-
                 let mut id: GLuint = 0;
                 unsafe {
                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
 
-                    let width = tex.extent(0).width;
-                    let height = tex.extent(0).height;
                     gl::TextureStorage2D(id,
                                          tex.levels() as i32,
                                          internal_format as u32,
                                          tex.extent(0).width as i32,
                                          tex.extent(0).height as i32);
 
-                    for layer in 0..tex.layers() {
+                    for _ in 0..tex.layers() {
 
                         for face in 0..tex.faces() {
 
                             let gl_face = gl::TEXTURE_CUBE_MAP_POSITIVE_X + face as u32;
-                            let face_tex = tex.get_face(face);
+                            let face_tex = tex.get_face(gl_face as usize);
 
                             for level in 0..tex.levels() {
 
@@ -261,8 +259,8 @@ impl Asset for TextureCube {
 impl TextureCube {
 
     //TODO: To be removed
-    pub fn new_from_file(path: &str) -> Result<Self, String> {
-        let result: gli::Result<gli::TextureCube> = gli::load(Path::new(path));
+    pub fn new_from_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let result: gli::Result<gli::TextureCube> = gli::load(path.as_ref());
          match result {
              Ok(tex) => {
 
@@ -285,20 +283,16 @@ impl TextureCube {
                  let mut id: GLuint = 0;
                  unsafe {
                      gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
-
-                     let width = tex.extent(0).width;
-                     let height = tex.extent(0).height;
                      gl::TextureStorage2D(id,
                                           tex.levels() as i32,
                                           internal_format as u32,
                                           tex.extent(0).width as i32,
                                           tex.extent(0).height as i32);
 
-                     for layer in 0..tex.layers() {
+                     for _ in 0..tex.layers() {
 
                          for face in 0..tex.faces() {
 
-                             let gl_face = gl::TEXTURE_CUBE_MAP_POSITIVE_X + face as u32;
                              let face_tex = tex.get_face(face);
 
                              for level in 0..tex.levels() {

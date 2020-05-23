@@ -12,6 +12,7 @@ mod model_loader;
 mod messaging;
 
 use self::math::{UVec2, Vec4};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Version {
@@ -37,13 +38,14 @@ pub enum Msaa {
 #[derive(Debug)]
 pub struct Settings{
     pub name: String,
+    pub asset_path: PathBuf,
     pub version: Version,
     pub graphics_api_version: Version,
     pub window_size: UVec2,
     pub window_mode: WindowMode,
     pub msaa: Msaa,
     pub vsync: bool,
-    pub default_clear_color: Vec4
+    pub default_clear_color: Vec4,
 }
 
 #[derive(Debug, Clone, Copy)]

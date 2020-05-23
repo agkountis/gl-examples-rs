@@ -8,6 +8,7 @@ use std::ptr;
 use crate::rendering::Draw;
 use crate::core::asset::Asset;
 use std::ops::Index;
+use std::path::Path;
 
 
 #[derive(Debug)]
@@ -118,7 +119,7 @@ impl Asset for Mesh {
     type Error = String;
     type LoadConfig = ();
 
-    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+    fn load<P: AsRef<Path>>(path: P, _: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
         use assimp::Importer;
 
         let mut importer = Importer::new();
@@ -126,7 +127,7 @@ impl Asset for Mesh {
         importer.calc_tangent_space(|calc| calc.enable = true);
         importer.flip_uvs(true);
 
-        if let Ok(scene) = importer.read_file(path) {
+        if let Ok(scene) = importer.read_file(path.as_ref().to_string_lossy().to_owned().as_ref()) {
             if scene.num_meshes() > 0 {
                 let ai_mesh = scene.mesh(0).unwrap();
 

@@ -1,37 +1,37 @@
 use crate::core::engine::{event::Event, Context};
 
-pub enum Transition<T> {
-    Push(Box<dyn Scene<T>>),
-    Switch(Box<dyn Scene<T>>),
+pub enum Transition {
+    Push(Box<dyn Scene>),
+    Switch(Box<dyn Scene>),
     Pop,
     None,
     Quit,
 }
 
-pub trait Scene<T> {
-    fn start(&mut self, context: Context<T>) {}
-    fn stop(&mut self, context: Context<T>) {}
-    fn pause(&mut self, context: Context<T>) {}
-    fn resume(&mut self, context: Context<T>) {}
-    fn handle_event(&mut self, context: Context<T>, event: Event) -> Transition<T> {
+pub trait Scene {
+    fn start(&mut self, context: Context) {}
+    fn stop(&mut self, context: Context) {}
+    fn pause(&mut self, context: Context) {}
+    fn resume(&mut self, context: Context) {}
+    fn handle_event(&mut self, context: Context, event: Event) -> Transition {
         Transition::None
     }
-    fn update(&mut self, context: Context<T>) -> Transition<T> {
+    fn update(&mut self, context: Context) -> Transition {
         Transition::None
     }
-    fn pre_draw(&mut self, context: Context<T>) {}
-    fn draw(&mut self, context: Context<T>) {}
-    fn post_draw(&mut self, context: Context<T>) {}
+    fn pre_draw(&mut self, context: Context) {}
+    fn draw(&mut self, context: Context) {}
+    fn post_draw(&mut self, context: Context) {}
 }
 
-pub struct SceneManager<'a, T: 'a> {
-    scenes: Vec<Box<dyn Scene<T> + 'a>>,
+pub struct SceneManager<'a> {
+    scenes: Vec<Box<dyn Scene + 'a>>,
     active_scene_index: usize,
     is_running: bool,
 }
 
-impl<'a, T> SceneManager<'a, T> {
-    pub fn new<S: Scene<T> + 'a>(initial_scene: S) -> SceneManager<'a, T> {
+impl<'a> SceneManager<'a> {
+    pub fn new<S: Scene + 'a>(initial_scene: S) -> SceneManager<'a> {
         Self {
             scenes: vec![Box::new(initial_scene)],
             active_scene_index: 0,
@@ -39,24 +39,23 @@ impl<'a, T> SceneManager<'a, T> {
         }
     }
 
-    pub fn initialize(&mut self, context: Context<T>) {
+    pub fn initialize(&mut self, context: Context) {
         self.scenes.last_mut().unwrap().start(context);
         self.is_running = true
     }
 
-    pub fn handle_event(&mut self, context: Context<T>, event: Event) {
+    pub fn handle_event(&mut self, context: Context, event: Event) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         if self.is_running {
             let transition = match self.scenes.last_mut() {
                 Some(scene) => scene.handle_event(
-                    Context::new(window, asset_manager, timer, settings, user_data),
+                    Context::new(window, asset_manager, timer, settings),
                     event,
                 ),
                 None => Transition::None,
@@ -64,18 +63,17 @@ impl<'a, T> SceneManager<'a, T> {
 
             self.handle_transition(
                 transition,
-                Context::new(window, asset_manager, timer, settings, user_data),
+                Context::new(window, asset_manager, timer, settings),
             );
         }
     }
 
-    pub fn update(&mut self, context: Context<T>) {
+    pub fn update(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         if self.is_running {
@@ -85,25 +83,23 @@ impl<'a, T> SceneManager<'a, T> {
                     asset_manager,
                     timer,
                     settings,
-                    user_data,
                 )),
                 None => Transition::None,
             };
 
             self.handle_transition(
                 transition,
-                Context::new(window, asset_manager, timer, settings, user_data),
+                Context::new(window, asset_manager, timer, settings),
             )
         }
     }
 
-    pub fn pre_draw(&mut self, context: Context<T>) {
+    pub fn pre_draw(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         if self.is_running {
@@ -113,19 +109,17 @@ impl<'a, T> SceneManager<'a, T> {
                     asset_manager,
                     timer,
                     settings,
-                    user_data,
                 ))
             }
         }
     }
 
-    pub fn draw(&mut self, context: Context<T>) {
+    pub fn draw(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         if self.is_running {
@@ -135,19 +129,17 @@ impl<'a, T> SceneManager<'a, T> {
                     asset_manager,
                     timer,
                     settings,
-                    user_data,
                 ))
             }
         }
     }
 
-    pub fn post_draw(&mut self, context: Context<T>) {
+    pub fn post_draw(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         if self.is_running {
@@ -157,7 +149,6 @@ impl<'a, T> SceneManager<'a, T> {
                     asset_manager,
                     timer,
                     settings,
-                    user_data,
                 ))
             }
         }
@@ -167,19 +158,18 @@ impl<'a, T> SceneManager<'a, T> {
         self.is_running
     }
 
-    fn handle_transition(&mut self, transition: Transition<T>, context: Context<T>) {
+    fn handle_transition(&mut self, transition: Transition, context: Context) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         match transition {
             Transition::Push(mut scene) => self.push(
                 scene,
-                Context::new(window, asset_manager, timer, settings, user_data),
+                Context::new(window, asset_manager, timer, settings),
             ),
             Transition::Switch(_) => {}
             Transition::Pop => {}
@@ -189,18 +179,16 @@ impl<'a, T> SceneManager<'a, T> {
                 asset_manager,
                 timer,
                 settings,
-                user_data,
             )),
         }
     }
 
-    fn push(&mut self, scene: Box<dyn Scene<T>>, context: Context<T>) {
+    fn push(&mut self, scene: Box<dyn Scene>, context: Context) {
         let Context {
             window,
             asset_manager,
             timer,
             settings,
-            user_data,
         } = context;
 
         if let Some(current) = self.scenes.last_mut() {
@@ -209,7 +197,6 @@ impl<'a, T> SceneManager<'a, T> {
                 asset_manager,
                 timer,
                 settings,
-                user_data,
             ))
         }
 
@@ -219,18 +206,16 @@ impl<'a, T> SceneManager<'a, T> {
             asset_manager,
             timer,
             settings,
-            user_data,
         ))
     }
 
-    pub(crate) fn stop(&mut self, context: Context<T>) {
+    pub(crate) fn stop(&mut self, context: Context) {
         if self.is_running {
             let Context {
                 window,
                 asset_manager,
                 timer,
                 settings,
-                user_data,
             } = context;
 
             while let Some(mut scene) = self.scenes.pop() {
@@ -239,7 +224,6 @@ impl<'a, T> SceneManager<'a, T> {
                     asset_manager,
                     timer,
                     settings,
-                    user_data,
                 ))
             }
 

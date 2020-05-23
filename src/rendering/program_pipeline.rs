@@ -35,13 +35,13 @@ impl ProgramPipeline {
     }
 
     pub fn add_shader(mut self, shader: &Shader) -> Self {
-        let idx = Self::shader_type_to_array_index(shader.get_type());
+        let idx = Self::shader_stage_to_array_index(shader.get_stage());
 
         if let Some(ref sdr) = self.shaders[idx] {
-            println!("Shader of type {:?} already exists in the program pipeline... Replacing...", shader.get_type())
+            println!("Shader of type {:?} already exists in the program pipeline... Replacing...", shader.get_stage())
         }
 
-        self.shaders[idx] = Some((shader.get_type(), shader.get_id()));
+        self.shaders[idx] = Some((shader.get_stage(), shader.get_id()));
 
         self
     }
@@ -86,7 +86,7 @@ impl ProgramPipeline {
                         return Err(message.to_string_lossy().into_owned());
                     }
 
-                    let idx = Self::shader_type_to_array_index(shader.0);
+                    let idx = Self::shader_stage_to_array_index(shader.0);
                     self.shader_programs[idx] = Some(program_id);
 
                     gl::UseProgramStages(self.id,
@@ -221,7 +221,7 @@ impl ProgramPipeline {
         }
     }
 
-    fn shader_type_to_array_index(shader_type: ShaderStage) -> usize {
+    fn shader_stage_to_array_index(shader_type: ShaderStage) -> usize {
         match shader_type {
             ShaderStage::Vertex => 0,
             ShaderStage::TesselationControl => 1,
@@ -236,7 +236,7 @@ impl ProgramPipeline {
                                                  stage: ShaderStage,
                                                  resource_type: GLenum,
                                                  name: &str) -> Result<(GLuint, GLint), String> {
-        let program_index = Self::shader_type_to_array_index(stage);
+        let program_index = Self::shader_stage_to_array_index(stage);
 
         let program_id = match self.shader_programs[program_index] {
             Some(id) => id,

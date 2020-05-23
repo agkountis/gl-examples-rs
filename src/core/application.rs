@@ -11,25 +11,23 @@ use crate::core::Settings;
 use crate::engine::event::Event;
 use std::error::Error;
 
-pub struct Application<'a, T: 'a> {
+pub struct Application<'a> {
     window: Window,
-    scene_manager: SceneManager<'a, T>,
+    scene_manager: SceneManager<'a>,
     asset_manager: AssetManager,
     timer: Timer,
     settings: Settings,
     event_consumer: Receiver<Event>,
     event_producer: Sender<Event>,
-    user_data: T,
 }
 
-impl<'a, T> Application<'a, T> {
-    pub fn new<Cons, S: Scene<T> + 'a>(
+impl<'a> Application<'a> {
+    pub fn new<Cons, S: Scene + 'a>(
         mut settings: Settings,
-        mut user_data: T,
         mut scene_constructor: Cons,
-    ) -> Application<'a, T>
+    ) -> Application<'a>
     where
-        Cons: FnMut(Context<T>) -> S,
+        Cons: FnMut(Context) -> S,
     {
         let (producer, consumer) = crossbeam_channel::unbounded();
 
@@ -50,8 +48,8 @@ impl<'a, T> Application<'a, T> {
             &mut asset_manager,
             &mut timer,
             &mut settings,
-            &mut user_data,
         ));
+
         let scene_manager = SceneManager::new(initial_scene);
 
         Self {
@@ -62,7 +60,6 @@ impl<'a, T> Application<'a, T> {
             settings,
             event_consumer: consumer,
             event_producer: producer,
-            user_data,
         }
     }
 
@@ -79,7 +76,6 @@ impl<'a, T> Application<'a, T> {
                         &mut self.asset_manager,
                         &mut self.timer,
                         &mut self.settings,
-                        &mut self.user_data,
                     ),
                     event,
                 )
@@ -90,7 +86,6 @@ impl<'a, T> Application<'a, T> {
                 &mut self.asset_manager,
                 &mut self.timer,
                 &mut self.settings,
-                &mut self.user_data,
             ));
 
             self.scene_manager.pre_draw(Context::new(
@@ -98,7 +93,6 @@ impl<'a, T> Application<'a, T> {
                 &mut self.asset_manager,
                 &mut self.timer,
                 &mut self.settings,
-                &mut self.user_data,
             ));
 
             self.scene_manager.draw(Context::new(
@@ -106,7 +100,6 @@ impl<'a, T> Application<'a, T> {
                 &mut self.asset_manager,
                 &mut self.timer,
                 &mut self.settings,
-                &mut self.user_data,
             ));
 
             self.scene_manager.post_draw(Context::new(
@@ -114,7 +107,6 @@ impl<'a, T> Application<'a, T> {
                 &mut self.asset_manager,
                 &mut self.timer,
                 &mut self.settings,
-                &mut self.user_data,
             ));
 
             self.window.swap_buffers()
@@ -129,7 +121,6 @@ impl<'a, T> Application<'a, T> {
             &mut self.asset_manager,
             &mut self.timer,
             &mut self.settings,
-            &mut self.user_data,
         ))
     }
 }

@@ -1,6 +1,7 @@
 use crate::core::math::{clamp_scalar, rotate_vec3};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
 use crate::math::quaternion;
+use nalgebra_glm::quat_normalize;
 
 pub struct Camera {
     position: Vec3,
@@ -19,7 +20,7 @@ pub struct Camera {
 impl Default for Camera {
     fn default() -> Self {
         let position = Vec3::new(0.0, 0.0, 0.0);
-        let target = Vec3::new(0.0, 0.0, 1.0);
+        let target = Vec3::new(0.0, 0.0, -1.0);
         let up = Vec3::new(0.0, 1.0, 0.0);
         let transform = math::look_at(&position, &target, &up);
         let default_distance = 40.0f32;
@@ -28,10 +29,10 @@ impl Default for Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
-            orbit_speed: 15.0,
+            orbit_speed: 110.0,
             zoom_speed: 30.0,
-            orbit_dampening: 12.0,
-            zoom_dampening: 6.0,
+            orbit_dampening: 2.0,
+            zoom_dampening: 4.0,
             yaw: 0.0,
             pitch: 0.0,
             distance: default_distance,
@@ -89,8 +90,8 @@ impl Camera {
 
     pub fn update(&mut self, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
         if mouse_dx != 0.0 || mouse_dy != 0.0 {
-            self.pitch += mouse_dy * self.orbit_speed * dt;
-            self.yaw += mouse_dx * self.orbit_speed * dt;
+            self.pitch += mouse_dy.signum() * self.orbit_speed * dt;
+            self.yaw += mouse_dx.signum() * self.orbit_speed * dt;
 
             self.pitch = clamp_scalar(self.pitch, -89.99, 89.99);
         }
@@ -103,12 +104,11 @@ impl Camera {
 
         self.distance =
             math::lerp_scalar(self.prev_distance, self.distance, dt * self.zoom_dampening);
-        println!("distance: {}", self.distance);
         self.distance = clamp_scalar(self.distance, 2.0, 200.0);
         self.prev_distance = self.distance;
 
-        let dest = quaternion::from_euler(self.yaw, self.pitch, 0.0);
-        self.orientation = quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening);
+        let dest = quat_normalize(&quaternion::from_euler(self.yaw, self.pitch, 0.0));
+        self.orientation = quat_normalize(&quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening));
         self.position = rotate_vec3(&self.orientation, &Vec3::new(0.0, 0.0, self.distance));
 
         self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());

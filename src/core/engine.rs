@@ -353,27 +353,24 @@ pub mod input {
     }
 }
 
-pub struct Context<'a, T> {
+pub struct Context<'a> {
     pub window: &'a mut Window,
     pub asset_manager: &'a mut AssetManager,
     pub timer: &'a mut Timer,
     pub settings: &'a mut Settings,
-    pub user_data: &'a mut T
 }
 
 
-impl<'a, T> Context<'a, T> where T: 'a {
+impl<'a> Context<'a> {
     pub fn new(window: &'a mut Window,
                asset_manager: &'a mut AssetManager,
                timer: &'a mut Timer,
-               settings: &'a mut Settings,
-               user_data: &'a mut T) -> Self {
+               settings: &'a mut Settings) -> Self {
         Self {
             window,
             asset_manager,
             timer,
             settings,
-            user_data
         }
     }
 }

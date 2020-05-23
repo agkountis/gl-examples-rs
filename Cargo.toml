@@ -1,8 +1,25 @@
 [package]
-name = "pbs_rs"
+name = "engine"
 version = "0.1.0"
 authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-pbs_engine = {path = "pbs_engine", version = "0.1.0"}
+nalgebra-glm = "0.5.0"
+bitflags = "1.0.4"
+image = "0.22.3"
+gli-rs = "0.3.1"
+async-std = "1.0.1"
+async-macros = "2.0.0"
+crossbeam-channel = "0.4"
+assimp = "0.3.1"
+pbs_gl = {path = "pbs_gl"}
+
+[dependencies.glfw]
+version = "0.34.0"
+default-features = false
+
+
+
+#[target.'cfg(target_os = "unix")'.dependencies.glfw]
+#version = "0.34.0"

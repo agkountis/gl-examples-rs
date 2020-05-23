@@ -3,13 +3,14 @@ use crate::rendering::texture::{Texture2D, TextureCube, Texture2DLoadConfig};
 use crate::rendering::mesh::Mesh;
 use std::path::Path;
 use std::rc::Rc;
+use std::fmt::Debug;
 
 pub trait Asset {
     type Output;
     type Error;
     type LoadConfig;
 
-    fn load(path: &str, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error>;
+    fn load<P: AsRef<Path> + Debug>(path: P, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error>;
 }
 
 pub struct AssetManager {
@@ -27,10 +28,10 @@ impl AssetManager {
         }
     }
 
-    pub fn load_texture_2d(&mut self, path: &str, is_srgb: bool, generate_mipmaps: bool) -> Result<Rc<Texture2D>, String> {
-        match Path::new(path).file_name() {
+    pub fn load_texture_2d<P: AsRef<Path>>(&mut self, path: P, is_srgb: bool, generate_mipmaps: bool) -> Result<Rc<Texture2D>, String> {
+        match path.as_ref().file_name() {
             Some(fname) => {
-                let texture = Rc::new(Texture2D::load(path, Some(Texture2DLoadConfig {
+                let texture = Rc::new(Texture2D::load(path.as_ref(), Some(Texture2DLoadConfig {
                     is_srgb,
                     generate_mipmaps
                 }))?);
@@ -45,10 +46,10 @@ impl AssetManager {
         }
     }
 
-    pub fn load_mesh(&mut self, path: &str) -> Result<Rc<Mesh>, String> {
-        match Path::new(path).file_name() {
+    pub fn load_mesh<P: AsRef<Path>>(&mut self, path: P) -> Result<Rc<Mesh>, String> {
+        match path.as_ref().file_name() {
             Some(fname) => {
-                let mesh = Rc::new(Mesh::load(path, None)?);
+                let mesh = Rc::new(Mesh::load(path.as_ref(), None)?);
 
                 self.meshes.entry(String::from(fname.to_string_lossy())).or_insert(Rc::clone(&mesh));
 

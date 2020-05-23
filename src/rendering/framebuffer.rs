@@ -23,6 +23,8 @@ pub enum FramebufferError {
     Unknown
 }
 
+impl std::error::Error for FramebufferError {}
+
 impl fmt::Display for FramebufferError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -35,9 +37,7 @@ impl fmt::Display for FramebufferError {
     }
 }
 
-//TODO: Do I have to implement the Error trait for the error enum?!
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AttachmentType {
     Texture,
     Renderbuffer,
@@ -161,10 +161,7 @@ impl Framebuffer {
 
         let texture_attachment_create_infos = attachment_create_infos.iter()
             .filter(|&create_info|{
-                match create_info.get_type() {
-                    AttachmentType::Texture => true,
-                    _ => false
-                }
+                create_info.get_type() == AttachmentType::Texture
             }).collect::<Vec<_>>();
 
 

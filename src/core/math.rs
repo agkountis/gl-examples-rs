@@ -153,3 +153,11 @@ pub fn clamp_scalar(x: f32, min: f32, max: f32) -> f32 {
 pub fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
     glm::lerp_scalar(a, b, t)
 }
+
+pub fn spherical_to_cartesian(theta: f32, phi: f32) -> Vec3 {
+    Vec3::new(
+        phi.sin() * theta.cos(),
+        phi.cos(),
+        phi.sin() * theta.sin()
+    )
+}

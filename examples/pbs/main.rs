@@ -1,21 +1,18 @@
-use pbs_engine;
+use engine;
 
 mod pbs_scene;
 
 use crate::pbs_scene::PbsScene;
-use pbs_engine::application::Application;
-use pbs_engine::math::vector::{UVec2, Vec4};
-use pbs_engine::{Msaa, Settings, Version, WindowMode};
+use engine::application::Application;
+use engine::math::vector::{UVec2, Vec4};
+use engine::{Msaa, Settings, Version, WindowMode};
 use std::error::Error;
-
-pub struct ApplicationData {
-    pub foo: i32,
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut app = Application::new(
         Settings {
             name: String::from("PBS-rs: Physically Based Shading demo using Rust"),
+            asset_path: "examples/assets".into(),
             version: Version {
                 major: 0,
                 minor: 1,
@@ -32,7 +29,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             vsync: true,
             default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
         },
-        ApplicationData { foo: 10 },
         |context| PbsScene::new(context),
     );
 

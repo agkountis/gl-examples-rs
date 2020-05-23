@@ -6,6 +6,7 @@ use std::io::Read;
 use std::ffi::CString;
 use std::path::Path;
 use std::error::Error;
+use std::fmt::{Display, Debug};
 
 
 pub fn check_spirv_support() -> bool {
@@ -49,7 +50,7 @@ pub enum ShaderStage {
 #[derive(Debug, Clone)]
 pub struct Shader {
     id: GLuint,
-    s_type: ShaderStage
+    stage: ShaderStage
 }
 
 impl Shader {
@@ -115,19 +116,18 @@ impl Shader {
 
         Ok(Shader {
             id,
-            s_type: stage
+            stage
         })
 
     }
 
-    pub fn new_from_text(stage: ShaderStage, filename: &str) -> Result<Shader, String> {
+    pub fn new_from_text<P: AsRef<Path> + Debug>(stage: ShaderStage, path: P) -> Result<Shader, String> {
 
         let mut text_source = String::new();
 
         {
-            let path = Path::new(filename);
-            let mut file = match File::open(path) {
-                Err(why) => panic!("couldn't open {}: {}", path.display(), why.description()),
+            let mut file = match File::open(path.as_ref()) {
+                Err(why) => panic!("couldn't open {:?}: {}", path, why),
                 Ok(file) => file
             };
 
@@ -173,7 +173,7 @@ impl Shader {
 
             Ok(Shader {
                 id,
-                s_type: stage
+                stage
             })
         }
     }
@@ -182,10 +182,9 @@ impl Shader {
         self.id
     }
 
-    pub fn get_type(&self) -> ShaderStage {
-        self.s_type
+    pub fn get_stage(&self) -> ShaderStage {
+        self.stage
     }
-
 }
 
 impl Drop for Shader {

@@ -4,6 +4,7 @@ use crate::rendering::shader::{Shader, ShaderStage};
 use crate::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
 use crate::core::math::Vec4;
 use std::rc::Rc;
+use std::path::Path;
 
 pub trait Material {
     fn bind(&self);
@@ -23,18 +24,19 @@ pub struct PbsMetallicRoughnessMaterial {
 }
 
 impl PbsMetallicRoughnessMaterial {
-    pub fn new(albedo: Rc<Texture2D>,
-               metallic: Rc<Texture2D>,
-               roughness: Rc<Texture2D>,
-               normals: Rc<Texture2D>,
-               ao: Rc<Texture2D>,
-               ibl_brdf_lut: Rc<Texture2D>) -> Self {
+    pub fn new<P: AsRef<Path>>(asset_path: P,
+                               albedo: Rc<Texture2D>,
+                               metallic: Rc<Texture2D>,
+                               roughness: Rc<Texture2D>,
+                               normals: Rc<Texture2D>,
+                               ao: Rc<Texture2D>,
+                               ibl_brdf_lut: Rc<Texture2D>) -> Self {
 
         let program_pipeline = ProgramPipeline::new()
             .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
-                                               "sdr/pbs.vert").unwrap())
+                                               asset_path.as_ref().join("sdr/pbs.vert")).unwrap())
             .add_shader(&Shader::new_from_text(ShaderStage::Fragment,
-                                               "sdr/pbs.frag").unwrap())
+                                               asset_path.as_ref().join("sdr/pbs.frag")).unwrap())
             .build()
             .unwrap();
 
