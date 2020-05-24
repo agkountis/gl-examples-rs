@@ -1,4 +1,4 @@
-use pbs_gl as gl;
+use gl_bindings as gl;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -35,7 +35,7 @@ pub enum BufferInternalFormat {
     Rgba32i = gl::RGBA32I,
     Rgba8ui = gl::RGBA8UI,
     Rgba16ui = gl::RGBA16UI,
-    Rgba32ui = gl::RGBA32UI
+    Rgba32ui = gl::RGBA32UI,
 }
 
 #[repr(u32)]
@@ -48,7 +48,7 @@ pub enum DataType {
     Int = gl::INT,
     UnsignedInt = gl::UNSIGNED_INT,
     HalfFloat = gl::HALF_FLOAT,
-    Float = gl::FLOAT
+    Float = gl::FLOAT,
 }
 
 #[repr(u32)]
@@ -71,7 +71,7 @@ pub enum DataFormat {
     RgbInteger = gl::RGB_INTEGER,
     RgbaInteger = gl::RGBA_INTEGER,
     BgrInteger = gl::BGR_INTEGER,
-    BgraInteger = gl::BGRA_INTEGER
+    BgraInteger = gl::BGRA_INTEGER,
 }
 
 #[repr(u32)]
@@ -83,5 +83,5 @@ pub enum DepthFormat {
     Depth32f = gl::DEPTH_COMPONENT32F,
     Depth32fStencil8 = gl::DEPTH32F_STENCIL8,
     Depth24Stencil8 = gl::DEPTH24_STENCIL8,
-    StencilIndex8 = gl::STENCIL_INDEX8
+    StencilIndex8 = gl::STENCIL_INDEX8,
 }

@@ -1,12 +1,12 @@
 [package]
-name = "pbs_gl"
+name = "gl_bindings"
 version = "0.1.0"
 build = "build.rs"
 authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "pbs_gl"
+name = "gl_bindings"
 path = "src/lib.rs"
 
 [build-dependencies]

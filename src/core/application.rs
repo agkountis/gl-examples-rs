@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, Sender};
-use pbs_gl as gl;
+use gl_bindings as gl;
 
 use crate::core::asset::AssetManager;
 use crate::core::event::Event;

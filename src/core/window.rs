@@ -1,7 +1,7 @@
 use crossbeam_channel::Sender;
 use gl::types::*;
+use gl_bindings as gl;
 use glfw;
-use pbs_gl as gl;
 
 use std::ffi::CStr;
 use std::ptr;

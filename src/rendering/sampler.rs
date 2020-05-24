@@ -1,6 +1,6 @@
-use pbs_gl as gl;
-use crate::core::math::Vec4;
 use crate::core::math::utilities;
+use crate::core::math::Vec4;
+use gl_bindings as gl;
 
 use gl::types::GLuint;
 
@@ -11,14 +11,14 @@ pub enum MinificationFilter {
     Linear = gl::LINEAR,
     NearestMipmapNearest = gl::NEAREST_MIPMAP_NEAREST,
     LinearMipmapNearest = gl::LINEAR_MIPMAP_NEAREST,
-    LinearMipmapLinear = gl::LINEAR_MIPMAP_LINEAR
+    LinearMipmapLinear = gl::LINEAR_MIPMAP_LINEAR,
 }
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
 pub enum MagnificationFilter {
     Nearest = gl::NEAREST,
-    Linear = gl::LINEAR
+    Linear = gl::LINEAR,
 }
 
 #[repr(u32)]
@@ -26,7 +26,7 @@ pub enum MagnificationFilter {
 pub enum WrappingMode {
     Repeat = gl::REPEAT,
     ClampToEdge = gl::CLAMP_TO_EDGE,
-    MirroredRepeat = gl::MIRRORED_REPEAT
+    MirroredRepeat = gl::MIRRORED_REPEAT,
 }
 
 #[derive(Debug)]
@@ -37,18 +37,18 @@ pub struct Sampler {
     pub wrap_s: WrappingMode,
     pub wrap_t: WrappingMode,
     pub wrap_r: WrappingMode,
-    pub border_color: Vec4
+    pub border_color: Vec4,
 }
 
 impl Sampler {
-
-    pub fn new(min_filter: MinificationFilter,
-               mag_filter: MagnificationFilter,
-               wrap_s: WrappingMode,
-               wrap_t: WrappingMode,
-               wrap_r: WrappingMode,
-               border_color: Vec4) -> Sampler {
-
+    pub fn new(
+        min_filter: MinificationFilter,
+        mag_filter: MagnificationFilter,
+        wrap_s: WrappingMode,
+        wrap_t: WrappingMode,
+        wrap_r: WrappingMode,
+        border_color: Vec4,
+    ) -> Sampler {
         let mut id: GLuint = 0;
 
         unsafe {
@@ -59,8 +59,11 @@ impl Sampler {
             gl::SamplerParameteri(id, gl::TEXTURE_WRAP_S, wrap_s as i32);
             gl::SamplerParameteri(id, gl::TEXTURE_WRAP_T, wrap_t as i32);
             gl::SamplerParameteri(id, gl::TEXTURE_WRAP_R, wrap_r as i32);
-            gl::SamplerParameterfv(id, gl::TEXTURE_BORDER_COLOR,
-                                   utilities::value_ptr(&border_color));
+            gl::SamplerParameterfv(
+                id,
+                gl::TEXTURE_BORDER_COLOR,
+                utilities::value_ptr(&border_color),
+            );
         }
 
         Sampler {
@@ -70,16 +73,13 @@ impl Sampler {
             wrap_s,
             wrap_t,
             wrap_r,
-            border_color
+            border_color,
         }
     }
-
 }
 
 impl Drop for Sampler {
     fn drop(&mut self) {
-        unsafe {
-            gl::DeleteSamplers(1, &self.id)
-        }
+        unsafe { gl::DeleteSamplers(1, &self.id) }
     }
 }

@@ -1,9 +1,8 @@
-use std::ptr;
-use pbs_gl as gl;
-use gl::types::*;
-use std::mem;
 use crate::rendering::format::{BufferInternalFormat, DataFormat, DataType};
-
+use gl::types::*;
+use gl_bindings as gl;
+use std::mem;
+use std::ptr;
 
 bitflags! {
     pub struct BufferStorageFlags : u32 {
@@ -22,7 +21,7 @@ bitflags! {
 pub enum BufferAccess {
     ReadOnly = gl::READ_ONLY,
     WriteOnly = gl::WRITE_ONLY,
-    ReadWrite = gl::READ_WRITE
+    ReadWrite = gl::READ_WRITE,
 }
 
 #[repr(u32)]
@@ -42,7 +41,7 @@ pub enum BufferTarget {
     ShaderStorage = gl::SHADER_STORAGE_BUFFER,
     Texture = gl::TEXTURE_BUFFER,
     TransformFeedback = gl::TRANSFORM_FEEDBACK_BUFFER,
-    Uniform = gl::UNIFORM_BUFFER
+    Uniform = gl::UNIFORM_BUFFER,
 }
 
 pub struct BufferCopyInfo<'a> {
@@ -50,7 +49,7 @@ pub struct BufferCopyInfo<'a> {
     pub destination: &'a Buffer,
     pub source_offset: isize,
     pub destination_offset: isize,
-    pub size: isize
+    pub size: isize,
 }
 
 pub struct Buffer {
@@ -58,7 +57,7 @@ pub struct Buffer {
     size: isize,
     mapped_ptr: *mut GLvoid,
     storage_flags: BufferStorageFlags,
-    current_bound_target: BufferTarget
+    current_bound_target: BufferTarget,
 }
 
 impl Buffer {
@@ -75,12 +74,11 @@ impl Buffer {
             size,
             mapped_ptr: ptr::null_mut(),
             storage_flags: buffer_storage_flags,
-            current_bound_target: BufferTarget::None
+            current_bound_target: BufferTarget::None,
         }
     }
 
-    pub fn new_with_data<T>(data: &[T],
-                         buffer_storage_flags: BufferStorageFlags) -> Buffer {
+    pub fn new_with_data<T>(data: &[T], buffer_storage_flags: BufferStorageFlags) -> Buffer {
         let mut id: GLuint = 0;
 
         unsafe {
@@ -89,7 +87,7 @@ impl Buffer {
                 id,
                 (data.len() * mem::size_of::<T>()) as isize,
                 data.as_ptr() as *const GLvoid,
-                buffer_storage_flags.bits()
+                buffer_storage_flags.bits(),
             );
         }
 
@@ -98,14 +96,12 @@ impl Buffer {
             size: data.len() as isize,
             mapped_ptr: ptr::null_mut(),
             storage_flags: buffer_storage_flags,
-            current_bound_target: BufferTarget::None
+            current_bound_target: BufferTarget::None,
         }
     }
 
     pub fn bind(&self, buffer_target: BufferTarget) {
-        unsafe {
-            gl::BindBuffer(buffer_target as u32, self.id)
-        }
+        unsafe { gl::BindBuffer(buffer_target as u32, self.id) }
     }
 
     pub fn unbind(&mut self) {
@@ -126,25 +122,30 @@ impl Buffer {
                 Hint: Create the buffer using BufferStorageFlags::MAP_READ, BufferStorageFlags::MAP_WRITE \
                 or BUFFER_STORAGE_FLAGS::MAP_READ_WRITE");
 
-        assert!(self.storage_flags.intersects(match buffer_access {
-            BufferAccess::ReadOnly => BufferStorageFlags::MAP_READ,
-            BufferAccess::WriteOnly => BufferStorageFlags::MAP_WRITE,
-            BufferAccess::ReadWrite => BufferStorageFlags::MAP_READ_WRITE
-        }),
-                "Cannot map buffer. \n\
+        assert!(
+            self.storage_flags.intersects(match buffer_access {
+                BufferAccess::ReadOnly => BufferStorageFlags::MAP_READ,
+                BufferAccess::WriteOnly => BufferStorageFlags::MAP_WRITE,
+                BufferAccess::ReadWrite => BufferStorageFlags::MAP_READ_WRITE,
+            }),
+            "Cannot map buffer. \n\
                 Reason: buffer_access function parameter not contained \
                 in the buffer's storage flags.\n\
                 Hint: Create the buffer using BufferStorageFlags::MAP_<READ/WRITE/READ_WRITE> \
-                to match the buffer_access function parameter.");
+                to match the buffer_access function parameter."
+        );
 
-        assert!((offset + length) < self.size,
-                "Cannot map buffer.\n\
+        assert!(
+            (offset + length) < self.size,
+            "Cannot map buffer.\n\
                 Reason: Requested range exceeds buffer capacity (out of bounds).\n\
-                Hint: Offset + length must be smaller than the total buffer length(capacity)");
+                Hint: Offset + length must be smaller than the total buffer length(capacity)"
+        );
 
         if self.mapped_ptr == ptr::null_mut() {
             unsafe {
-                self.mapped_ptr = gl::MapNamedBufferRange(self.id, offset, length, buffer_access as u32)
+                self.mapped_ptr =
+                    gl::MapNamedBufferRange(self.id, offset, length, buffer_access as u32)
             }
         } else {
             println!("WARNING: Buffer already mapped. This call has no effect.")
@@ -159,30 +160,33 @@ impl Buffer {
     }
 
     pub fn fill(&self, offset: isize, size: isize, data: &[u8]) {
-        assert!(self.storage_flags.intersects(BufferStorageFlags::DYNAMIC),
-                "Cannot fill non-mapped buffer. \n \
+        assert!(
+            self.storage_flags.intersects(BufferStorageFlags::DYNAMIC),
+            "Cannot fill non-mapped buffer. \n \
                 Reason: Not able to call glBufferSubData(...).\n\
                 Hint: Create the buffer using BufferStorageFlags::DYNAMIC \
-                for non-mapped data updates.");
+                for non-mapped data updates."
+        );
 
-        unsafe {
-            gl::NamedBufferSubData(self.id, offset, size, data.as_ptr() as *const GLvoid)
-        }
+        unsafe { gl::NamedBufferSubData(self.id, offset, size, data.as_ptr() as *const GLvoid) }
     }
 
     pub fn fill_mapped(&mut self, data: &[u8], size: usize) {
-        assert_ne!(self.mapped_ptr, ptr::null_mut(),
-                   "Attempting to fill unmapped buffer. Please map the buffer first by calling \
-                   map(&mut self, buffer_access: BufferAccess)");
+        assert_ne!(
+            self.mapped_ptr,
+            ptr::null_mut(),
+            "Attempting to fill unmapped buffer. Please map the buffer first by calling \
+                   map(&mut self, buffer_access: BufferAccess)"
+        );
 
-        assert!(self.storage_flags.intersects(BufferStorageFlags::MAP_WRITE),
-                "Cannot fill mapped buffer.\n\
+        assert!(
+            self.storage_flags.intersects(BufferStorageFlags::MAP_WRITE),
+            "Cannot fill mapped buffer.\n\
                 Reason: Buffer not created using the flag BufferStorageFlags::MAP_WRITE.\n\
-                Hint: Create the buffer using BufferStorageFlags::MAP_WRITE");
+                Hint: Create the buffer using BufferStorageFlags::MAP_WRITE"
+        );
 
-        unsafe {
-            ptr::copy_nonoverlapping(data.as_ptr(), self.mapped_ptr as *mut u8, size)
-        }
+        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), self.mapped_ptr as *mut u8, size) }
     }
 
     pub fn get_id(&self) -> GLuint {
@@ -201,46 +205,60 @@ impl Buffer {
         self.storage_flags
     }
 
-    pub fn clear(&self,
-                 internal_format: BufferInternalFormat,
-                 data_format: DataFormat,
-                 data_type: DataType,
-                 data: &[u8]) {
+    pub fn clear(
+        &self,
+        internal_format: BufferInternalFormat,
+        data_format: DataFormat,
+        data_type: DataType,
+        data: &[u8],
+    ) {
         self.clear_range(internal_format, 0, self.size, data_format, data_type, data)
     }
 
-    pub fn clear_range(&self,
-                       internal_format: BufferInternalFormat,
-                       offset: isize,
-                       size: isize,
-                       data_format: DataFormat,
-                       data_type: DataType,
-                       data: &[u8]) {
-
+    pub fn clear_range(
+        &self,
+        internal_format: BufferInternalFormat,
+        offset: isize,
+        size: isize,
+        data_format: DataFormat,
+        data_type: DataType,
+        data: &[u8],
+    ) {
         //TODO: Add asserts to ensure spec correctness
 
         unsafe {
-            gl::ClearNamedBufferSubData(self.id,
-                                        internal_format as u32,
-                                        offset,
-                                        size,
-                                        data_format as u32,
-                                        data_type as u32,
-                                        data.as_ptr() as *const GLvoid);
+            gl::ClearNamedBufferSubData(
+                self.id,
+                internal_format as u32,
+                offset,
+                size,
+                data_format as u32,
+                data_type as u32,
+                data.as_ptr() as *const GLvoid,
+            );
         }
     }
 
     pub fn copy(buffer_copy_info: BufferCopyInfo) {
-        assert!(buffer_copy_info.source_offset > 0, "Buffer copy source offset must be > 0.");
-        assert!(buffer_copy_info.destination_offset > 0,
-                "Buffer copy destination offset must be > 0");
+        assert!(
+            buffer_copy_info.source_offset > 0,
+            "Buffer copy source offset must be > 0."
+        );
+        assert!(
+            buffer_copy_info.destination_offset > 0,
+            "Buffer copy destination offset must be > 0"
+        );
         assert!(buffer_copy_info.size > 0, "Buffer copy size must be > 0.");
-        assert!(buffer_copy_info.source_offset + buffer_copy_info.size
-            <= buffer_copy_info.source.get_size(),
-                "Source offset + size must be less or equal to source buffer size");
-        assert!(buffer_copy_info.destination_offset + buffer_copy_info.size
-                    <= buffer_copy_info.destination.get_size(),
-                "Destination offset + size must be less or equal to destination buffer size");
+        assert!(
+            buffer_copy_info.source_offset + buffer_copy_info.size
+                <= buffer_copy_info.source.get_size(),
+            "Source offset + size must be less or equal to source buffer size"
+        );
+        assert!(
+            buffer_copy_info.destination_offset + buffer_copy_info.size
+                <= buffer_copy_info.destination.get_size(),
+            "Destination offset + size must be less or equal to destination buffer size"
+        );
 
         if buffer_copy_info.source.get_id() == buffer_copy_info.destination.get_id() {
             assert_ne!(buffer_copy_info.source_offset + buffer_copy_info.size - buffer_copy_info.source_offset,
@@ -249,23 +267,35 @@ impl Buffer {
         }
 
         if buffer_copy_info.source.is_mapped() {
-            assert!(buffer_copy_info.source.get_storage_flags().intersects(BufferStorageFlags::MAP_PERSISTENT),
-                    "Mapped buffer 'source' can only be used if mapped persistently. \
-                    Map persistently or unmap the buffer before attempting to copy.")
+            assert!(
+                buffer_copy_info
+                    .source
+                    .get_storage_flags()
+                    .intersects(BufferStorageFlags::MAP_PERSISTENT),
+                "Mapped buffer 'source' can only be used if mapped persistently. \
+                    Map persistently or unmap the buffer before attempting to copy."
+            )
         }
 
         if buffer_copy_info.destination.is_mapped() {
-            assert!(buffer_copy_info.destination.get_storage_flags().intersects(BufferStorageFlags::MAP_PERSISTENT),
-                    "Mapped buffer 'destination' can only be used if mapped persistently. \
-                    Map persistently or unmap the buffer before attempting to copy.")
+            assert!(
+                buffer_copy_info
+                    .destination
+                    .get_storage_flags()
+                    .intersects(BufferStorageFlags::MAP_PERSISTENT),
+                "Mapped buffer 'destination' can only be used if mapped persistently. \
+                    Map persistently or unmap the buffer before attempting to copy."
+            )
         }
 
         unsafe {
-            gl::CopyNamedBufferSubData(buffer_copy_info.source.get_id(),
-                                       buffer_copy_info.destination.get_id(),
-                                       buffer_copy_info.source_offset,
-                                       buffer_copy_info.destination_offset,
-                                       buffer_copy_info.size)
+            gl::CopyNamedBufferSubData(
+                buffer_copy_info.source.get_id(),
+                buffer_copy_info.destination.get_id(),
+                buffer_copy_info.source_offset,
+                buffer_copy_info.destination_offset,
+                buffer_copy_info.size,
+            )
         }
     }
 }

@@ -1,13 +1,12 @@
-use pbs_gl as gl;
 use gl::types::*;
-use std::ptr;
+use gl_bindings as gl;
+use std::error::Error;
+use std::ffi::CString;
+use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::Read;
-use std::ffi::CString;
 use std::path::Path;
-use std::error::Error;
-use std::fmt::{Display, Debug};
-
+use std::ptr;
 
 pub fn check_spirv_support() -> bool {
     let mut format_count: GLint = 0;
@@ -23,13 +22,12 @@ pub fn check_spirv_support() -> bool {
             gl::GetIntegerv(gl::SHADER_BINARY_FORMATS, formats.as_mut_ptr());
         }
 
-        let opt = formats.iter()
-            .find(|&m| {
-                *m == gl::SHADER_BINARY_FORMAT_SPIR_V_ARB as i32
-            });
+        let opt = formats
+            .iter()
+            .find(|&m| *m == gl::SHADER_BINARY_FORMAT_SPIR_V_ARB as i32);
         match opt {
             Some(_) => return true,
-            _ => false
+            _ => false,
         };
     }
 
@@ -44,21 +42,21 @@ pub enum ShaderStage {
     TesselationEvaluation = gl::TESS_EVALUATION_SHADER,
     Geometry = gl::GEOMETRY_SHADER,
     Fragment = gl::FRAGMENT_SHADER,
-    Compute = gl::COMPUTE_SHADER
+    Compute = gl::COMPUTE_SHADER,
 }
 
 #[derive(Debug, Clone)]
 pub struct Shader {
     id: GLuint,
-    stage: ShaderStage
+    stage: ShaderStage,
 }
 
 impl Shader {
-
-    pub fn new_from_spirv(stage: ShaderStage,
-                          entry_point: &str,
-                          filename: &str) -> Result<Shader, String> {
-
+    pub fn new_from_spirv(
+        stage: ShaderStage,
+        entry_point: &str,
+        filename: &str,
+    ) -> Result<Shader, String> {
         let mut spir_v = Vec::new();
 
         {
@@ -68,7 +66,10 @@ impl Shader {
 
             let bytes_read = file.read_to_end(&mut spir_v).unwrap();
 
-            assert_eq!(bytes_read, file_size_in_bytes, "Could not read the entirety of the file.");
+            assert_eq!(
+                bytes_read, file_size_in_bytes,
+                "Could not read the entirety of the file."
+            );
         }
 
         let id: GLuint;
@@ -76,20 +77,24 @@ impl Shader {
         unsafe {
             id = gl::CreateShader(stage as u32);
 
-            gl::ShaderBinary(1,
-                             &id,
-                             gl::SHADER_BINARY_FORMAT_SPIR_V_ARB,
-                             spir_v.as_ptr() as *const GLvoid,
-                             spir_v.len() as i32);
+            gl::ShaderBinary(
+                1,
+                &id,
+                gl::SHADER_BINARY_FORMAT_SPIR_V_ARB,
+                spir_v.as_ptr() as *const GLvoid,
+                spir_v.len() as i32,
+            );
 
             let cstr = CString::new(entry_point).unwrap();
 
             // Specify shader module entry point and specialization constants
-            gl::SpecializeShaderARB(id, //obj id
-                                    cstr.as_ptr() as *const GLchar,
-                                    0, // no specialization constants
-                                    ptr::null_mut(), // no specialization constants
-                                    ptr::null_mut()); // no specialization constants
+            gl::SpecializeShaderARB(
+                id, //obj id
+                cstr.as_ptr() as *const GLchar,
+                0,               // no specialization constants
+                ptr::null_mut(), // no specialization constants
+                ptr::null_mut(),
+            ); // no specialization constants
 
             let mut compilation_status: GLint = 0;
 
@@ -100,40 +105,45 @@ impl Shader {
 
                 gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut message_size);
 
-                let mut buffer = Vec::with_capacity( message_size as usize + 1 ); //+1 for nul termination
+                let mut buffer = Vec::with_capacity(message_size as usize + 1); //+1 for nul termination
 
                 buffer.extend([b' '].iter().cycle().take(message_size as usize));
 
                 let message = CString::from_vec_unchecked(buffer);
 
-                gl::GetShaderInfoLog(id, message_size as i32,
-                                     ptr::null_mut(),
-                                     message.as_ptr() as *mut GLchar);
+                gl::GetShaderInfoLog(
+                    id,
+                    message_size as i32,
+                    ptr::null_mut(),
+                    message.as_ptr() as *mut GLchar,
+                );
 
                 return Err(message.to_string_lossy().into_owned());
             }
         }
 
-        Ok(Shader {
-            id,
-            stage
-        })
-
+        Ok(Shader { id, stage })
     }
 
-    pub fn new_from_text<P: AsRef<Path> + Debug>(stage: ShaderStage, path: P) -> Result<Shader, String> {
-
+    pub fn new_from_text<P: AsRef<Path> + Debug>(
+        stage: ShaderStage,
+        path: P,
+    ) -> Result<Shader, String> {
         let mut text_source = String::new();
 
         {
             let mut file = match File::open(path.as_ref()) {
                 Err(why) => panic!("couldn't open {:?}: {}", path, why),
-                Ok(file) => file
+                Ok(file) => file,
             };
 
             let size = file.read_to_string(&mut text_source).unwrap();
 
-            assert_eq!(size, text_source.len(), "Could not read the entirety of the file.");
+            assert_eq!(
+                size,
+                text_source.len(),
+                "Could not read the entirety of the file."
+            );
         }
 
         let id: GLuint;
@@ -142,10 +152,7 @@ impl Shader {
         unsafe {
             id = gl::CreateShader(stage as u32);
 
-            gl::ShaderSource(id,
-                             1,
-                             &c_string_source.as_ptr(),
-                             ptr::null());
+            gl::ShaderSource(id, 1, &c_string_source.as_ptr(), ptr::null());
 
             gl::CompileShader(id);
 
@@ -158,23 +165,23 @@ impl Shader {
 
                 gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut message_size);
 
-                let mut buffer = Vec::with_capacity( message_size as usize + 1 ); //+1 for nul termination
+                let mut buffer = Vec::with_capacity(message_size as usize + 1); //+1 for nul termination
 
                 buffer.extend([b' '].iter().cycle().take(message_size as usize));
 
                 let message = CString::from_vec_unchecked(buffer);
 
-                gl::GetShaderInfoLog(id, message_size as i32,
-                                     ptr::null_mut(),
-                                     message.as_ptr() as *mut GLchar);
+                gl::GetShaderInfoLog(
+                    id,
+                    message_size as i32,
+                    ptr::null_mut(),
+                    message.as_ptr() as *mut GLchar,
+                );
 
                 return Err(message.to_string_lossy().into_owned());
             }
 
-            Ok(Shader {
-                id,
-                stage
-            })
+            Ok(Shader { id, stage })
         }
     }
 
@@ -189,8 +196,6 @@ impl Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        unsafe {
-            gl::DeleteShader(self.id)
-        }
+        unsafe { gl::DeleteShader(self.id) }
     }
 }

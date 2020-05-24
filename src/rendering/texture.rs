@@ -1,14 +1,14 @@
 use image;
-use image::{DynamicImage, GenericImageView, ColorType};
+use image::{ColorType, DynamicImage, GenericImageView};
 
-use gli_rs as gli;
 use gli::GliTexture;
+use gli_rs as gli;
 
-use pbs_gl as gl;
-use gl::types::*;
-use std::path::Path;
 use crate::core::asset::Asset;
+use gl::types::*;
+use gl_bindings as gl;
 use std::fmt::Display;
+use std::path::Path;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -30,7 +30,7 @@ pub enum SizedTextureFormat {
     Depth32f = gl::DEPTH_COMPONENT32F,
     Depth32fStencil8 = gl::DEPTH32F_STENCIL8,
     Depth24Stencil8 = gl::DEPTH24_STENCIL8,
-    StencilIndex8 = gl::STENCIL_INDEX8
+    StencilIndex8 = gl::STENCIL_INDEX8,
 }
 
 #[repr(u32)]
@@ -38,7 +38,7 @@ pub enum SizedTextureFormat {
 pub enum TextureFormat {
     Red = gl::RED,
     Rgb = gl::RGB,
-    Rgba = gl::RGBA
+    Rgba = gl::RGBA,
 }
 
 pub struct Utils;
@@ -51,40 +51,39 @@ impl Utils {
         }
     }
 
-    fn color_type_to_texture_formats(color_type: ColorType, is_srgb: bool) -> Result<(SizedTextureFormat, TextureFormat), String> {
+    fn color_type_to_texture_formats(
+        color_type: ColorType,
+        is_srgb: bool,
+    ) -> Result<(SizedTextureFormat, TextureFormat), String> {
         match color_type {
-            ColorType::Gray(_) => {
-                Ok((SizedTextureFormat::R8, TextureFormat::Red))
-            },
+            ColorType::Gray(_) => Ok((SizedTextureFormat::R8, TextureFormat::Red)),
             ColorType::RGB(_) => {
                 if is_srgb {
                     Ok((SizedTextureFormat::Srgb8, TextureFormat::Rgb))
-                }
-                else {
+                } else {
                     Ok((SizedTextureFormat::Rgb8, TextureFormat::Rgb))
                 }
-            },
+            }
             ColorType::RGBA(_) => {
                 if is_srgb {
                     Ok((SizedTextureFormat::Srgb8A8, TextureFormat::Rgba))
-                }
-                else {
+                } else {
                     Ok((SizedTextureFormat::Rgba8, TextureFormat::Rgba))
                 }
-            },
-            _ => Err(String::from("Unsupported texture format."))
+            }
+            _ => Err(String::from("Unsupported texture format.")),
         }
     }
 }
 
 pub struct Texture2D {
     id: GLuint,
-    image: DynamicImage
+    image: DynamicImage,
 }
 
 pub struct Texture2DLoadConfig {
     pub is_srgb: bool,
-    pub generate_mipmaps: bool
+    pub generate_mipmaps: bool,
 }
 
 impl Asset for Texture2D {
@@ -92,8 +91,11 @@ impl Asset for Texture2D {
     type Error = String;
     type LoadConfig = Texture2DLoadConfig;
 
-    fn load<P: AsRef<Path>>(path: P, load_config: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
-        let mut is_srgb= false;
+    fn load<P: AsRef<Path>>(
+        path: P,
+        load_config: Option<Self::LoadConfig>,
+    ) -> Result<Self::Output, Self::Error> {
+        let mut is_srgb = false;
         let mut generate_mipmaps = false;
 
         if let Some(config) = load_config {
@@ -113,50 +115,47 @@ impl Asset for Texture2D {
 
                 let mut mip_levels = 1;
                 if generate_mipmaps {
-                    mip_levels = (f32::floor(f32::log2(f32::max(width as f32,
-                                                                height as f32))) + 1.0)
-                        as i32;
+                    mip_levels =
+                        (f32::floor(f32::log2(f32::max(width as f32, height as f32))) + 1.0) as i32;
                 }
 
                 let mut id: GLuint = 0;
                 unsafe {
                     gl::CreateTextures(gl::TEXTURE_2D, 1, &mut id);
 
-                    gl::TextureStorage2D(id,
-                                         mip_levels,
-                                         formats.0 as u32,
-                                         width as i32,
-                                         height as i32);
+                    gl::TextureStorage2D(
+                        id,
+                        mip_levels,
+                        formats.0 as u32,
+                        width as i32,
+                        height as i32,
+                    );
 
-                    gl::TextureSubImage2D(id,
-                                          0,
-                                          0,
-                                          0,
-                                          width as i32,
-                                          height as i32,
-                                          formats.1 as u32,
-                                          gl::UNSIGNED_BYTE,
-                                          img.raw_pixels().as_ptr() as *const GLvoid);
+                    gl::TextureSubImage2D(
+                        id,
+                        0,
+                        0,
+                        0,
+                        width as i32,
+                        height as i32,
+                        formats.1 as u32,
+                        gl::UNSIGNED_BYTE,
+                        img.raw_pixels().as_ptr() as *const GLvoid,
+                    );
 
                     if generate_mipmaps {
                         gl::GenerateTextureMipmap(id)
                     }
                 }
 
-                Ok(Texture2D {
-                    id,
-                    image: img
-                })
-            },
-            Err(e) => {
-                Err(e.to_string())
+                Ok(Texture2D { id, image: img })
             }
+            Err(e) => Err(e.to_string()),
         }
     }
 }
 
 impl Texture2D {
-
     pub fn new_from_bytes(data: &[u8]) -> Result<Self, String> {
         unimplemented!()
     }
@@ -172,14 +171,12 @@ impl Texture2D {
 
 impl Drop for Texture2D {
     fn drop(&mut self) {
-        unsafe {
-            gl::DeleteTextures(1, &self.id)
-        }
+        unsafe { gl::DeleteTextures(1, &self.id) }
     }
 }
 
 pub struct TextureCube {
-    id: GLuint
+    id: GLuint,
 }
 
 impl Asset for TextureCube {
@@ -187,14 +184,20 @@ impl Asset for TextureCube {
     type Error = String;
     type LoadConfig = ();
 
-    fn load<P: AsRef<Path>>(path: P, _: Option<Self::LoadConfig>) -> Result<Self::Output, Self::Error> {
+    fn load<P: AsRef<Path>>(
+        path: P,
+        _: Option<Self::LoadConfig>,
+    ) -> Result<Self::Output, Self::Error> {
         let result: gli::Result<gli::TextureCube> = gli::load(path.as_ref());
         match result {
             Ok(tex) => {
-
                 println!("Cube load ok!");
                 println!("KTX Texture info:");
-                println!("\tExtent: ({}, {})", tex.extent(0).width, tex.extent(0).height);
+                println!(
+                    "\tExtent: ({}, {})",
+                    tex.extent(0).width,
+                    tex.extent(0).height
+                );
                 println!("\tFaces  count: {}", tex.faces());
                 println!("\tLayers count: {}", tex.layers());
                 println!("\tLevels count: {}", tex.levels());
@@ -211,142 +214,156 @@ impl Asset for TextureCube {
                 unsafe {
                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
 
-                    gl::TextureStorage2D(id,
-                                         tex.levels() as i32,
-                                         internal_format as u32,
-                                         tex.extent(0).width as i32,
-                                         tex.extent(0).height as i32);
+                    gl::TextureStorage2D(
+                        id,
+                        tex.levels() as i32,
+                        internal_format as u32,
+                        tex.extent(0).width as i32,
+                        tex.extent(0).height as i32,
+                    );
 
                     for _ in 0..tex.layers() {
-
                         for face in 0..tex.faces() {
-
                             let gl_face = gl::TEXTURE_CUBE_MAP_POSITIVE_X + face as u32;
                             let face_tex = tex.get_face(gl_face as usize);
 
                             for level in 0..tex.levels() {
-
                                 let image = face_tex.get_level(level);
 
                                 // Cubemaps + DSA = TextureSubImage3D using zOffset as the face index
-                                gl::TextureSubImage3D(id,
-                                                      level as i32,
-                                                      0,
-                                                      0,
-                                                      face as i32,
-                                                      image.extent().width as i32,
-                                                      image.extent().height as i32,
-                                                      1,
-                                                      external_format as u32,
-                                                      data_type,
-                                                      image.data());
+                                gl::TextureSubImage3D(
+                                    id,
+                                    level as i32,
+                                    0,
+                                    0,
+                                    face as i32,
+                                    image.extent().width as i32,
+                                    image.extent().height as i32,
+                                    1,
+                                    external_format as u32,
+                                    data_type,
+                                    image.data(),
+                                );
                             }
                         }
                     }
                 }
 
-                Ok(TextureCube {
-                    id
-                })
-            },
-            Err(e) => {
-                Err(e.to_string())
+                Ok(TextureCube { id })
             }
+            Err(e) => Err(e.to_string()),
         }
     }
 }
 
 impl TextureCube {
-
     //TODO: To be removed
     pub fn new_from_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         let result: gli::Result<gli::TextureCube> = gli::load(path.as_ref());
-         match result {
-             Ok(tex) => {
+        match result {
+            Ok(tex) => {
+                println!("Cube load ok!");
+                println!("KTX Texture info:");
+                println!(
+                    "\tExtent: ({}, {})",
+                    tex.extent(0).width,
+                    tex.extent(0).height
+                );
+                println!("\tFaces  count: {}", tex.faces());
+                println!("\tLayers count: {}", tex.layers());
+                println!("\tLevels count: {}", tex.levels());
+                println!("\tSize: {}", tex.size());
+                println!("\tAddress: {:?}", tex.data());
+                println!("\tFormat: {}", tex.format());
+                println!("\tTarget: {}", tex.target());
+                println!();
 
-                 println!("Cube load ok!");
-                 println!("KTX Texture info:");
-                 println!("\tExtent: ({}, {})", tex.extent(0).width, tex.extent(0).height);
-                 println!("\tFaces  count: {}", tex.faces());
-                 println!("\tLayers count: {}", tex.layers());
-                 println!("\tLevels count: {}", tex.levels());
-                 println!("\tSize: {}", tex.size());
-                 println!("\tAddress: {:?}", tex.data());
-                 println!("\tFormat: {}", tex.format());
-                 println!("\tTarget: {}", tex.target());
-                 println!();
+                let (internal_format, external_format, data_type) =
+                    Self::translate_gli_format_info(tex.format());
 
-                 let (internal_format, external_format, data_type) =
-                     Self::translate_gli_format_info(tex.format());
+                let mut id: GLuint = 0;
+                unsafe {
+                    gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
+                    gl::TextureStorage2D(
+                        id,
+                        tex.levels() as i32,
+                        internal_format as u32,
+                        tex.extent(0).width as i32,
+                        tex.extent(0).height as i32,
+                    );
 
+                    for _ in 0..tex.layers() {
+                        for face in 0..tex.faces() {
+                            let face_tex = tex.get_face(face);
 
-                 let mut id: GLuint = 0;
-                 unsafe {
-                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
-                     gl::TextureStorage2D(id,
-                                          tex.levels() as i32,
-                                          internal_format as u32,
-                                          tex.extent(0).width as i32,
-                                          tex.extent(0).height as i32);
+                            for level in 0..tex.levels() {
+                                let image = face_tex.get_level(level);
 
-                     for _ in 0..tex.layers() {
+                                // Cubemaps + DSA = TextureSubImage3D using zOffset as the face index
+                                gl::TextureSubImage3D(
+                                    id,
+                                    level as i32,
+                                    0,
+                                    0,
+                                    face as i32,
+                                    image.extent().width as i32,
+                                    image.extent().height as i32,
+                                    1,
+                                    external_format as u32,
+                                    data_type,
+                                    image.data(),
+                                );
+                            }
+                        }
+                    }
+                }
 
-                         for face in 0..tex.faces() {
-
-                             let face_tex = tex.get_face(face);
-
-                             for level in 0..tex.levels() {
-
-                                 let image = face_tex.get_level(level);
-
-                                 // Cubemaps + DSA = TextureSubImage3D using zOffset as the face index
-                                 gl::TextureSubImage3D(id,
-                                                       level as i32,
-                                                       0,
-                                                       0,
-                                                       face as i32,
-                                                       image.extent().width as i32,
-                                                       image.extent().height as i32,
-                                                       1,
-                                                       external_format as u32,
-                                                       data_type,
-                                                       image.data());
-                             }
-                         }
-                     }
-                 }
-
-                 Ok(TextureCube {
-                     id
-                 })
-             },
-             Err(e) => {
-                 Err(e.to_string())
-             }
-         }
+                Ok(TextureCube { id })
+            }
+            Err(e) => Err(e.to_string()),
+        }
     }
 
     pub fn get_id(&self) -> GLuint {
         self.id
     }
 
-    fn translate_gli_format_info(format: gli::Format) -> (SizedTextureFormat, TextureFormat, GLenum) {
+    fn translate_gli_format_info(
+        format: gli::Format,
+    ) -> (SizedTextureFormat, TextureFormat, GLenum) {
         match format {
-            gli::Format::RGB16_SFLOAT_PACK16 => (SizedTextureFormat::Rgb16f, TextureFormat::Rgb, gl::HALF_FLOAT),
-            gli::Format::RGBA16_SFLOAT_PACK16 => (SizedTextureFormat::Rgba16f, TextureFormat::Rgba, gl::HALF_FLOAT),
-            gli::Format::RGB8_UNORM_PACK8 => (SizedTextureFormat::Rgb8, TextureFormat::Rgb, gl::UNSIGNED_INT),
-            gli::Format::RGBA32_SFLOAT_PACK32 => (SizedTextureFormat::Rgba32f, TextureFormat::Rgba, gl::FLOAT),
-            gli::Format::RGB32_SFLOAT_PACK32 => (SizedTextureFormat::Rgb32f, TextureFormat::Rgb, gl::FLOAT),
-            _ => (SizedTextureFormat::Rgba8, TextureFormat::Rgba, gl::UNSIGNED_INT)
+            gli::Format::RGB16_SFLOAT_PACK16 => (
+                SizedTextureFormat::Rgb16f,
+                TextureFormat::Rgb,
+                gl::HALF_FLOAT,
+            ),
+            gli::Format::RGBA16_SFLOAT_PACK16 => (
+                SizedTextureFormat::Rgba16f,
+                TextureFormat::Rgba,
+                gl::HALF_FLOAT,
+            ),
+            gli::Format::RGB8_UNORM_PACK8 => (
+                SizedTextureFormat::Rgb8,
+                TextureFormat::Rgb,
+                gl::UNSIGNED_INT,
+            ),
+            gli::Format::RGBA32_SFLOAT_PACK32 => {
+                (SizedTextureFormat::Rgba32f, TextureFormat::Rgba, gl::FLOAT)
+            }
+            gli::Format::RGB32_SFLOAT_PACK32 => {
+                (SizedTextureFormat::Rgb32f, TextureFormat::Rgb, gl::FLOAT)
+            }
+            _ => (
+                SizedTextureFormat::Rgba8,
+                TextureFormat::Rgba,
+                gl::UNSIGNED_INT,
+            ),
         }
     }
 }
 
 impl Drop for TextureCube {
     fn drop(&mut self) {
-        unsafe {
-            gl::DeleteTextures(1, &self.id)
-        }
+        unsafe { gl::DeleteTextures(1, &self.id) }
     }
 }
-

@@ -1,4 +1,4 @@
-use pbs_gl as gl;
+use gl_bindings as gl;
 
 pub struct StateManager;
 
@@ -22,58 +22,48 @@ pub enum BlendFactor {
     Source1Color = gl::SRC1_COLOR,
     OneMinusSource1Color = gl::ONE_MINUS_SRC1_COLOR,
     Source1Alpha = gl::SRC1_ALPHA,
-    OneMinusSource1Alpha = gl::ONE_MINUS_SRC1_ALPHA
+    OneMinusSource1Alpha = gl::ONE_MINUS_SRC1_ALPHA,
 }
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
 pub enum DepthFunction {
     Less = gl::LESS,
-    LessOrEqual = gl::LEQUAL
+    LessOrEqual = gl::LEQUAL,
 }
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
 pub enum FaceCulling {
     Front = gl::FRONT,
-    Back = gl::BACK
+    Back = gl::BACK,
 }
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
 pub enum FrontFace {
     Clockwise = gl::CW,
-    CounterClockwise = gl::CCW
+    CounterClockwise = gl::CCW,
 }
 
 impl StateManager {
     pub fn set_viewport(x: i32, y: i32, width: i32, height: i32) {
-        unsafe {
-            gl::Viewport(x, y, width, height)
-        }
+        unsafe { gl::Viewport(x, y, width, height) }
     }
 
     pub fn set_blend_function(source_factor: BlendFactor, destination_factor: BlendFactor) {
-        unsafe {
-            gl::BlendFunc(source_factor as u32, destination_factor as u32)
-        }
+        unsafe { gl::BlendFunc(source_factor as u32, destination_factor as u32) }
     }
-    
+
     pub fn set_depth_function(depth_function: DepthFunction) {
-        unsafe {
-            gl::DepthFunc(depth_function as u32)
-        }
+        unsafe { gl::DepthFunc(depth_function as u32) }
     }
 
     pub fn set_face_culling(culling: FaceCulling) {
-        unsafe {
-            gl::CullFace(culling as u32)
-        }
+        unsafe { gl::CullFace(culling as u32) }
     }
 
     pub fn set_front_face(front_face: FrontFace) {
-        unsafe {
-            gl::FrontFace(front_face as u32)
-        }
+        unsafe { gl::FrontFace(front_face as u32) }
     }
 }
