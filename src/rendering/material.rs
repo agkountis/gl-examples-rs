@@ -1,10 +1,10 @@
-use crate::rendering::texture::Texture2D;
-use crate::rendering::program_pipeline::ProgramPipeline;
-use crate::rendering::shader::{Shader, ShaderStage};
-use crate::rendering::sampler::{Sampler, MinificationFilter, MagnificationFilter, WrappingMode};
 use crate::core::math::Vec4;
-use std::rc::Rc;
+use crate::rendering::program_pipeline::ProgramPipeline;
+use crate::rendering::sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode};
+use crate::rendering::shader::{Shader, ShaderStage};
+use crate::rendering::texture::Texture2D;
 use std::path::Path;
+use std::rc::Rc;
 
 pub trait Material {
     fn bind(&self);
@@ -14,48 +14,73 @@ pub trait Material {
 
 pub struct PbsMetallicRoughnessMaterial {
     pub albedo: Rc<Texture2D>,
-    pub metallic: Rc<Texture2D>,
-    pub roughness: Rc<Texture2D>,
-    pub normals:  Rc<Texture2D>,
-    pub ao: Rc<Texture2D>,
+    pub metallic_roughness_ao: Rc<Texture2D>,
+    pub normals: Rc<Texture2D>,
+    pub displacement: Option<Rc<Texture2D>>,
     pub ibl_brdf_lut: Rc<Texture2D>,
     sampler: Sampler,
-    program_pipeline: ProgramPipeline
+    program_pipeline: ProgramPipeline,
 }
 
 impl PbsMetallicRoughnessMaterial {
-    pub fn new<P: AsRef<Path>>(asset_path: P,
-                               albedo: Rc<Texture2D>,
-                               metallic: Rc<Texture2D>,
-                               roughness: Rc<Texture2D>,
-                               normals: Rc<Texture2D>,
-                               ao: Rc<Texture2D>,
-                               ibl_brdf_lut: Rc<Texture2D>) -> Self {
+    pub fn new<P: AsRef<Path>>(
+        asset_path: P,
+        albedo: Rc<Texture2D>,
+        metallic_roughness_ao: Rc<Texture2D>,
+        normals: Rc<Texture2D>,
+        displacement: Option<Rc<Texture2D>>,
+        ibl_brdf_lut: Rc<Texture2D>,
+    ) -> Self {
+        let (vertex_shader, fragment_shader) = match displacement {
+            Some(_) => (
+                Shader::new_from_text(
+                    ShaderStage::Vertex,
+                    asset_path.as_ref().join("sdr/pbs_pom.vert"),
+                )
+                .unwrap(),
+                Shader::new_from_text(
+                    ShaderStage::Fragment,
+                    asset_path.as_ref().join("sdr/pbs_pom.frag"),
+                )
+                .unwrap(),
+            ),
+            None => (
+                Shader::new_from_text(
+                    ShaderStage::Vertex,
+                    asset_path.as_ref().join("sdr/pbs.vert"),
+                )
+                .unwrap(),
+                Shader::new_from_text(
+                    ShaderStage::Fragment,
+                    asset_path.as_ref().join("sdr/pbs.frag"),
+                )
+                .unwrap(),
+            ),
+        };
 
         let program_pipeline = ProgramPipeline::new()
-            .add_shader(&Shader::new_from_text(ShaderStage::Vertex,
-                                               asset_path.as_ref().join("sdr/pbs.vert")).unwrap())
-            .add_shader(&Shader::new_from_text(ShaderStage::Fragment,
-                                               asset_path.as_ref().join("sdr/pbs.frag")).unwrap())
+            .add_shader(&vertex_shader)
+            .add_shader(&fragment_shader)
             .build()
             .unwrap();
 
-        let sampler = Sampler::new(MinificationFilter::LinearMipmapLinear,
-                                   MagnificationFilter::Linear,
-                                   WrappingMode::Repeat,
-                                   WrappingMode::Repeat,
-                                   WrappingMode::Repeat,
-                                   Vec4::new(0.0, 0.0, 0.0, 0.0));
+        let sampler = Sampler::new(
+            MinificationFilter::LinearMipmapLinear,
+            MagnificationFilter::Linear,
+            WrappingMode::Repeat,
+            WrappingMode::Repeat,
+            WrappingMode::Repeat,
+            Vec4::new(0.0, 0.0, 0.0, 0.0),
+        );
 
         Self {
             albedo,
-            metallic,
-            roughness,
+            metallic_roughness_ao,
             normals,
-            ao,
+            displacement,
             ibl_brdf_lut,
             sampler,
-            program_pipeline
+            program_pipeline,
         }
     }
 
@@ -64,35 +89,44 @@ impl PbsMetallicRoughnessMaterial {
     }
 }
 
-impl Material for PbsMetallicRoughnessMaterial{
+impl Material for PbsMetallicRoughnessMaterial {
     fn bind(&self) {
         self.program_pipeline.bind();
 
         self.program_pipeline
-            .set_texture_2d("albedoMap",
-                            &self.albedo,
-                            &self.sampler,
-                            ShaderStage::Fragment)
-            .set_texture_2d("metallicMap",
-                            &self.metallic,
-                            &self.sampler,
-                            ShaderStage::Fragment)
-            .set_texture_2d("roughnessMap",
-                            &self.roughness,
-                            &self.sampler,
-                            ShaderStage::Fragment)
-            .set_texture_2d("normalMap",
-                            &self.normals,
-                            &self.sampler,
-                            ShaderStage::Fragment)
-            .set_texture_2d("aoMap",
-                            &self.ao,
-                            &self.sampler,
-                            ShaderStage::Fragment)
-            .set_texture_2d("brdfLUT",
-                            &self.ibl_brdf_lut,
-                            &self.sampler,
-                            ShaderStage::Fragment);
+            .set_texture_2d(
+                "albedoMap",
+                &self.albedo,
+                &self.sampler,
+                ShaderStage::Fragment,
+            )
+            .set_texture_2d(
+                "m_r_aoMap",
+                &self.metallic_roughness_ao,
+                &self.sampler,
+                ShaderStage::Fragment,
+            )
+            .set_texture_2d(
+                "normalMap",
+                &self.normals,
+                &self.sampler,
+                ShaderStage::Fragment,
+            )
+            .set_texture_2d(
+                "brdfLUT",
+                &self.ibl_brdf_lut,
+                &self.sampler,
+                ShaderStage::Fragment,
+            );
+
+        if let Some(displacement) = &self.displacement {
+            self.program_pipeline.set_texture_2d(
+                "displacementMap",
+                &displacement,
+                &self.sampler,
+                ShaderStage::Fragment,
+            );
+        }
     }
 
     fn unbind(&self) {

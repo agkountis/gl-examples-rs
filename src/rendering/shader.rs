@@ -196,6 +196,7 @@ impl Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
+        println!("dropping shader");
         unsafe { gl::DeleteShader(self.id) }
     }
 }

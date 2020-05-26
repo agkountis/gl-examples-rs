@@ -37,6 +37,7 @@ pub enum SizedTextureFormat {
 #[derive(Debug, Clone, Copy)]
 pub enum TextureFormat {
     Red = gl::RED,
+    Rg = gl::RG,
     Rgb = gl::RGB,
     Rgba = gl::RGBA,
 }
@@ -57,6 +58,7 @@ impl Utils {
     ) -> Result<(SizedTextureFormat, TextureFormat), String> {
         match color_type {
             ColorType::Gray(_) => Ok((SizedTextureFormat::R8, TextureFormat::Red)),
+            ColorType::GrayA(_) => Ok((SizedTextureFormat::Rg8, TextureFormat::Rg)),
             ColorType::RGB(_) => {
                 if is_srgb {
                     Ok((SizedTextureFormat::Srgb8, TextureFormat::Rgb))
@@ -83,7 +85,7 @@ pub struct Texture2D {
 
 pub struct Texture2DLoadConfig {
     pub is_srgb: bool,
-    pub generate_mipmaps: bool,
+    pub generate_mipmap: bool,
 }
 
 impl Asset for Texture2D {
@@ -96,68 +98,70 @@ impl Asset for Texture2D {
         load_config: Option<Self::LoadConfig>,
     ) -> Result<Self::Output, Self::Error> {
         let mut is_srgb = false;
-        let mut generate_mipmaps = false;
+        let mut generate_mipmap = false;
 
         if let Some(config) = load_config {
             is_srgb = config.is_srgb;
-            generate_mipmaps = config.generate_mipmaps;
+            generate_mipmap = config.generate_mipmap;
         }
 
         match Utils::open_image_file(path.as_ref()) {
-            Ok(img) => {
-                let (width, height) = img.dimensions();
-
-                let formats;
-                match Utils::color_type_to_texture_formats(img.color(), is_srgb) {
-                    Ok(res) => formats = res,
-                    Err(e) => return Err(e),
-                }
-
-                let mut mip_levels = 1;
-                if generate_mipmaps {
-                    mip_levels =
-                        (f32::floor(f32::log2(f32::max(width as f32, height as f32))) + 1.0) as i32;
-                }
-
-                let mut id: GLuint = 0;
-                unsafe {
-                    gl::CreateTextures(gl::TEXTURE_2D, 1, &mut id);
-
-                    gl::TextureStorage2D(
-                        id,
-                        mip_levels,
-                        formats.0 as u32,
-                        width as i32,
-                        height as i32,
-                    );
-
-                    gl::TextureSubImage2D(
-                        id,
-                        0,
-                        0,
-                        0,
-                        width as i32,
-                        height as i32,
-                        formats.1 as u32,
-                        gl::UNSIGNED_BYTE,
-                        img.raw_pixels().as_ptr() as *const GLvoid,
-                    );
-
-                    if generate_mipmaps {
-                        gl::GenerateTextureMipmap(id)
-                    }
-                }
-
-                Ok(Texture2D { id, image: img })
-            }
+            Ok(img) => Ok(Self::new_from_image(img, generate_mipmap, is_srgb)?),
             Err(e) => Err(e.to_string()),
         }
     }
 }
 
 impl Texture2D {
-    pub fn new_from_bytes(data: &[u8]) -> Result<Self, String> {
-        unimplemented!()
+    pub fn new_from_image(
+        image: DynamicImage,
+        generate_mipmap: bool,
+        is_srgb: bool,
+    ) -> Result<Self, String> {
+        let (width, height) = image.dimensions();
+
+        let formats;
+        match Utils::color_type_to_texture_formats(image.color(), is_srgb) {
+            Ok(res) => formats = res,
+            Err(e) => return Err(e),
+        }
+
+        let mut mip_levels = 1;
+        if generate_mipmap {
+            mip_levels =
+                (f32::floor(f32::log2(f32::max(width as f32, height as f32))) + 1.0) as i32;
+        }
+
+        let mut id: GLuint = 0;
+        unsafe {
+            gl::CreateTextures(gl::TEXTURE_2D, 1, &mut id);
+
+            gl::TextureStorage2D(
+                id,
+                mip_levels,
+                formats.0 as u32,
+                width as i32,
+                height as i32,
+            );
+
+            gl::TextureSubImage2D(
+                id,
+                0,
+                0,
+                0,
+                width as i32,
+                height as i32,
+                formats.1 as u32,
+                gl::UNSIGNED_BYTE,
+                image.raw_pixels().as_ptr() as *const GLvoid,
+            );
+
+            if generate_mipmap {
+                gl::GenerateTextureMipmap(id)
+            }
+        }
+
+        Ok(Self { id, image })
     }
 
     pub fn get_id(&self) -> GLuint {

@@ -11,34 +11,12 @@ pub struct Camera {
     zoom_speed: f32,
     orbit_dampening: f32,
     zoom_dampening: f32,
+    min_distance: f32,
+    max_distance: f32,
     yaw: f32,
     pitch: f32,
     distance: f32,
     prev_distance: f32,
-}
-
-impl Default for Camera {
-    fn default() -> Self {
-        let position = Vec3::new(0.0, 0.0, 0.0);
-        let target = Vec3::new(0.0, 0.0, -1.0);
-        let up = Vec3::new(0.0, 1.0, 0.0);
-        let transform = math::look_at(&position, &target, &up);
-        let default_distance = 40.0f32;
-
-        Camera {
-            position,
-            orientation: matrix::to_rotation_quat(&transform),
-            transform,
-            orbit_speed: 110.0,
-            zoom_speed: 30.0,
-            orbit_dampening: 2.0,
-            zoom_dampening: 4.0,
-            yaw: 0.0,
-            pitch: 0.0,
-            distance: default_distance,
-            prev_distance: default_distance,
-        }
-    }
 }
 
 impl Camera {
@@ -47,23 +25,29 @@ impl Camera {
         target: Vec3,
         orbit_speed: f32,
         zoom_speed: f32,
+        min_distance: f32,
+        max_distance: f32,
         orbit_dampening: f32,
         zoom_dampening: f32,
     ) -> Self {
         let transform = math::look_at(&position, &target, &Axes::up());
 
+        let distance = (&position - &target).norm();
+
         Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
-            orbit_speed: 6.0,
-            zoom_speed: 2.0,
-            orbit_dampening: 2.0,
-            zoom_dampening: 2.0,
+            orbit_speed,
+            zoom_speed,
+            min_distance,
+            max_distance,
+            orbit_dampening,
+            zoom_dampening,
             yaw: 0.0,
             pitch: 0.0,
-            distance: 0.0,
-            prev_distance: 0.0,
+            distance,
+            prev_distance: distance,
         }
     }
 
@@ -104,11 +88,15 @@ impl Camera {
 
         self.distance =
             math::lerp_scalar(self.prev_distance, self.distance, dt * self.zoom_dampening);
-        self.distance = clamp_scalar(self.distance, 2.0, 200.0);
+        self.distance = clamp_scalar(self.distance, self.min_distance, self.max_distance);
         self.prev_distance = self.distance;
 
         let dest = quat_normalize(&quaternion::from_euler(self.yaw, self.pitch, 0.0));
-        self.orientation = quat_normalize(&quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening));
+        self.orientation = quat_normalize(&quaternion::slerp(
+            &self.orientation,
+            &dest,
+            dt * self.orbit_dampening,
+        ));
         self.position = rotate_vec3(&self.orientation, &Vec3::new(0.0, 0.0, self.distance));
 
         self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());

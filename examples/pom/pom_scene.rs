@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use engine::core::input::Action;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
@@ -7,8 +8,7 @@ use engine::{
     input,
     input::Modifiers,
     math::{
-        matrix::{perspective, rotate, Mat4},
-        scale,
+        matrix::{perspective, Mat4},
         vector::{UVec2, Vec3, Vec4},
     },
     rendering::{
@@ -33,15 +33,9 @@ struct EnvironmentMaps {
     pub radiance: TextureCube,
 }
 
-struct Model {
-    pub mesh: Rc<Mesh>,
-    pub transform: Mat4,
-}
-
-pub struct PbsScene {
+pub struct PomScene {
     camera: Camera,
-    model: Model,
-    skybox_mesh: Mesh,
+    cube_mesh: Mesh,
     fullscreen_mesh: FullscreenMesh,
     material: Box<dyn Material>,
     environment_maps: EnvironmentMaps,
@@ -61,9 +55,10 @@ pub struct PbsScene {
     prev_x: f32,
     prev_y: f32,
     dt: f32,
+    use_parallax: i32,
 }
 
-impl PbsScene {
+impl PomScene {
     pub fn new(context: Context) -> Self {
         let Context {
             window,
@@ -74,12 +69,12 @@ impl PbsScene {
 
         let asset_path = settings.asset_path.as_path();
         let camera = Camera::new(
-            Vec3::new(0.0, 0.0, -40.0),
+            Vec3::new(0.0, 0.0, -2.0),
             Vec3::new(0.0, 0.0, 0.0),
             110.0,
             30.0,
-            10.0,
-            200.0,
+            1.0,
+            20.0,
             2.0,
             4.0,
         );
@@ -132,15 +127,11 @@ impl PbsScene {
             .build()
             .unwrap();
 
-        let mesh = asset_manager
-            .load_mesh(asset_path.join("models/cerberus/cerberus.fbx"))
-            .expect("Failed to load mesh");
-
-        let skybox_mesh = MeshUtilities::generate_cube(1.0);
+        let cube_mesh = MeshUtilities::generate_cube(1.0);
 
         let albedo = asset_manager
             .load_texture_2d(
-                asset_path.join("textures/cerberus/Cerberus_A.png"),
+                asset_path.join("textures/pbs/castle_brick/castle_brick_albedo.png"),
                 true,
                 true,
             )
@@ -148,7 +139,7 @@ impl PbsScene {
 
         let metallic_roughness_ao = asset_manager
             .load_texture_2d(
-                asset_path.join("textures/cerberus/Cerberus_M_R_AO.png"),
+                asset_path.join("textures/pbs/castle_brick/castle_brick_m_r_ao.png"),
                 false,
                 true,
             )
@@ -156,11 +147,19 @@ impl PbsScene {
 
         let normals = asset_manager
             .load_texture_2d(
-                asset_path.join("textures/cerberus/Cerberus_N.png"),
+                asset_path.join("textures/pbs/castle_brick/castle_brick_normals.png"),
                 false,
                 true,
             )
             .expect("Failed to load normals texture");
+
+        let displacement = asset_manager
+            .load_texture_2d(
+                asset_path.join("textures/pbs/castle_brick/castle_brick_displacement_inv.png"),
+                false,
+                true,
+            )
+            .expect("Failed to load displacement texture");
 
         let ibl_brdf_lut = asset_manager
             .load_texture_2d(
@@ -171,18 +170,17 @@ impl PbsScene {
             .expect("Failed to load BRDF LUT texture");
 
         let skybox =
-            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/ibl_skybox.ktx"))
+            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/skybox2.ktx"))
                 .expect("Failed to load Skybox");
 
         let irradiance = TextureCube::new_from_file(
-            asset_path.join("textures/pbs/ktx/irradiance/ibl_irradiance.ktx"),
+            asset_path.join("textures/pbs/ktx/irradiance/irradiance2.ktx"),
         )
         .expect("Failed to load Irradiance map");
 
-        let radiance = TextureCube::new_from_file(
-            asset_path.join("textures/pbs/ktx/radiance/ibl_radiance.ktx"),
-        )
-        .expect("Failed to load Radiance map");
+        let radiance =
+            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/radiance/radiance2.ktx"))
+                .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(
             UVec2::new(
@@ -262,17 +260,13 @@ impl PbsScene {
             albedo.clone(),
             metallic_roughness_ao.clone(),
             normals.clone(),
-            None,
+            Some(displacement.clone()),
             ibl_brdf_lut.clone(),
         ));
 
-        PbsScene {
+        PomScene {
             camera,
-            model: Model {
-                mesh,
-                transform: Mat4::identity(),
-            },
-            skybox_mesh,
+            cube_mesh,
             fullscreen_mesh: FullscreenMesh::new(),
             material,
             environment_maps: EnvironmentMaps {
@@ -296,6 +290,7 @@ impl PbsScene {
             prev_x: 0.0,
             prev_y: 0.0,
             dt: 0.0,
+            use_parallax: 1,
         }
     }
 
@@ -327,19 +322,20 @@ impl PbsScene {
             )
             .set_vector3f(
                 "lightColor",
-                &Vec3::new(5.0, 5.0, 5.0),
+                &Vec3::new(1.0, 1.0, 1.0),
                 ShaderStage::Fragment,
             )
-            .set_matrix4f("model", &self.model.transform, ShaderStage::Vertex)
+            .set_matrix4f("model", &Mat4::identity(), ShaderStage::Vertex)
             .set_matrix4f("view", &self.camera.get_transform(), ShaderStage::Vertex)
             .set_vector3f(
                 "eyePosition",
                 &self.camera.get_position(),
                 ShaderStage::Vertex,
             )
-            .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex);
+            .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex)
+            .set_integer("useParallax", self.use_parallax, ShaderStage::Fragment);
 
-        self.model.mesh.draw();
+        self.cube_mesh.draw();
 
         self.framebuffer.unbind(false);
         self.material.unbind()
@@ -413,7 +409,7 @@ impl PbsScene {
             ShaderStage::Vertex,
         );
 
-        self.skybox_mesh.draw();
+        self.cube_mesh.draw();
 
         self.framebuffer.unbind(true);
         self.skybox_program_pipeline.unbind();
@@ -451,13 +447,8 @@ impl PbsScene {
     }
 }
 
-impl Scene for PbsScene {
+impl Scene for PomScene {
     fn start(&mut self, _: Context) {
-        self.model.transform = {
-            let tx = rotate(&Mat4::identity(), -90.0, &Vec3::new(1.0, 0.0, 0.0));
-            scale(&tx, &Vec3::new(0.2, 0.2, 0.2))
-        };
-
         self.skybox_program_pipeline.bind();
         self.skybox_program_pipeline.set_matrix4f(
             "projection",
@@ -508,6 +499,11 @@ impl Scene for PbsScene {
                     println!("{:?} : {:?}", key, action);
                     match key {
                         input::Key::Escape => return Transition::Quit,
+                        input::Key::Space => {
+                            if let Action::Release = action {
+                                self.use_parallax = 1 - self.use_parallax
+                            }
+                        }
                         _ => (),
                     }
                 }
