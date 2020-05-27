@@ -40,7 +40,7 @@ void main()
     gl_Position = projection * view * wVertexPosition;
 
     // Calculate the normal matrix.
-    mat3 normalMatrix = transpose(inverse(mat3(model)));
+    mat3 normalMatrix = mat3(transpose(inverse(model)));
 
     //Calculate the normal. Bring it to world space
     vec3 wNormal = normalMatrix * inNormal;
@@ -63,6 +63,6 @@ void main()
     vsOut.texcoord = inTexcoord;
 
     mat3 invTBN = transpose(vsOut.TBN);
-    //Assign teh view direction in tangent space for Parallax Occlusion Mapping.
+    //Assign the view direction in tangent space for Parallax Occlusion Mapping.
     vsOut.tViewDirection = invTBN * vsOut.wViewDirection;
 }

@@ -126,6 +126,7 @@ vec3 SampleNormalMap(sampler2D normalMap, vec2 texcoords, float strength)
     return norm;
 }
 
+// Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
 vec2 ParallaxOcclusionMapping(vec2 texcoord, vec3 viewDirection)
 {
     // number of depth layers
@@ -133,16 +134,20 @@ vec2 ParallaxOcclusionMapping(vec2 texcoord, vec3 viewDirection)
     const float maxLayers = 64;
     const float heightScale = 0.012;
 
+    // Calculate how many layers to use based on the angle of the Z axis in tangent space (points upwards)
+    // and the view vector.
     float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDirection)));
+
     // calculate the size of each layer
     float layerDepth = 1.0 / numLayers;
+
     // depth of current layer
     float currentLayerDepth = 0.0;
+
     // the amount to shift the texture coordinates per layer (from vector P)
     vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * heightScale;
     vec2 deltaTexCoords = P / numLayers;
 
-    // get initial values
     vec2  currentTexCoords     = texcoord;
     float currentDepthMapValue = texture(displacementMap, currentTexCoords).r;
 
