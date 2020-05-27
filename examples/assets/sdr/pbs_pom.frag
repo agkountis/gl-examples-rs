@@ -131,7 +131,7 @@ vec2 ParallaxOcclusionMapping(vec2 texcoord, vec3 viewDirection)
     // number of depth layers
     const float minLayers = 16;
     const float maxLayers = 64;
-    const float heightScale = 0.0099;
+    const float heightScale = 0.012;
 
     float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDirection)));
     // calculate the size of each layer
@@ -178,10 +178,10 @@ void main()
         texcoord = ParallaxOcclusionMapping(fsIn.texcoord, normalize(fsIn.tViewDirection));
     }
 
-//    if (texcoord.x > 1.0 || texcoord.y > 1.0 || texcoord.x < 0.0 || texcoord.y < 0.0)
-//    {
-//        discard;
-//    }
+    if (texcoord.x > 1.0 || texcoord.y > 1.0 || texcoord.x < 0.0 || texcoord.y < 0.0)
+    {
+        discard;
+    }
 
     vec3 n = normalize(fsIn.TBN * SampleNormalMap(normalMap, texcoord, 1.0));
 

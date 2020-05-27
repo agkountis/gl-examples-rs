@@ -57,6 +57,7 @@ pub struct PbsScene {
     left_mouse_button_pressed: bool,
     mouse_x: f32,
     mouse_y: f32,
+    mouse_sensitivity: f32,
     scroll: f32,
     prev_x: f32,
     prev_y: f32,
@@ -76,11 +77,11 @@ impl PbsScene {
         let camera = Camera::new(
             Vec3::new(0.0, 0.0, -40.0),
             Vec3::new(0.0, 0.0, 0.0),
-            110.0,
+            10.0,
             30.0,
             10.0,
             200.0,
-            2.0,
+            3.0,
             4.0,
         );
 
@@ -292,6 +293,7 @@ impl PbsScene {
             left_mouse_button_pressed: false,
             mouse_x: 0.0,
             mouse_y: 0.0,
+            mouse_sensitivity: 2.0,
             scroll: 0.0,
             prev_x: 0.0,
             prev_y: 0.0,
@@ -487,6 +489,11 @@ impl Scene for PbsScene {
                     input::Action::Press => self.left_mouse_button_pressed = true,
                     input::Action::Release => {
                         self.left_mouse_button_pressed = false;
+
+                        self.mouse_x = 0.0;
+                        self.mouse_y = 0.0;
+                        self.prev_x = 0.0;
+                        self.prev_y = 0.0;
                     }
                     _ => {}
                 },
@@ -525,8 +532,13 @@ impl Scene for PbsScene {
         let Context { timer, .. } = context;
 
         self.dt = timer.get_delta();
-        let dx = self.mouse_x - self.prev_x;
-        let dy = self.mouse_y - self.prev_y;
+        let mut dx = 0.0;
+        let mut dy = 0.0;
+
+        if self.prev_x != 0.0 || self.prev_y != 0.0 {
+            dx = (self.mouse_x - self.prev_x) * self.mouse_sensitivity;
+            dy = (self.mouse_y - self.prev_y) * self.mouse_sensitivity;
+        }
 
         self.prev_x = self.mouse_x;
         self.prev_y = self.mouse_y;

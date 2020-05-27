@@ -64,6 +64,7 @@ impl Sampler {
                 gl::TEXTURE_BORDER_COLOR,
                 utilities::value_ptr(&border_color),
             );
+            gl::SamplerParameterf(id, gl::TEXTURE_MAX_ANISOTROPY, 16.0)
         }
 
         Sampler {

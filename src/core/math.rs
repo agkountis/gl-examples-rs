@@ -57,6 +57,10 @@ pub mod quaternion {
         glm::quat_normalize(&(y * p * r))
     }
 
+    pub fn quat_look_at(target: &Vec3, up: &Vec3) -> Quat {
+        glm::quat_look_at(target, up)
+    }
+
     pub fn to_mat4(quat: &Quat) -> Mat4 {
         glm::quat_to_mat4(&quat)
     }
@@ -155,9 +159,7 @@ pub fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
 }
 
 pub fn spherical_to_cartesian(theta: f32, phi: f32) -> Vec3 {
-    Vec3::new(
-        phi.sin() * theta.cos(),
-        phi.cos(),
-        phi.sin() * theta.sin()
-    )
+    let theta = theta.to_radians();
+    let phi = phi.to_radians();
+    Vec3::new(phi.sin() * theta.sin(), phi.sin() * theta.cos(), phi.cos())
 }

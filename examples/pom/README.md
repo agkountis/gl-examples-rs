@@ -1,16 +1,14 @@
 # Parallax Occlusion Mapping
 An example of parallax occlusion mapping.
 
+# Controls
+Press the **space** key to switch between **Normal Mapping** and **Parallax Occlusion Mapping**.
+
 # Samples
 
-|  |
+| Normal Mapping | Parallax Occlusion Mapping |
 |:-:|:-:|
-|  |
-
-|  |
-|:-:|:-:|
-|  |
+| <img src="images/normal_mapping.png"> | <img src="images/parallax_occlusion_mapping.png"> |
 
 # References
 * https://learnopengl.com/
-* https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/

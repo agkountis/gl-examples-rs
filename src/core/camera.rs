@@ -1,7 +1,7 @@
 use crate::core::math::{clamp_scalar, rotate_vec3};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
 use crate::math::quaternion;
-use nalgebra_glm::quat_normalize;
+use nalgebra_glm::{normalize, quat_cast, quat_normalize};
 
 pub struct Camera {
     position: Vec3,
@@ -73,9 +73,18 @@ impl Camera {
     }
 
     pub fn update(&mut self, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
-        if mouse_dx != 0.0 || mouse_dy != 0.0 {
-            self.pitch += mouse_dy.signum() * self.orbit_speed * dt;
-            self.yaw += mouse_dx.signum() * self.orbit_speed * dt;
+        const EPSILON: f32 = 0.00001;
+
+        if mouse_dx < -EPSILON || mouse_dx > EPSILON || mouse_dy < -EPSILON || mouse_dy > EPSILON {
+            self.pitch += mouse_dy * self.orbit_speed * dt;
+
+            self.yaw += mouse_dx * self.orbit_speed * dt;
+
+            if self.yaw < 0.0 {
+                self.yaw += 360.0;
+            } else if self.yaw >= 360.0 {
+                self.yaw -= 360.0;
+            }
 
             self.pitch = clamp_scalar(self.pitch, -89.99, 89.99);
         }
@@ -92,12 +101,9 @@ impl Camera {
         self.prev_distance = self.distance;
 
         let dest = quat_normalize(&quaternion::from_euler(self.yaw, self.pitch, 0.0));
-        self.orientation = quat_normalize(&quaternion::slerp(
-            &self.orientation,
-            &dest,
-            dt * self.orbit_dampening,
-        ));
-        self.position = rotate_vec3(&self.orientation, &Vec3::new(0.0, 0.0, self.distance));
+        self.orientation = quaternion::slerp(&self.orientation, &dest, dt * self.orbit_dampening);
+        let direction = normalize(&rotate_vec3(&self.orientation, &Axes::forward()));
+        self.position = Vec3::new(0.0, 0.0, 0.0) - direction * self.distance;
 
         self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());
     }
