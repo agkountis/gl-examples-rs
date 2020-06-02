@@ -12,4 +12,4 @@ jobs:
       - name: Install dependencies
         run: sudo apt install libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev cmake libglfw3-dev
       - name: Build
-        run: cargo build --all --verbose
+        run: cargo build --workspace --all-targets --verbose
