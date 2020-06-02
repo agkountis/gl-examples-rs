@@ -2,7 +2,7 @@
 name = "gl_bindings"
 version = "0.1.0"
 build = "build.rs"
-authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
+authors = ["Angelos Gkountis <angelos.gkountis@gmail.com>"]
 edition = "2018"
 
 [lib]
@@ -10,4 +10,4 @@ name = "gl_bindings"
 path = "src/lib.rs"
 
 [build-dependencies]
-gl_generator = "0.10.0"
+gl_generator = "^0.10.0"

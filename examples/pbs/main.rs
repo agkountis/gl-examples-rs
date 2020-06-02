@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             window_size: UVec2::new(1920, 1080),
             window_mode: WindowMode::Windowed,
-            msaa: Msaa::X4,
+            msaa: Msaa::X8,
             vsync: true,
             default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
         },

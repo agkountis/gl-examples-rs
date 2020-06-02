@@ -7,7 +7,6 @@ use gli_rs as gli;
 use crate::core::asset::Asset;
 use gl::types::*;
 use gl_bindings as gl;
-use std::fmt::Display;
 use std::path::Path;
 
 #[repr(u32)]

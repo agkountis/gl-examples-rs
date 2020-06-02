@@ -24,7 +24,7 @@ use engine::{
     },
     scene::Scene,
     scene::Transition,
-    Context,
+    Context, Msaa,
 };
 
 struct EnvironmentMaps {
@@ -44,6 +44,7 @@ pub struct PomScene {
     vertical_gaussian_pipeline: ProgramPipeline,
     tonemapping_pipeline: ProgramPipeline,
     framebuffer: Framebuffer,
+    resolve_framebuffer: Framebuffer,
     blur_framebuffers: [Framebuffer; 2],
     sampler: Sampler,
     sampler_nearest: Sampler,
@@ -188,6 +189,30 @@ impl PomScene {
                 window.get_framebuffer_width(),
                 window.get_framebuffer_height(),
             ),
+            Msaa::X8,
+            vec![
+                FramebufferAttachmentCreateInfo::new(
+                    SizedTextureFormat::Rgba16f,
+                    AttachmentType::Texture,
+                ),
+                FramebufferAttachmentCreateInfo::new(
+                    SizedTextureFormat::Rgba16f,
+                    AttachmentType::Texture,
+                ),
+                FramebufferAttachmentCreateInfo::new(
+                    SizedTextureFormat::Depth24Stencil8,
+                    AttachmentType::Renderbuffer,
+                ),
+            ],
+        )
+        .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
+
+        let resolve_framebuffer = Framebuffer::new(
+            UVec2::new(
+                window.get_framebuffer_width(),
+                window.get_framebuffer_height(),
+            ),
+            Msaa::None,
             vec![
                 FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
@@ -211,6 +236,7 @@ impl PomScene {
                     window.get_framebuffer_width() / 4,
                     window.get_framebuffer_height() / 4,
                 ),
+                Msaa::None,
                 vec![FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
                     AttachmentType::Texture,
@@ -222,6 +248,7 @@ impl PomScene {
                     window.get_framebuffer_width() / 4,
                     window.get_framebuffer_height() / 4,
                 ),
+                Msaa::None,
                 vec![FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
                     AttachmentType::Texture,
@@ -280,6 +307,7 @@ impl PomScene {
             vertical_gaussian_pipeline: vertical_gaussian_prog,
             tonemapping_pipeline: tonemapping_prog,
             framebuffer,
+            resolve_framebuffer,
             blur_framebuffers,
             sampler,
             sampler_nearest,
@@ -340,14 +368,20 @@ impl PomScene {
         self.cube_mesh.draw();
 
         self.framebuffer.unbind(false);
-        self.material.unbind()
+        self.material.unbind();
+
+        Framebuffer::blit(&self.framebuffer, &self.resolve_framebuffer)
     }
 
     fn bloom_pass(&self) {
         let blur_strength = 6;
 
-        let size = self.blur_framebuffers[0].get_size();
-        StateManager::set_viewport(0, 0, size.x as i32, size.y as i32);
+        self.blur_framebuffers.iter().for_each(|fb| {
+            fb.bind();
+            fb.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
+            fb.unbind(false)
+        });
+
         for i in 0..blur_strength {
             let ping_pong_index = i % 2;
 
@@ -357,11 +391,11 @@ impl PomScene {
                 self.vertical_gaussian_pipeline.bind();
 
                 if i == 0 {
-                    attachment_id = self.framebuffer.get_texture_attachment(1).get_id();
+                    attachment_id = self.resolve_framebuffer.texture_attachment(1).id();
                 } else {
                     attachment_id = self.blur_framebuffers[1 - ping_pong_index]
-                        .get_texture_attachment(0)
-                        .get_id();
+                        .texture_attachment(0)
+                        .id();
                 }
 
                 self.vertical_gaussian_pipeline.set_texture_2d_with_id(
@@ -376,8 +410,8 @@ impl PomScene {
                 self.blur_framebuffers[ping_pong_index].unbind(false);
             } else {
                 attachment_id = self.blur_framebuffers[1 - ping_pong_index]
-                    .get_texture_attachment(0)
-                    .get_id();
+                    .texture_attachment(0)
+                    .id();
                 self.blur_framebuffers[ping_pong_index].bind();
 
                 self.horizontal_gaussian_pipeline.bind();
@@ -396,12 +430,11 @@ impl PomScene {
         }
     }
 
-    fn skybox_pass(&self, window_width: u32, window_height: u32) {
+    fn skybox_pass(&self) {
         StateManager::set_depth_function(DepthFunction::LessOrEqual);
         StateManager::set_face_culling(FaceCulling::Front);
-        StateManager::set_viewport(0, 0, window_width as i32, window_height as i32);
 
-        self.framebuffer.bind();
+        self.resolve_framebuffer.bind();
 
         self.skybox_program_pipeline.bind();
 
@@ -413,7 +446,7 @@ impl PomScene {
 
         self.cube_mesh.draw();
 
-        self.framebuffer.unbind(true);
+        self.resolve_framebuffer.unbind(false);
         self.skybox_program_pipeline.unbind();
 
         StateManager::set_depth_function(DepthFunction::Less);
@@ -429,13 +462,13 @@ impl PomScene {
         self.tonemapping_pipeline
             .set_texture_2d_with_id(
                 "image",
-                self.framebuffer.get_texture_attachment(0).get_id(),
+                self.resolve_framebuffer.texture_attachment(0).id(),
                 &self.sampler_nearest,
                 ShaderStage::Fragment,
             )
             .set_texture_2d_with_id(
                 "bloomImage",
-                self.blur_framebuffers[1].get_texture_attachment(0).get_id(),
+                self.blur_framebuffers[1].texture_attachment(0).id(),
                 &self.sampler,
                 ShaderStage::Fragment,
             )
@@ -499,22 +532,23 @@ impl Scene for PomScene {
             Event::Scroll(_, y) => {
                 self.scroll = y as f32; //maybe accumulate?
             }
-            Event::Key(key, action, m) => {
-                if m.intersects(Modifiers::Shift) {
-                    println!("Shift + {:?} : {:?}", key, action)
-                } else {
-                    println!("{:?} : {:?}", key, action);
-                    match key {
-                        input::Key::Escape => return Transition::Quit,
-                        input::Key::Space => {
-                            if let Action::Release = action {
-                                self.use_parallax = 1 - self.use_parallax
-                            }
-                        }
-                        _ => (),
+            Event::Key(key, action, m) => match key {
+                input::Key::Escape => return Transition::Quit,
+                input::Key::Space => {
+                    if let Action::Release = action {
+                        self.use_parallax = 1 - self.use_parallax
                     }
                 }
-            }
+                input::Key::A => {
+                    use gl_bindings as gl;
+                    unsafe { gl::Enable(gl::MULTISAMPLE) }
+                }
+                input::Key::B => {
+                    use gl_bindings as gl;
+                    unsafe { gl::Disable(gl::MULTISAMPLE) }
+                }
+                _ => (),
+            },
             Event::WindowFramebufferSize(x, y) => {
                 self.projection_matrix = perspective(x as u32, y as u32, 60, 0.1, 100.0);
                 StateManager::set_viewport(0, 0, x, y)
@@ -549,12 +583,10 @@ impl Scene for PomScene {
 
     fn pre_draw(&mut self, _: Context) {}
 
-    fn draw(&mut self, context: Context) {
-        let Context { window, .. } = context;
-
+    fn draw(&mut self, _: Context) {
         self.geometry_pass();
         self.bloom_pass();
-        self.skybox_pass(window.get_width(), window.get_height());
+        self.skybox_pass();
         self.tonemap_pass();
     }
 

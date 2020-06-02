@@ -32,11 +32,12 @@ pub enum WindowMode {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(u32)]
 pub enum Msaa {
-    None,
-    X4,
-    X8,
-    X16,
+    None = 1,
+    X4 = 4,
+    X8 = 8,
+    X16 = 16,
 }
 
 #[derive(Debug)]

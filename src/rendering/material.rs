@@ -6,6 +6,13 @@ use crate::rendering::texture::Texture2D;
 use std::path::Path;
 use std::rc::Rc;
 
+const ALBEDO_MAP_UNIFORM_NAME: &str = "albedoMap";
+// [Metalness (R), Roughness (G), AO (B)]
+const M_R_AO_MAP_UNIFORM_NAME: &str = "m_r_aoMap";
+const NORMAL_MAP_UNIFORM_NAME: &str = "normalMap";
+const DISPLACEMENT_MAP_UNIFORM_NAME: &str = "displacementMap";
+const BRDF_LUT_MAP_UNIFORM_NAME: &str = "brdfLUT";
+
 pub trait Material {
     fn bind(&self);
     fn unbind(&self);
@@ -95,25 +102,25 @@ impl Material for PbsMetallicRoughnessMaterial {
 
         self.program_pipeline
             .set_texture_2d(
-                "albedoMap",
+                ALBEDO_MAP_UNIFORM_NAME,
                 &self.albedo,
                 &self.sampler,
                 ShaderStage::Fragment,
             )
             .set_texture_2d(
-                "m_r_aoMap",
+                M_R_AO_MAP_UNIFORM_NAME,
                 &self.metallic_roughness_ao,
                 &self.sampler,
                 ShaderStage::Fragment,
             )
             .set_texture_2d(
-                "normalMap",
+                NORMAL_MAP_UNIFORM_NAME,
                 &self.normals,
                 &self.sampler,
                 ShaderStage::Fragment,
             )
             .set_texture_2d(
-                "brdfLUT",
+                BRDF_LUT_MAP_UNIFORM_NAME,
                 &self.ibl_brdf_lut,
                 &self.sampler,
                 ShaderStage::Fragment,
@@ -121,7 +128,7 @@ impl Material for PbsMetallicRoughnessMaterial {
 
         if let Some(displacement) = &self.displacement {
             self.program_pipeline.set_texture_2d(
-                "displacementMap",
+                DISPLACEMENT_MAP_UNIFORM_NAME,
                 &displacement,
                 &self.sampler,
                 ShaderStage::Fragment,

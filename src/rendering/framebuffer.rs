@@ -6,6 +6,7 @@ use crate::core::math;
 use crate::core::math::{UVec2, Vec4};
 use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
+use crate::Msaa;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -79,11 +80,11 @@ impl FramebufferAttachmentCreateInfo {
         }
     }
 
-    pub fn get_format(&self) -> SizedTextureFormat {
+    pub fn format(&self) -> SizedTextureFormat {
         self.format
     }
 
-    pub fn get_type(&self) -> AttachmentType {
+    pub fn attachment_type(&self) -> AttachmentType {
         self.attachment_type
     }
 }
@@ -99,7 +100,6 @@ pub struct FramebufferAttachment {
 impl FramebufferAttachment {
     fn new(
         id: GLuint,
-        size: UVec2,
         format: SizedTextureFormat,
         attachment_type: AttachmentType,
         attachment_bind_point: AttachmentBindPoint,
@@ -112,15 +112,15 @@ impl FramebufferAttachment {
         }
     }
 
-    pub fn get_id(&self) -> GLuint {
+    pub fn id(&self) -> GLuint {
         self.id
     }
 
-    pub fn get_format(&self) -> SizedTextureFormat {
+    pub fn format(&self) -> SizedTextureFormat {
         self.format
     }
 
-    pub fn get_type(&self) -> AttachmentType {
+    pub fn attachment_type(&self) -> AttachmentType {
         self.attachment_type
     }
 }
@@ -130,6 +130,8 @@ pub struct Framebuffer {
     size: UVec2,
     texture_attachments: Vec<FramebufferAttachment>,
     renderbuffer_attachments: Vec<FramebufferAttachment>,
+    output_locations: Vec<u32>,
+    samples: u32,
     has_depth: bool,
 }
 
@@ -140,6 +142,8 @@ impl Default for Framebuffer {
             size: UVec2::new(0, 0),
             texture_attachments: vec![],
             renderbuffer_attachments: vec![],
+            output_locations: vec![],
+            samples: Msaa::None as u32,
             has_depth: false,
         }
     }
@@ -148,6 +152,7 @@ impl Default for Framebuffer {
 impl Framebuffer {
     pub fn new(
         size: UVec2,
+        msaa: Msaa,
         attachment_create_infos: Vec<FramebufferAttachmentCreateInfo>,
     ) -> Result<Self, FramebufferError> {
         let mut framebuffer_id: GLuint = 0;
@@ -166,19 +171,28 @@ impl Framebuffer {
 
         let texture_attachment_create_infos = attachment_create_infos
             .iter()
-            .filter(|&create_info| create_info.get_type() == AttachmentType::Texture)
+            .filter(|&create_info| create_info.attachment_type() == AttachmentType::Texture)
             .collect::<Vec<_>>();
 
         if !texture_attachment_create_infos.is_empty() {
             let texture_attachment_ids: Vec<GLuint> =
                 vec![0; texture_attachment_create_infos.len()];
 
-            unsafe {
-                gl::CreateTextures(
-                    gl::TEXTURE_2D,
-                    texture_attachment_ids.len() as i32,
-                    texture_attachment_ids.as_ptr() as *mut GLuint,
-                )
+            match msaa {
+                Msaa::None => unsafe {
+                    gl::CreateTextures(
+                        gl::TEXTURE_2D,
+                        texture_attachment_ids.len() as i32,
+                        texture_attachment_ids.as_ptr() as *mut GLuint,
+                    )
+                },
+                _ => unsafe {
+                    gl::CreateTextures(
+                        gl::TEXTURE_2D_MULTISAMPLE,
+                        texture_attachment_ids.len() as i32,
+                        texture_attachment_ids.as_ptr() as *mut GLuint,
+                    )
+                },
             }
 
             texture_attachment_create_infos
@@ -186,17 +200,28 @@ impl Framebuffer {
                 .zip(texture_attachment_ids.iter())
                 .for_each(|(&create_info, id)| {
                     unsafe {
-                        gl::TextureStorage2D(
-                            *id,
-                            1,
-                            create_info.get_format() as u32,
-                            size.x as i32,
-                            size.y as i32,
-                        )
+                        //TODO: Assert that num samples is 0 if internal format is singed or unsigned int
+                        match msaa {
+                            Msaa::None => gl::TextureStorage2D(
+                                *id,
+                                1,
+                                create_info.format() as u32,
+                                size.x as i32,
+                                size.y as i32,
+                            ),
+                            _ => gl::TextureStorage2DMultisample(
+                                *id,
+                                msaa as i32,
+                                create_info.format() as u32,
+                                size.x as i32,
+                                size.y as i32,
+                                gl::TRUE,
+                            ),
+                        }
                     }
 
                     if let Some(attachment_bind_point) =
-                        Self::is_depth_stencil_attachment(create_info.get_format())
+                        Self::is_depth_stencil_attachment(create_info.format())
                     {
                         unsafe {
                             gl::NamedFramebufferTexture(
@@ -211,15 +236,13 @@ impl Framebuffer {
 
                         texture_attachments.push(FramebufferAttachment::new(
                             *id,
-                            size,
-                            create_info.get_format(),
-                            create_info.get_type(),
+                            create_info.format(),
+                            create_info.attachment_type(),
                             attachment_bind_point,
                         ))
                     } else {
                         let output_location = gl::COLOR_ATTACHMENT0 + color_attachment_count;
                         output_locations.push(output_location);
-                        color_attachment_count += 1;
 
                         unsafe {
                             gl::NamedFramebufferTexture(framebuffer_id, output_location, *id, 0);
@@ -227,21 +250,22 @@ impl Framebuffer {
 
                         texture_attachments.push(FramebufferAttachment::new(
                             *id,
-                            size,
-                            create_info.get_format(),
-                            create_info.get_type(),
+                            create_info.format(),
+                            create_info.attachment_type(),
                             AttachmentBindPoint::ColorAttachment(
                                 output_location,
                                 color_attachment_count as i32,
                             ),
-                        ))
+                        ));
+
+                        color_attachment_count += 1
                     }
                 });
         }
 
         let renderbuffer_attachment_create_infos = attachment_create_infos
             .iter()
-            .filter(|&create_info| match create_info.get_type() {
+            .filter(|&create_info| match create_info.attachment_type() {
                 AttachmentType::Renderbuffer => true,
                 _ => false,
             })
@@ -263,16 +287,25 @@ impl Framebuffer {
                 .zip(renderbuffer_attachment_ids.iter())
                 .for_each(|(create_info, id)| {
                     unsafe {
-                        gl::NamedRenderbufferStorage(
-                            *id,
-                            create_info.get_format() as u32,
-                            size.x as i32,
-                            size.y as i32,
-                        )
+                        match msaa {
+                            Msaa::None => gl::NamedRenderbufferStorage(
+                                *id,
+                                create_info.format() as u32,
+                                size.x as i32,
+                                size.y as i32,
+                            ),
+                            _ => gl::NamedRenderbufferStorageMultisample(
+                                *id,
+                                msaa as i32,
+                                create_info.format() as u32,
+                                size.x as i32,
+                                size.y as i32,
+                            ),
+                        };
                     }
 
                     if let Some(attachment_bind_point) =
-                        Self::is_depth_stencil_attachment(create_info.get_format())
+                        Self::is_depth_stencil_attachment(create_info.format())
                     {
                         unsafe {
                             gl::NamedFramebufferRenderbuffer(
@@ -287,15 +320,13 @@ impl Framebuffer {
 
                         renderbuffer_attachments.push(FramebufferAttachment::new(
                             *id,
-                            size,
-                            create_info.get_format(),
-                            create_info.get_type(),
+                            create_info.format(),
+                            create_info.attachment_type(),
                             attachment_bind_point,
                         ))
                     } else {
                         let output_location = gl::COLOR_ATTACHMENT0 + color_attachment_count;
-                        output_locations.push(gl::COLOR_ATTACHMENT0 + color_attachment_count);
-                        color_attachment_count += 1;
+                        output_locations.push(output_location);
 
                         unsafe {
                             gl::NamedFramebufferRenderbuffer(
@@ -308,14 +339,15 @@ impl Framebuffer {
 
                         renderbuffer_attachments.push(FramebufferAttachment::new(
                             *id,
-                            size,
-                            create_info.get_format(),
-                            create_info.get_type(),
+                            create_info.format(),
+                            create_info.attachment_type(),
                             AttachmentBindPoint::ColorAttachment(
                                 output_location,
                                 color_attachment_count as i32,
                             ),
-                        ))
+                        ));
+
+                        color_attachment_count += 1
                     }
                 })
         }
@@ -336,13 +368,14 @@ impl Framebuffer {
                 size,
                 texture_attachments,
                 renderbuffer_attachments,
+                output_locations,
                 has_depth: has_depth_attachment,
+                samples: msaa as u32,
             })
         }
     }
 
     pub fn clear(&self, clear_color: &Vec4) {
-        //TODO: Clear ALL attachments
         self.texture_attachments
             .iter()
             .chain(self.renderbuffer_attachments.iter())
@@ -409,7 +442,7 @@ impl Framebuffer {
         unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, 0) }
     }
 
-    pub fn get_texture_attachment(&self, index: usize) -> FramebufferAttachment {
+    pub fn texture_attachment(&self, index: usize) -> FramebufferAttachment {
         assert!(
             index < self.texture_attachments.len(),
             "Index out of bounds."
@@ -417,42 +450,89 @@ impl Framebuffer {
         self.texture_attachments[index]
     }
 
-    pub fn get_id(&self) -> GLuint {
+    pub fn texture_attachments(&self) -> &Vec<FramebufferAttachment> {
+        &self.texture_attachments
+    }
+
+    pub fn renderbuffer_attachments(&self) -> &Vec<FramebufferAttachment> {
+        &self.renderbuffer_attachments
+    }
+
+    pub fn id(&self) -> GLuint {
         self.id
     }
 
-    pub fn get_size(&self) -> UVec2 {
+    pub fn size(&self) -> UVec2 {
         self.size
     }
 
+    pub fn samples(&self) -> u32 {
+        self.samples
+    }
+
     pub fn blit(source: &Framebuffer, destination: &Framebuffer) {
+        let source_color_attachments = &source.texture_attachments;
+        let dest_color_attachments = &destination.texture_attachments;
+
+        assert_eq!(source_color_attachments.len(), dest_color_attachments.len());
+
+        source_color_attachments
+            .iter()
+            .enumerate()
+            .for_each(|(i, attachment)| unsafe {
+                gl::NamedFramebufferReadBuffer(source.id(), gl::COLOR_ATTACHMENT0 + i as u32);
+                gl::NamedFramebufferDrawBuffer(destination.id(), gl::COLOR_ATTACHMENT0 + i as u32);
+
+                gl::BlitNamedFramebuffer(
+                    source.id(),
+                    destination.id(),
+                    0,
+                    0,
+                    source.size().x as i32,
+                    source.size().y as i32,
+                    0,
+                    0,
+                    destination.size().x as i32,
+                    destination.size().y as i32,
+                    gl::COLOR_BUFFER_BIT,
+                    gl::NEAREST,
+                );
+            });
+
         unsafe {
             gl::BlitNamedFramebuffer(
-                source.get_id(),
-                destination.get_id(),
+                source.id(),
+                destination.id(),
                 0,
                 0,
-                source.get_size().x as i32,
-                source.get_size().y as i32,
+                source.size().x as i32,
+                source.size().y as i32,
                 0,
                 0,
-                destination.get_size().x as i32,
-                destination.get_size().y as i32,
-                gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
+                destination.size().x as i32,
+                destination.size().y as i32,
+                gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
                 gl::NEAREST,
             );
+
+            gl::NamedFramebufferReadBuffer(source.id(), gl::BACK);
+            gl::NamedFramebufferDrawBuffers(
+                destination.id(),
+                destination.output_locations.len() as i32,
+                destination.output_locations.as_ptr(),
+            )
         }
     }
 
     pub fn blit_to_default(source: &Framebuffer, default_framebuffer_size: UVec2) {
         unsafe {
             gl::BlitNamedFramebuffer(
-                source.get_id(),
+                source.id(),
                 0,
                 0,
                 0,
-                source.get_size().x as i32,
-                source.get_size().y as i32,
+                source.size().x as i32,
+                source.size().y as i32,
                 0,
                 0,
                 default_framebuffer_size.x as i32,

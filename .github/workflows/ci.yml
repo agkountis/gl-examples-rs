@@ -1,0 +1,15 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: agkountis/rust:cmake
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build
+        run: cargo build --verbose

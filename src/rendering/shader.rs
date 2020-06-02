@@ -1,8 +1,7 @@
 use gl::types::*;
 use gl_bindings as gl;
-use std::error::Error;
 use std::ffi::CString;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -196,7 +195,6 @@ impl Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        println!("dropping shader");
         unsafe { gl::DeleteShader(self.id) }
     }
 }

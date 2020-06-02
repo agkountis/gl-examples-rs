@@ -1,7 +1,7 @@
 use crate::core::math::{clamp_scalar, rotate_vec3};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
 use crate::math::quaternion;
-use nalgebra_glm::{normalize, quat_cast, quat_normalize};
+use nalgebra_glm::{normalize, quat_normalize};
 
 pub struct Camera {
     position: Vec3,
@@ -91,7 +91,7 @@ impl Camera {
 
         if mouse_scroll != 0.0 {
             let mut scroll_amount = mouse_scroll * self.zoom_speed;
-            scroll_amount *= (self.distance * 0.3);
+            scroll_amount *= self.distance * 0.3;
             self.distance -= scroll_amount * dt;
         }
 

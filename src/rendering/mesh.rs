@@ -6,7 +6,6 @@ use crate::core::math::{Vec2, Vec3, Vec4};
 use crate::rendering::buffer::{Buffer, BufferStorageFlags};
 use crate::rendering::Draw;
 use std::mem;
-use std::ops::Index;
 use std::path::Path;
 use std::ptr;
 
