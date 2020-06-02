@@ -5,11 +5,11 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: agkountis/rust:cmake
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt install libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev cmake libglfw3-dev
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --all --verbose
