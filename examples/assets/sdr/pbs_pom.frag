@@ -26,7 +26,7 @@ layout(location = 6, binding = 6) uniform samplerCube radianceMap;
 
 layout(location = 7) uniform vec3 wLightDirection;
 layout(location = 8) uniform vec3 lightColor;
-layout(location = 9) uniform int useParallax;
+layout(location = 9) uniform int parallaxMappingMethod;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBloomBrightColor;
@@ -127,12 +127,36 @@ vec3 SampleNormalMap(sampler2D normalMap, vec2 texcoords, float strength)
 }
 
 // Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
-vec2 ParallaxOcclusionMapping(vec2 texcoord, vec3 viewDirection)
+vec2 ParallaxMapping(vec2 texcoords, vec3 viewDirection)
+{
+    const float dispalcementScale = 0.018;
+    float displacement = texture(displacementMap, texcoords).r;
+
+    // the amount to shift the texture coordinates per layer (from vector P)
+    vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * displacement * dispalcementScale;
+
+    return texcoords - P;
+}
+
+// Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
+vec2 ParallaxMappingOffsetLimiting(vec2 texcoords, vec3 viewDirection)
+{
+    const float depthScale = 0.018;
+    float depth = texture(displacementMap, texcoords).r;
+
+    // the amount to shift the texture coordinates per layer (from vector P)
+    vec2 P = viewDirection.xy * depth * depthScale;
+
+    return texcoords - P;
+}
+
+// Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
+vec2 SteepParallaxMapping(vec2 texcoords, vec3 viewDirection)
 {
     // number of depth layers
-    const float minLayers = 16;
-    const float maxLayers = 64;
-    const float heightScale = 0.012;
+    const float minLayers = 8;
+    const float maxLayers = 32;
+    const float depthScale = 0.018;
 
     // Calculate how many layers to use based on the angle of the Z axis in tangent space (points upwards)
     // and the view vector.
@@ -145,18 +169,56 @@ vec2 ParallaxOcclusionMapping(vec2 texcoord, vec3 viewDirection)
     float currentLayerDepth = 0.0;
 
     // the amount to shift the texture coordinates per layer (from vector P)
-    vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * heightScale;
+    vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * depthScale;
     vec2 deltaTexCoords = P / numLayers;
 
-    vec2  currentTexCoords     = texcoord;
-    float currentDepthMapValue = texture(displacementMap, currentTexCoords).r;
+    vec2 currentTexCoords = texcoords;
+    float currentDepthValue = texture(displacementMap, currentTexCoords).r;
 
-    while(currentLayerDepth < currentDepthMapValue)
+    while (currentLayerDepth < currentDepthValue)
     {
         // shift texture coordinates along direction of P
         currentTexCoords -= deltaTexCoords;
         // get depthmap value at current texture coordinates
-        currentDepthMapValue = texture(displacementMap, currentTexCoords).r;
+        currentDepthValue = texture(displacementMap, currentTexCoords).r;
+        // get depth of next layer
+        currentLayerDepth += layerDepth;
+    }
+
+    return currentTexCoords;
+}
+
+// Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
+vec2 ParallaxOcclusionMapping(vec2 texcoords, vec3 viewDirection)
+{
+    // number of depth layers
+    const float minLayers = 8;
+    const float maxLayers = 32;
+    const float displacementScale = 0.018;
+
+    // Calculate how many layers to use based on the angle of the Z axis in tangent space (points upwards)
+    // and the view vector.
+    float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), viewDirection)));
+
+    // calculate the size of each layer
+    float layerDepth = 1.0 / numLayers;
+
+    // depth of current layer
+    float currentLayerDepth = 0.0;
+
+    // the amount to shift the texture coordinates per layer (from vector P)
+    vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * displacementScale;
+    vec2 deltaTexCoords = P / numLayers;
+
+    vec2 currentTexCoords = texcoords;
+    float currentDepthValue = texture(displacementMap, currentTexCoords).r;
+
+    while (currentLayerDepth < currentDepthValue)
+    {
+        // shift texture coordinates along direction of P
+        currentTexCoords -= deltaTexCoords;
+        // get depthmap value at current texture coordinates
+        currentDepthValue = texture(displacementMap, currentTexCoords).r;
         // get depth of next layer
         currentLayerDepth += layerDepth;
     }
@@ -165,7 +227,7 @@ vec2 ParallaxOcclusionMapping(vec2 texcoord, vec3 viewDirection)
     vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
 
     // get depth after and before collision for linear interpolation
-    float afterDepth  = currentDepthMapValue - currentLayerDepth;
+    float afterDepth  = currentDepthValue - currentLayerDepth;
     float beforeDepth = texture(displacementMap, prevTexCoords).r - currentLayerDepth + layerDepth;
 
     // interpolation of texture coordinates
@@ -179,10 +241,19 @@ void main()
 {
     vec2 texcoord = fsIn.texcoord;
 
-    if (useParallax == 1) {
+    // Choose Parallax Mapping method.
+    if (parallaxMappingMethod == 1) {
+        texcoord = ParallaxMapping(fsIn.texcoord, normalize(fsIn.tViewDirection));
+    } else if (parallaxMappingMethod == 2) {
+        texcoord = ParallaxMappingOffsetLimiting(fsIn.texcoord, normalize(fsIn.tViewDirection));
+    } else if (parallaxMappingMethod == 3) {
+        texcoord = SteepParallaxMapping(fsIn.texcoord, normalize(fsIn.tViewDirection));
+    } else if (parallaxMappingMethod == 4) {
         texcoord = ParallaxOcclusionMapping(fsIn.texcoord, normalize(fsIn.tViewDirection));
     }
 
+    // Discard fragments sampled outside the [0, 1] uv range. May cause artifacts when texture adressing is
+    // set to repeat.
     if (texcoord.x > 1.0 || texcoord.y > 1.0 || texcoord.x < 0.0 || texcoord.y < 0.0)
     {
         discard;

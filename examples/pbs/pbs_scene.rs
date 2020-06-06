@@ -461,6 +461,8 @@ impl PbsScene {
     pub fn tonemap_pass(&self) {
         clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
 
+        StateManager::set_viewport(0, 0, 1920, 1080);
+
         self.tonemapping_pipeline.bind();
 
         let exposure: f32 = 1.5;
@@ -584,8 +586,8 @@ impl Scene for PbsScene {
 
     fn draw(&mut self, _: Context) {
         self.geometry_pass();
-        // self.bloom_pass();
         self.skybox_pass();
+        self.bloom_pass();
         self.tonemap_pass();
     }
 

@@ -159,6 +159,5 @@ void main()
     outColor = vec4(finalColor, 1.0);
 
     float brightness = ConvertToGrayscale(finalColor);
-
-    outBloomBrightColor = vec4(finalColor * smoothstep(0.5, 1.0, brightness/brightness) * step(1.0, brightness), 1.0) * 0.08;
+    outBloomBrightColor = vec4(finalColor * step(1.0, brightness), 1.0) * 0.08;
 }

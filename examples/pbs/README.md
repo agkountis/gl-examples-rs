@@ -11,6 +11,12 @@ An example of physically based shading, image based lighting and hdr rendering.
 * [ ] SSAO
 * [ ] SSR
 
+# Controls
+Use the following controls to manipulate the camera view.
+#### Mouse
+* **Left Click**: Drag to rotate camera.
+* **Mouse Wheel**: Scroll to zoom in or out.
+
 # Samples
 
 | Indoors ACES | Indoors ACES (simple luminance fit) |

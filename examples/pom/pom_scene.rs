@@ -33,6 +33,16 @@ struct EnvironmentMaps {
     pub radiance: TextureCube,
 }
 
+#[repr(i32)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum ParallaxMappingMethod {
+    None = 0,
+    ParallaxMapping = 1,
+    ParallaxMappingOffsetLimiting = 2,
+    SteepParallaxMapping = 3,
+    ParallaxOcclusionMapping = 4,
+}
+
 pub struct PomScene {
     camera: Camera,
     cube_mesh: Mesh,
@@ -57,7 +67,7 @@ pub struct PomScene {
     prev_x: f32,
     prev_y: f32,
     dt: f32,
-    use_parallax: i32,
+    parallax_mapping_method: ParallaxMappingMethod,
 }
 
 impl PomScene {
@@ -320,7 +330,7 @@ impl PomScene {
             prev_x: 0.0,
             prev_y: 0.0,
             dt: 0.0,
-            use_parallax: 1,
+            parallax_mapping_method: ParallaxMappingMethod::ParallaxOcclusionMapping,
         }
     }
 
@@ -363,7 +373,11 @@ impl PomScene {
                 ShaderStage::Vertex,
             )
             .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex)
-            .set_integer("useParallax", self.use_parallax, ShaderStage::Fragment);
+            .set_integer(
+                "parallaxMappingMethod",
+                self.parallax_mapping_method as i32,
+                ShaderStage::Fragment,
+            );
 
         self.cube_mesh.draw();
 
@@ -534,9 +548,31 @@ impl Scene for PomScene {
             }
             Event::Key(key, action, m) => match key {
                 input::Key::Escape => return Transition::Quit,
-                input::Key::Space => {
+                input::Key::Num1 => {
                     if let Action::Release = action {
-                        self.use_parallax = 1 - self.use_parallax
+                        self.parallax_mapping_method = ParallaxMappingMethod::None
+                    }
+                }
+                input::Key::Num2 => {
+                    if let Action::Release = action {
+                        self.parallax_mapping_method = ParallaxMappingMethod::ParallaxMapping
+                    }
+                }
+                input::Key::Num3 => {
+                    if let Action::Release = action {
+                        self.parallax_mapping_method =
+                            ParallaxMappingMethod::ParallaxMappingOffsetLimiting
+                    }
+                }
+                input::Key::Num4 => {
+                    if let Action::Release = action {
+                        self.parallax_mapping_method = ParallaxMappingMethod::SteepParallaxMapping
+                    }
+                }
+                input::Key::Num5 => {
+                    if let Action::Release = action {
+                        self.parallax_mapping_method =
+                            ParallaxMappingMethod::ParallaxOcclusionMapping
                     }
                 }
                 input::Key::A => {
