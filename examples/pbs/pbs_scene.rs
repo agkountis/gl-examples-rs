@@ -1,11 +1,10 @@
 use std::rc::Rc;
 
+use engine::rendering::postprocess::bloom::{Bla, BloomBuilder, Foo};
+use engine::rendering::postprocess::PostprocessingStackBuilder;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
-    event::Event,
-    input,
-    input::Modifiers,
     math::{
         matrix::{perspective, rotate, Mat4},
         scale,
@@ -15,6 +14,7 @@ use engine::{
         framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
         material::{Material, PbsMetallicRoughnessMaterial},
         mesh::{FullscreenMesh, Mesh, MeshUtilities},
+        postprocess::{bloom::Bloom, PostprocessingStack},
         program_pipeline::ProgramPipeline,
         sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
@@ -25,6 +25,9 @@ use engine::{
     scene::Scene,
     scene::Transition,
     Context, Msaa,
+};
+use glutin::event::{
+    ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
 struct EnvironmentMaps {
@@ -55,6 +58,7 @@ pub struct PbsScene {
     sampler: Sampler,
     sampler_nearest: Sampler,
     projection_matrix: Mat4,
+    post_stack: PostprocessingStack,
     left_mouse_button_pressed: bool,
     mouse_x: f32,
     mouse_y: f32,
@@ -173,24 +177,20 @@ impl PbsScene {
             .expect("Failed to load BRDF LUT texture");
 
         let skybox =
-            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/ibl_skybox.ktx"))
+            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/skybox2.ktx"))
                 .expect("Failed to load Skybox");
 
         let irradiance = TextureCube::new_from_file(
-            asset_path.join("textures/pbs/ktx/irradiance/ibl_irradiance.ktx"),
+            asset_path.join("textures/pbs/ktx/irradiance/irradiance2.ktx"),
         )
         .expect("Failed to load Irradiance map");
 
-        let radiance = TextureCube::new_from_file(
-            asset_path.join("textures/pbs/ktx/radiance/ibl_radiance.ktx"),
-        )
-        .expect("Failed to load Radiance map");
+        let radiance =
+            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/radiance/radiance2.ktx"))
+                .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(
-            UVec2::new(
-                window.get_framebuffer_width(),
-                window.get_framebuffer_height(),
-            ),
+            UVec2::new(window.inner_size().width, window.inner_size().height),
             Msaa::X8,
             vec![
                 FramebufferAttachmentCreateInfo::new(
@@ -210,10 +210,7 @@ impl PbsScene {
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let resolve_framebuffer = Framebuffer::new(
-            UVec2::new(
-                window.get_framebuffer_width(),
-                window.get_framebuffer_height(),
-            ),
+            UVec2::new(window.inner_size().width, window.inner_size().height),
             Msaa::None,
             vec![
                 FramebufferAttachmentCreateInfo::new(
@@ -232,11 +229,11 @@ impl PbsScene {
         )
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
-        let blur_framebuffers: [Framebuffer; 2] = [
+        let blur_framebuffers = [
             Framebuffer::new(
                 UVec2::new(
-                    window.get_framebuffer_width() / 4,
-                    window.get_framebuffer_height() / 4,
+                    window.inner_size().width / 4,
+                    window.inner_size().height / 4,
                 ),
                 Msaa::None,
                 vec![FramebufferAttachmentCreateInfo::new(
@@ -247,8 +244,8 @@ impl PbsScene {
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
                 UVec2::new(
-                    window.get_framebuffer_width() / 4,
-                    window.get_framebuffer_height() / 4,
+                    window.inner_size().width / 4,
+                    window.inner_size().height / 4,
                 ),
                 Msaa::None,
                 vec![FramebufferAttachmentCreateInfo::new(
@@ -258,6 +255,12 @@ impl PbsScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
         ];
+
+        let post_stack = PostprocessingStackBuilder::new()
+            .with_effect(BloomBuilder::new(asset_path).build())
+            .with_effect(Foo)
+            .with_effect(Bla)
+            .build();
 
         let sampler = Sampler::new(
             MinificationFilter::LinearMipmapLinear,
@@ -278,8 +281,8 @@ impl PbsScene {
         );
 
         let projection = perspective(
-            window.get_framebuffer_width(),
-            window.get_framebuffer_height(),
+            window.inner_size().width,
+            window.inner_size().height,
             60,
             0.5,
             500.0,
@@ -318,6 +321,7 @@ impl PbsScene {
             sampler,
             sampler_nearest,
             projection_matrix: projection,
+            post_stack,
             left_mouse_button_pressed: false,
             mouse_x: 0.0,
             mouse_y: 0.0,
@@ -513,49 +517,82 @@ impl Scene for PbsScene {
 
     fn resume(&mut self, _: Context) {}
 
-    fn handle_event(&mut self, _: Context, event: Event) -> Transition {
+    fn handle_event(&mut self, _: Context, event: WindowEvent) -> Transition {
         match event {
-            Event::MouseButton(button, action, _) => match button {
-                input::MouseButton::Left => match action {
-                    input::Action::Press => self.left_mouse_button_pressed = true,
-                    input::Action::Release => {
-                        self.left_mouse_button_pressed = false;
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+                ..
+            } => {
+                println!("Mouse pressed");
+                self.left_mouse_button_pressed = true
+            }
+            WindowEvent::MouseInput {
+                state: ElementState::Released,
+                button: MouseButton::Left,
+                ..
+            } => {
+                println!("Mouse released");
+                self.left_mouse_button_pressed = false;
 
-                        self.mouse_x = 0.0;
-                        self.mouse_y = 0.0;
-                        self.prev_x = 0.0;
-                        self.prev_y = 0.0;
-                    }
-                    _ => {}
-                },
-                _ => {}
-            },
-            Event::CursorPosition(x, y) => {
+                self.mouse_x = 0.0;
+                self.mouse_y = 0.0;
+                self.prev_x = 0.0;
+                self.prev_y = 0.0;
+            }
+            WindowEvent::CursorMoved { position, .. } => {
                 if self.left_mouse_button_pressed {
-                    self.mouse_x = x as f32;
-                    self.mouse_y = y as f32;
+                    self.mouse_x = position.x as f32;
+                    self.mouse_y = position.y as f32;
                 }
             }
-            Event::Scroll(_, y) => {
-                self.scroll = y as f32; //maybe accumulate?
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_, y),
+                ..
+            } => {
+                self.scroll = y;
             }
-            Event::Key(key, action, m) => match key {
-                input::Key::Escape => return Transition::Quit,
-                input::Key::A => {
-                    use gl_bindings as gl;
-                    unsafe { gl::Enable(gl::MULTISAMPLE) }
-                }
-                input::Key::B => {
-                    use gl_bindings as gl;
-                    unsafe { gl::Disable(gl::MULTISAMPLE) }
-                }
-                _ => (),
-            },
-            Event::WindowFramebufferSize(x, y) => {
-                self.projection_matrix = perspective(x as u32, y as u32, 60, 0.5, 500.0);
-                StateManager::set_viewport(0, 0, x, y)
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    },
+                ..
+            } => return Transition::Quit,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::A),
+                        ..
+                    },
+                ..
+            } => {
+                use gl_bindings as gl;
+                unsafe { gl::Enable(gl::MULTISAMPLE) }
             }
-            _ => (),
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        scancode,
+                        state,
+                        virtual_keycode: Some(VirtualKeyCode::S),
+                        ..
+                    },
+                ..
+            } => {
+                use gl_bindings as gl;
+                unsafe { gl::Disable(gl::MULTISAMPLE) }
+            }
+            WindowEvent::Resized(size) => {
+                let x = size.width;
+                let y = size.height;
+                self.projection_matrix = perspective(x, y, 60, 0.5, 500.0);
+                StateManager::set_viewport(0, 0, x as i32, y as i32)
+            }
+            _ => {}
         }
         Transition::None
     }
@@ -589,6 +626,7 @@ impl Scene for PbsScene {
         self.skybox_pass();
         self.bloom_pass();
         self.tonemap_pass();
+        // self.post_stack.apply(&self.resolve_framebuffer)
     }
 
     fn post_draw(&mut self, _: Context) {}

@@ -1,12 +1,8 @@
 use std::rc::Rc;
 
-use engine::core::input::Action;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
-    event::Event,
-    input,
-    input::Modifiers,
     math::{
         matrix::{perspective, Mat4},
         vector::{UVec2, Vec3, Vec4},
@@ -25,6 +21,9 @@ use engine::{
     scene::Scene,
     scene::Transition,
     Context, Msaa,
+};
+use glutin::event::{
+    ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
 struct EnvironmentMaps {
@@ -195,10 +194,7 @@ impl PomScene {
                 .expect("Failed to load Radiance map");
 
         let framebuffer = Framebuffer::new(
-            UVec2::new(
-                window.get_framebuffer_width(),
-                window.get_framebuffer_height(),
-            ),
+            UVec2::new(window.inner_size().width, window.inner_size().height),
             Msaa::X8,
             vec![
                 FramebufferAttachmentCreateInfo::new(
@@ -218,10 +214,7 @@ impl PomScene {
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let resolve_framebuffer = Framebuffer::new(
-            UVec2::new(
-                window.get_framebuffer_width(),
-                window.get_framebuffer_height(),
-            ),
+            UVec2::new(window.inner_size().width, window.inner_size().height),
             Msaa::None,
             vec![
                 FramebufferAttachmentCreateInfo::new(
@@ -240,12 +233,9 @@ impl PomScene {
         )
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
-        let blur_framebuffers: [Framebuffer; 2] = [
+        let blur_framebuffers = [
             Framebuffer::new(
-                UVec2::new(
-                    window.get_framebuffer_width() / 4,
-                    window.get_framebuffer_height() / 4,
-                ),
+                UVec2::new(window.inner_size().width / 4, window.inner_size().width / 4),
                 Msaa::None,
                 vec![FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
@@ -254,10 +244,7 @@ impl PomScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
-                UVec2::new(
-                    window.get_framebuffer_width() / 4,
-                    window.get_framebuffer_height() / 4,
-                ),
+                UVec2::new(window.inner_size().width / 4, window.inner_size().width / 4),
                 Msaa::None,
                 vec![FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
@@ -286,8 +273,8 @@ impl PomScene {
         );
 
         let projection = perspective(
-            window.get_framebuffer_width(),
-            window.get_framebuffer_height(),
+            window.inner_size().width,
+            window.inner_size().height,
             60,
             0.1,
             500.0,
@@ -520,76 +507,124 @@ impl Scene for PomScene {
 
     fn resume(&mut self, _: Context) {}
 
-    fn handle_event(&mut self, _: Context, event: Event) -> Transition {
+    fn handle_event(&mut self, _: Context, event: WindowEvent) -> Transition {
         match event {
-            Event::MouseButton(button, action, _) => match button {
-                input::MouseButton::Left => match action {
-                    input::Action::Press => self.left_mouse_button_pressed = true,
-                    input::Action::Release => {
-                        self.left_mouse_button_pressed = false;
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+                ..
+            } => self.left_mouse_button_pressed = true,
+            WindowEvent::MouseInput {
+                state: ElementState::Released,
+                button: MouseButton::Left,
+                ..
+            } => {
+                self.left_mouse_button_pressed = false;
 
-                        self.mouse_x = 0.0;
-                        self.mouse_y = 0.0;
-                        self.prev_x = 0.0;
-                        self.prev_y = 0.0;
-                    }
-                    _ => {}
-                },
-                _ => {}
-            },
-            Event::CursorPosition(x, y) => {
+                self.mouse_x = 0.0;
+                self.mouse_y = 0.0;
+                self.prev_x = 0.0;
+                self.prev_y = 0.0;
+            }
+            WindowEvent::CursorMoved { position, .. } => {
                 if self.left_mouse_button_pressed {
-                    self.mouse_x = x as f32;
-                    self.mouse_y = y as f32;
+                    self.mouse_x = position.x as f32;
+                    self.mouse_y = position.y as f32;
                 }
             }
-            Event::Scroll(_, y) => {
-                self.scroll = y as f32; //maybe accumulate?
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_, y),
+                ..
+            } => {
+                self.scroll = y;
             }
-            Event::Key(key, action, m) => match key {
-                input::Key::Escape => return Transition::Quit,
-                input::Key::Num1 => {
-                    if let Action::Release = action {
-                        self.parallax_mapping_method = ParallaxMappingMethod::None
-                    }
-                }
-                input::Key::Num2 => {
-                    if let Action::Release = action {
-                        self.parallax_mapping_method = ParallaxMappingMethod::ParallaxMapping
-                    }
-                }
-                input::Key::Num3 => {
-                    if let Action::Release = action {
-                        self.parallax_mapping_method =
-                            ParallaxMappingMethod::ParallaxMappingOffsetLimiting
-                    }
-                }
-                input::Key::Num4 => {
-                    if let Action::Release = action {
-                        self.parallax_mapping_method = ParallaxMappingMethod::SteepParallaxMapping
-                    }
-                }
-                input::Key::Num5 => {
-                    if let Action::Release = action {
-                        self.parallax_mapping_method =
-                            ParallaxMappingMethod::ParallaxOcclusionMapping
-                    }
-                }
-                input::Key::A => {
-                    use gl_bindings as gl;
-                    unsafe { gl::Enable(gl::MULTISAMPLE) }
-                }
-                input::Key::B => {
-                    use gl_bindings as gl;
-                    unsafe { gl::Disable(gl::MULTISAMPLE) }
-                }
-                _ => (),
-            },
-            Event::WindowFramebufferSize(x, y) => {
-                self.projection_matrix = perspective(x as u32, y as u32, 60, 0.1, 100.0);
-                StateManager::set_viewport(0, 0, x, y)
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    },
+                ..
+            } => return Transition::Quit,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Key1),
+                        ..
+                    },
+                ..
+            } => self.parallax_mapping_method = ParallaxMappingMethod::None,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Key2),
+                        ..
+                    },
+                ..
+            } => self.parallax_mapping_method = ParallaxMappingMethod::ParallaxMapping,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Key3),
+                        ..
+                    },
+                ..
+            } => {
+                self.parallax_mapping_method = ParallaxMappingMethod::ParallaxMappingOffsetLimiting
             }
-            _ => (),
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Key4),
+                        ..
+                    },
+                ..
+            } => self.parallax_mapping_method = ParallaxMappingMethod::SteepParallaxMapping,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::Key5),
+                        ..
+                    },
+                ..
+            } => self.parallax_mapping_method = ParallaxMappingMethod::ParallaxOcclusionMapping,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::A),
+                        ..
+                    },
+                ..
+            } => {
+                use gl_bindings as gl;
+                unsafe { gl::Enable(gl::MULTISAMPLE) }
+            }
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Released,
+                        virtual_keycode: Some(VirtualKeyCode::S),
+                        ..
+                    },
+                ..
+            } => {
+                use gl_bindings as gl;
+                unsafe { gl::Disable(gl::MULTISAMPLE) }
+            }
+            WindowEvent::Resized(size) => {
+                let x = size.width;
+                let y = size.height;
+                self.projection_matrix = perspective(x, y, 60, 0.5, 500.0);
+                StateManager::set_viewport(0, 0, x as i32, y as i32)
+            }
+            _ => {}
         }
         Transition::None
     }

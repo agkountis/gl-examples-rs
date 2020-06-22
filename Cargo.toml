@@ -5,17 +5,11 @@ authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-nalgebra-glm = "0.5.0"
-bitflags = "1.0.4"
-image = "0.22.3"
-gli-rs = "0.3.1"
-crossbeam-channel = "0.4"
+nalgebra-glm = "^0.5.0"
+bitflags = "^1.0.0"
+image = "^0.22.0"
+gli-rs = "^0.3.0"
+crossbeam-channel = "^0.4.0"
 assimp = "0.3.1"
+glutin = "^0.24.0"
 gl_bindings = {path = "gl_bindings"}
-
-[dependencies.glfw]
-version = "0.34.0"
-default-features = false
-
-[target.'cfg(target_os = "unix")'.dependencies.glfw]
-version = "0.34.0"

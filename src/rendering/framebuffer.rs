@@ -125,6 +125,7 @@ impl FramebufferAttachment {
     }
 }
 
+#[derive(Debug)]
 pub struct Framebuffer {
     id: GLuint,
     size: UVec2,
@@ -133,20 +134,6 @@ pub struct Framebuffer {
     output_locations: Vec<u32>,
     samples: u32,
     has_depth: bool,
-}
-
-impl Default for Framebuffer {
-    fn default() -> Self {
-        Self {
-            id: 0,
-            size: UVec2::new(0, 0),
-            texture_attachments: vec![],
-            renderbuffer_attachments: vec![],
-            output_locations: vec![],
-            samples: Msaa::None as u32,
-            has_depth: false,
-        }
-    }
 }
 
 impl Framebuffer {

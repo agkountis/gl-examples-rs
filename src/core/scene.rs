@@ -1,4 +1,5 @@
-use crate::core::{event::Event, Context};
+use crate::core::Context;
+use glutin::event::WindowEvent;
 
 pub enum Transition {
     Push(Box<dyn Scene>),
@@ -13,7 +14,7 @@ pub trait Scene {
     fn stop(&mut self, context: Context) {}
     fn pause(&mut self, context: Context) {}
     fn resume(&mut self, context: Context) {}
-    fn handle_event(&mut self, context: Context, event: Event) -> Transition {
+    fn handle_event(&mut self, context: Context, event: WindowEvent) -> Transition {
         Transition::None
     }
     fn update(&mut self, context: Context) -> Transition {
@@ -24,14 +25,14 @@ pub trait Scene {
     fn post_draw(&mut self, context: Context) {}
 }
 
-pub struct SceneManager<'a> {
-    scenes: Vec<Box<dyn Scene + 'a>>,
+pub struct SceneManager {
+    scenes: Vec<Box<dyn Scene>>,
     active_scene_index: usize,
     is_running: bool,
 }
 
-impl<'a> SceneManager<'a> {
-    pub fn new<S: Scene + 'a>(initial_scene: S) -> SceneManager<'a> {
+impl SceneManager {
+    pub(crate) fn new<S: Scene + 'static>(initial_scene: S) -> SceneManager {
         Self {
             scenes: vec![Box::new(initial_scene)],
             active_scene_index: 0,
@@ -44,7 +45,7 @@ impl<'a> SceneManager<'a> {
         self.is_running = true
     }
 
-    pub fn handle_event(&mut self, context: Context, event: Event) {
+    pub(crate) fn handle_event(&mut self, context: Context, event: WindowEvent) {
         let Context {
             window,
             asset_manager,
@@ -67,7 +68,7 @@ impl<'a> SceneManager<'a> {
         }
     }
 
-    pub fn update(&mut self, context: Context) {
+    pub(crate) fn update(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
@@ -88,7 +89,7 @@ impl<'a> SceneManager<'a> {
         }
     }
 
-    pub fn pre_draw(&mut self, context: Context) {
+    pub(crate) fn pre_draw(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
@@ -103,7 +104,7 @@ impl<'a> SceneManager<'a> {
         }
     }
 
-    pub fn draw(&mut self, context: Context) {
+    pub(crate) fn draw(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
@@ -118,7 +119,7 @@ impl<'a> SceneManager<'a> {
         }
     }
 
-    pub fn post_draw(&mut self, context: Context) {
+    pub(crate) fn post_draw(&mut self, context: Context) {
         let Context {
             window,
             asset_manager,
@@ -146,7 +147,7 @@ impl<'a> SceneManager<'a> {
         } = context;
 
         match transition {
-            Transition::Push(mut scene) => {
+            Transition::Push(scene) => {
                 self.push(scene, Context::new(window, asset_manager, timer, settings))
             }
             Transition::Switch(_) => {}
@@ -189,6 +190,32 @@ impl<'a> SceneManager<'a> {
             }
 
             self.is_running = false;
+        }
+    }
+
+    pub(crate) fn pause(&mut self, context: Context) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+        } = context;
+
+        if let Some(scene) = self.scenes.last_mut() {
+            scene.pause(Context::new(window, asset_manager, timer, settings))
+        }
+    }
+
+    pub(crate) fn resume(&mut self, context: Context) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            settings,
+        } = context;
+
+        if let Some(scene) = self.scenes.last_mut() {
+            scene.resume(Context::new(window, asset_manager, timer, settings))
         }
     }
 }

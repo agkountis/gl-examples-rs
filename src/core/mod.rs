@@ -2,12 +2,9 @@ pub mod application;
 pub mod asset;
 pub mod camera;
 pub mod entity;
-pub mod event;
-pub mod input;
 pub mod math;
 pub mod scene;
 pub mod timer;
-pub mod window;
 
 mod messaging;
 mod model_loader;
@@ -15,20 +12,15 @@ mod model_loader;
 use self::math::{UVec2, Vec4};
 use crate::asset::AssetManager;
 use crate::timer::Timer;
-use crate::window::Window;
-use std::path::{Path, PathBuf};
+use glutin::window::Window;
+use std::any::Any;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum WindowMode {
-    Windowed,
-    Fullscreen,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -47,7 +39,7 @@ pub struct Settings {
     pub version: Version,
     pub graphics_api_version: Version,
     pub window_size: UVec2,
-    pub window_mode: WindowMode,
+    pub fullscreen: bool,
     pub msaa: Msaa,
     pub vsync: bool,
     pub default_clear_color: Vec4,
@@ -73,18 +65,18 @@ impl Rectangle {
 }
 
 pub struct Context<'a> {
-    pub window: &'a mut Window,
+    pub window: &'a Window,
     pub asset_manager: &'a mut AssetManager,
     pub timer: &'a mut Timer,
-    pub settings: &'a mut Settings,
+    pub settings: &'a Settings,
 }
 
 impl<'a> Context<'a> {
     pub fn new(
-        window: &'a mut Window,
+        window: &'a Window,
         asset_manager: &'a mut AssetManager,
         timer: &'a mut Timer,
-        settings: &'a mut Settings,
+        settings: &'a Settings,
     ) -> Self {
         Self {
             window,
@@ -93,4 +85,12 @@ impl<'a> Context<'a> {
             settings,
         }
     }
+}
+
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+pub trait AsAnyMut {
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
