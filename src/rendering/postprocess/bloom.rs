@@ -10,11 +10,24 @@ pub struct Bloom {
     upsample_framebuffers: Vec<Framebuffer>,
     v_blur_program_pipeline: ProgramPipeline,
     h_blur_program_pipeline: ProgramPipeline,
+    enabled: bool,
 }
 
 impl PostprocessingEffect for Bloom {
     fn name(&self) -> &str {
         "bloom"
+    }
+
+    fn enable(&mut self) {
+        self.enabled = true
+    }
+
+    fn disable(&mut self) {
+        self.enabled = false
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
     }
 
     fn apply(&self, input: &Framebuffer) {
@@ -40,6 +53,7 @@ pub struct BloomBuilder {
     upsample_framebuffers: Vec<Framebuffer>,
     v_blur_program_pipeline: Option<ProgramPipeline>,
     h_blur_program_pipeline: Option<ProgramPipeline>,
+    enabled: bool,
 }
 
 impl BloomBuilder {
@@ -54,26 +68,32 @@ impl BloomBuilder {
             upsample_framebuffers: vec![],
             v_blur_program_pipeline: None,
             h_blur_program_pipeline: None,
+            enabled: true,
         }
     }
 
-    pub fn with_iterations(mut self, iterations: u32) -> Self {
+    pub fn iterations(mut self, iterations: u32) -> Self {
         self.iterations = iterations;
         self
     }
 
-    pub fn with_threshold(mut self, threshold: f32) -> Self {
+    pub fn threshold(mut self, threshold: f32) -> Self {
         self.threshold = threshold;
         self
     }
 
-    pub fn with_smooth_fade(mut self, smooth_fade: f32) -> Self {
+    pub fn smooth_fade(mut self, smooth_fade: f32) -> Self {
         self.smooth_fade = smooth_fade;
         self
     }
 
-    pub fn with_intensity(mut self, intensity: f32) -> Self {
+    pub fn intensity(mut self, intensity: f32) -> Self {
         self.intensity = intensity;
+        self
+    }
+
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
         self
     }
 
@@ -117,6 +137,7 @@ impl BloomBuilder {
             upsample_framebuffers: vec![],
             v_blur_program_pipeline,
             h_blur_program_pipeline,
+            enabled: self.enabled,
         }
     }
 }
@@ -126,6 +147,18 @@ pub struct Foo;
 impl PostprocessingEffect for Foo {
     fn name(&self) -> &str {
         "Foo"
+    }
+
+    fn enable(&mut self) {
+        unimplemented!()
+    }
+
+    fn disable(&mut self) {
+        unimplemented!()
+    }
+
+    fn enabled(&self) -> bool {
+        true
     }
 
     fn apply(&self, input: &Framebuffer) {
@@ -140,6 +173,18 @@ pub struct Bla;
 impl PostprocessingEffect for Bla {
     fn name(&self) -> &str {
         "Bla"
+    }
+
+    fn enable(&mut self) {
+        unimplemented!()
+    }
+
+    fn disable(&mut self) {
+        unimplemented!()
+    }
+
+    fn enabled(&self) -> bool {
+        false
     }
 
     fn apply(&self, input: &Framebuffer) {

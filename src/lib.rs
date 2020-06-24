@@ -16,7 +16,7 @@ macro_rules! impl_as_any {
 }
 
 pub mod core;
-mod imgui;
+pub mod imgui;
 pub mod rendering;
 
 pub use crate::core::*;
@@ -24,7 +24,6 @@ pub use crate::rendering::*;
 
 #[macro_use]
 extern crate bitflags;
-extern crate crossbeam_channel;
 
 pub mod capabilities {
     use crate::shader;

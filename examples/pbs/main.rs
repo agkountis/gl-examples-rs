@@ -6,7 +6,6 @@ use crate::pbs_scene::PbsScene;
 use engine::application::Application;
 use engine::math::vector::{UVec2, Vec4};
 use engine::{Msaa, Settings, Version};
-use std::error::Error;
 
 fn main() {
     Application::run(

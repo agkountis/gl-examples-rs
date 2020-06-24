@@ -1,6 +1,7 @@
 use gl::types::*;
 use gl_bindings as gl;
 
+use crate::imgui::ImGui;
 use crate::{
     core::{
         asset::AssetManager,
@@ -31,7 +32,7 @@ impl Application {
         let mut asset_manager = AssetManager::new();
         let mut timer = Timer::new();
 
-        let (event_loop, mut windowed_context) = Self::create_windowed_context(&settings).unwrap();
+        let (event_loop, windowed_context) = Self::create_windowed_context(&settings).unwrap();
 
         let initial_scene = scene_constructor(Context::new(
             windowed_context.window(),
@@ -48,23 +49,38 @@ impl Application {
             &settings,
         ));
 
+        let mut imgui = ImGui::new(windowed_context.window(), |s| {
+            windowed_context.get_proc_address(s)
+        });
+
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
+
+            imgui
+                .platform
+                .handle_event(imgui.context.io_mut(), windowed_context.window(), &event);
+
             match event {
                 Event::NewEvents(_) => {}
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..
                 } => *control_flow = ControlFlow::Exit,
-                Event::WindowEvent { event, .. } => scene_manager.handle_event(
-                    Context::new(
-                        windowed_context.window(),
-                        &mut asset_manager,
-                        &mut timer,
-                        &settings,
-                    ),
-                    event,
-                ),
+                Event::WindowEvent { event, .. } => {
+                    scene_manager.handle_event(
+                        Context::new(
+                            windowed_context.window(),
+                            &mut asset_manager,
+                            &mut timer,
+                            &settings,
+                        ),
+                        event,
+                    );
+
+                    if !scene_manager.is_running() {
+                        *control_flow = ControlFlow::Exit
+                    }
+                }
                 Event::DeviceEvent { .. } => {}
                 Event::UserEvent(_) => {}
                 Event::Suspended => scene_manager.pause(Context::new(
@@ -87,15 +103,31 @@ impl Application {
                         &settings,
                     ));
 
+                    imgui
+                        .platform
+                        .prepare_frame(imgui.context.io_mut(), windowed_context.window())
+                        .expect("Failed to prepare ImGui frame");
+
+                    windowed_context.window().request_redraw()
+                }
+                Event::RedrawRequested(_) => {
                     scene_manager.draw(Context::new(
                         windowed_context.window(),
                         &mut asset_manager,
                         &mut timer,
                         &settings,
                     ));
+
+                    // Let the active scene draw UI
+                    let ui = imgui.context.frame();
+                    scene_manager.gui(&ui);
+                    imgui
+                        .platform
+                        .prepare_render(&ui, windowed_context.window());
+                    imgui.renderer.render(ui);
+
                     windowed_context.swap_buffers().unwrap()
                 }
-                Event::RedrawRequested(_) => {}
                 Event::RedrawEventsCleared => {}
                 Event::LoopDestroyed => scene_manager.stop(Context::new(
                     windowed_context.window(),

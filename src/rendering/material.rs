@@ -1,4 +1,4 @@
-use crate::core::math::Vec4;
+use crate::core::math::{Vec3, Vec4};
 use crate::rendering::program_pipeline::ProgramPipeline;
 use crate::rendering::sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode};
 use crate::rendering::shader::{Shader, ShaderStage};
@@ -12,6 +12,8 @@ const M_R_AO_MAP_UNIFORM_NAME: &str = "m_r_aoMap";
 const NORMAL_MAP_UNIFORM_NAME: &str = "normalMap";
 const DISPLACEMENT_MAP_UNIFORM_NAME: &str = "displacementMap";
 const BRDF_LUT_MAP_UNIFORM_NAME: &str = "brdfLUT";
+const BASE_COLOR_UNIFORM_NAME: &str = "baseColor";
+const M_R_AO_SCALE_UNIFORM_NAME: &str = "m_r_aoScale";
 
 pub trait Material {
     fn bind(&self);
@@ -25,6 +27,10 @@ pub struct PbsMetallicRoughnessMaterial {
     pub normals: Rc<Texture2D>,
     pub displacement: Option<Rc<Texture2D>>,
     pub ibl_brdf_lut: Rc<Texture2D>,
+    pub base_color: Vec3,
+    pub metallic_scale: f32,
+    pub roughness_scale: f32,
+    pub ao_scale: f32,
     sampler: Sampler,
     program_pipeline: ProgramPipeline,
 }
@@ -86,6 +92,10 @@ impl PbsMetallicRoughnessMaterial {
             normals,
             displacement,
             ibl_brdf_lut,
+            base_color: Vec3::new(1.0, 1.0, 1.0),
+            metallic_scale: 1.0,
+            roughness_scale: 1.0,
+            ao_scale: 1.0,
             sampler,
             program_pipeline,
         }
@@ -123,6 +133,16 @@ impl Material for PbsMetallicRoughnessMaterial {
                 BRDF_LUT_MAP_UNIFORM_NAME,
                 &self.ibl_brdf_lut,
                 &self.sampler,
+                ShaderStage::Fragment,
+            )
+            .set_vector3f(
+                BASE_COLOR_UNIFORM_NAME,
+                &self.base_color,
+                ShaderStage::Fragment,
+            )
+            .set_vector3f(
+                M_R_AO_SCALE_UNIFORM_NAME,
+                &Vec3::new(self.metallic_scale, self.roughness_scale, self.ao_scale),
                 ShaderStage::Fragment,
             );
 

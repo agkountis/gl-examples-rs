@@ -1,5 +1,6 @@
 use crate::core::Context;
 use glutin::event::WindowEvent;
+use imgui::Ui;
 
 pub enum Transition {
     Push(Box<dyn Scene>),
@@ -22,6 +23,7 @@ pub trait Scene {
     }
     fn pre_draw(&mut self, context: Context) {}
     fn draw(&mut self, context: Context) {}
+    fn gui(&mut self, ui: &Ui) {}
     fn post_draw(&mut self, context: Context) {}
 }
 
@@ -115,6 +117,14 @@ impl SceneManager {
         if self.is_running {
             if let Some(scene) = self.scenes.last_mut() {
                 scene.draw(Context::new(window, asset_manager, timer, settings))
+            }
+        }
+    }
+
+    pub(crate) fn gui(&mut self, ui: &Ui) {
+        if self.is_running {
+            if let Some(scene) = self.scenes.last_mut() {
+                scene.gui(ui)
             }
         }
     }

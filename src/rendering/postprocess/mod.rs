@@ -6,6 +6,12 @@ pub mod bloom;
 pub trait PostprocessingEffect: AsAny + AsAnyMut {
     fn name(&self) -> &str;
 
+    fn enable(&mut self);
+
+    fn disable(&mut self);
+
+    fn enabled(&self) -> bool;
+
     fn apply(&self, input: &Framebuffer);
 }
 
@@ -25,6 +31,7 @@ impl PostprocessingStack {
     pub fn apply(&self, input: &Framebuffer) {
         self.post_effects
             .iter()
+            .filter(|&effect| effect.enabled())
             .for_each(|effect| effect.apply(&input));
     }
 

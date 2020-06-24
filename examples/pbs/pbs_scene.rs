@@ -5,6 +5,7 @@ use engine::rendering::postprocess::PostprocessingStackBuilder;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
+    imgui::*,
     math::{
         matrix::{perspective, rotate, Mat4},
         scale,
@@ -29,6 +30,7 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
+use std::ops::RangeInclusive;
 
 struct EnvironmentMaps {
     pub skybox: TextureCube,
@@ -46,7 +48,7 @@ pub struct PbsScene {
     model: Model,
     skybox_mesh: Mesh,
     fullscreen_mesh: FullscreenMesh,
-    material: Box<dyn Material>,
+    material: PbsMetallicRoughnessMaterial,
     environment_maps: EnvironmentMaps,
     skybox_program_pipeline: ProgramPipeline,
     horizontal_gaussian_pipeline: ProgramPipeline,
@@ -67,6 +69,10 @@ pub struct PbsScene {
     prev_x: f32,
     prev_y: f32,
     dt: f32,
+    light_color: [f32; 3],
+    light_intensity: f32,
+    exposure: f32,
+    cursor_over_ui: bool,
 }
 
 impl PbsScene {
@@ -288,14 +294,14 @@ impl PbsScene {
             500.0,
         );
 
-        let material = Box::new(PbsMetallicRoughnessMaterial::new(
+        let material = PbsMetallicRoughnessMaterial::new(
             asset_path,
             albedo.clone(),
             metallic_roughness_ao.clone(),
             normals.clone(),
             None,
             ibl_brdf_lut.clone(),
-        ));
+        );
 
         PbsScene {
             camera,
@@ -330,6 +336,10 @@ impl PbsScene {
             prev_x: 0.0,
             prev_y: 0.0,
             dt: 0.0,
+            light_color: [1.0, 1.0, 1.0],
+            light_intensity: 5.0,
+            exposure: 1.5,
+            cursor_over_ui: false,
         }
     }
 
@@ -341,6 +351,8 @@ impl PbsScene {
 
         let program_pipeline = self.material.program_pipeline();
 
+        let mut light_color: Vec3 = self.light_color.into();
+        light_color *= self.light_intensity;
         program_pipeline
             .set_texture_cube(
                 "irradianceMap",
@@ -359,11 +371,7 @@ impl PbsScene {
                 &Vec3::new(0.4, 0.0, -1.0),
                 ShaderStage::Fragment,
             )
-            .set_vector3f(
-                "lightColor",
-                &Vec3::new(5.0, 5.0, 5.0),
-                ShaderStage::Fragment,
-            )
+            .set_vector3f("lightColor", &light_color, ShaderStage::Fragment)
             .set_matrix4f("model", &self.model.transform, ShaderStage::Vertex)
             .set_matrix4f("view", &self.camera.get_transform(), ShaderStage::Vertex)
             .set_vector3f(
@@ -469,7 +477,6 @@ impl PbsScene {
 
         self.tonemapping_pipeline.bind();
 
-        let exposure: f32 = 1.5;
         self.tonemapping_pipeline
             .set_texture_2d_with_id(
                 "image",
@@ -483,7 +490,7 @@ impl PbsScene {
                 &self.sampler,
                 ShaderStage::Fragment,
             )
-            .set_float("exposure", exposure, ShaderStage::Fragment);
+            .set_float("exposure", self.exposure, ShaderStage::Fragment);
 
         StateManager::set_front_face(FrontFace::Clockwise);
         self.fullscreen_mesh.draw();
@@ -523,16 +530,12 @@ impl Scene for PbsScene {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
                 ..
-            } => {
-                println!("Mouse pressed");
-                self.left_mouse_button_pressed = true
-            }
+            } => self.left_mouse_button_pressed = true,
             WindowEvent::MouseInput {
                 state: ElementState::Released,
                 button: MouseButton::Left,
                 ..
             } => {
-                println!("Mouse released");
                 self.left_mouse_button_pressed = false;
 
                 self.mouse_x = 0.0;
@@ -541,7 +544,7 @@ impl Scene for PbsScene {
                 self.prev_y = 0.0;
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.left_mouse_button_pressed {
+                if self.left_mouse_button_pressed && !self.cursor_over_ui {
                     self.mouse_x = position.x as f32;
                     self.mouse_y = position.y as f32;
                 }
@@ -601,6 +604,7 @@ impl Scene for PbsScene {
         let Context { timer, .. } = context;
 
         self.dt = timer.get_delta();
+
         let mut dx = 0.0;
         let mut dy = 0.0;
 
@@ -627,6 +631,94 @@ impl Scene for PbsScene {
         self.bloom_pass();
         self.tonemap_pass();
         // self.post_stack.apply(&self.resolve_framebuffer)
+    }
+
+    fn gui(&mut self, ui: &Ui) {
+        imgui::Window::new(im_str!("Inspector"))
+            .size([300.0, 100.0], Condition::FirstUseEver)
+            .mouse_inputs(true)
+            .resizable(false)
+            .movable(false)
+            .build(ui, || {
+                ui.text(im_str!("Material"));
+                ui.separator();
+                ui.spacing();
+
+                ui.group(|| {
+                    ui.text(im_str!("Albedo Map"));
+                    imgui::Image::new(
+                        (self.material.albedo.get_id() as usize).into(),
+                        [128.0, 128.0],
+                    )
+                    .build(&ui);
+                    ui.spacing();
+
+                    let mut albedo_color: [f32; 3] = self.material.base_color.into();
+                    if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
+                        .format(ColorFormat::Float)
+                        .alpha(true)
+                        .hdr(false)
+                        .picker(true)
+                        .build(&ui)
+                    {
+                        self.material.base_color = albedo_color.into()
+                    }
+                });
+
+                ui.spacing();
+                ui.spacing();
+                ui.group(|| {
+                    ui.text(im_str!("Metallic/Roughness/Ao Map"));
+                    imgui::Image::new(
+                        (self.material.metallic_roughness_ao.get_id() as usize).into(),
+                        [128.0, 128.0],
+                    )
+                    .build(&ui);
+                    ui.spacing();
+                    imgui::Slider::new(im_str!("Metallic Scale"), RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.material.metallic_scale);
+                    imgui::Slider::new(im_str!("Roughness Scale"), RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.material.roughness_scale);
+                    imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.material.ao_scale);
+                });
+                ui.new_line();
+
+                ui.text(im_str!("Lighting"));
+                ui.separator();
+                ui.spacing();
+
+                imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
+                    .format(ColorFormat::Float)
+                    .picker(true)
+                    .alpha(false)
+                    .hdr(true)
+                    .build(&ui);
+                imgui::Slider::new(im_str!("Light Intensity"), RangeInclusive::new(0.0, 100.0))
+                    .display_format(im_str!("%.1f"))
+                    .build(&ui, &mut self.light_intensity);
+                ui.new_line();
+
+                ui.text(im_str!("Camera"));
+                ui.separator();
+                ui.spacing();
+                imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.1, 40.0))
+                    .display_format(im_str!("%.2f"))
+                    .build(&ui, &mut self.exposure);
+
+                ui.new_line();
+                ui.text(im_str!("Post-processing"));
+                ui.separator();
+                ui.spacing();
+
+                self.cursor_over_ui = ui.is_window_hovered()
+                    || ui.is_any_item_hovered()
+                    || ui.is_window_focused()
+                    || ui.is_any_item_focused();
+            });
     }
 
     fn post_draw(&mut self, _: Context) {}
