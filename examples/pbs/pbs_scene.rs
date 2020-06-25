@@ -86,7 +86,7 @@ impl PbsScene {
 
         let asset_path = settings.asset_path.as_path();
         let camera = Camera::new(
-            Vec3::new(0.0, 0.0, -40.0),
+            Vec3::new(0.0, 0.0, -60.0),
             Vec3::new(0.0, 0.0, 0.0),
             10.0,
             30.0,
@@ -373,12 +373,8 @@ impl PbsScene {
             )
             .set_vector3f("lightColor", &light_color, ShaderStage::Fragment)
             .set_matrix4f("model", &self.model.transform, ShaderStage::Vertex)
-            .set_matrix4f("view", &self.camera.get_transform(), ShaderStage::Vertex)
-            .set_vector3f(
-                "eyePosition",
-                &self.camera.get_position(),
-                ShaderStage::Vertex,
-            )
+            .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
+            .set_vector3f("eyePosition", &self.camera.position(), ShaderStage::Vertex)
             .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex);
 
         self.model.mesh.draw();
@@ -457,7 +453,7 @@ impl PbsScene {
 
         self.skybox_program_pipeline.set_matrix4f(
             "view",
-            &self.camera.get_transform(),
+            &self.camera.transform(),
             ShaderStage::Vertex,
         );
 
@@ -553,7 +549,9 @@ impl Scene for PbsScene {
                 delta: MouseScrollDelta::LineDelta(_, y),
                 ..
             } => {
-                self.scroll = y;
+                if !self.cursor_over_ui {
+                    self.scroll = y;
+                }
             }
             WindowEvent::KeyboardInput {
                 input:
@@ -635,89 +633,176 @@ impl Scene for PbsScene {
 
     fn gui(&mut self, ui: &Ui) {
         imgui::Window::new(im_str!("Inspector"))
-            .size([300.0, 100.0], Condition::FirstUseEver)
+            .size([358.0, 1079.0], Condition::Appearing)
+            .position([2.0, 0.0], Condition::Always)
             .mouse_inputs(true)
             .resizable(false)
             .movable(false)
+            .always_auto_resize(true)
             .build(ui, || {
-                ui.text(im_str!("Material"));
-                ui.separator();
-                ui.spacing();
+                ui.dummy([358.0, 0.0]);
 
-                ui.group(|| {
-                    ui.text(im_str!("Albedo Map"));
-                    imgui::Image::new(
-                        (self.material.albedo.get_id() as usize).into(),
-                        [128.0, 128.0],
-                    )
-                    .build(&ui);
+                // Material
+                if imgui::CollapsingHeader::new(im_str!("Material"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
                     ui.spacing();
+                    ui.group(|| {
+                        ui.group(|| {
+                            ui.text(im_str!("Albedo Map"));
+                            imgui::Image::new(
+                                (self.material.albedo.get_id() as usize).into(),
+                                [128.0, 128.0],
+                            )
+                            .build(&ui);
+                            ui.spacing();
 
-                    let mut albedo_color: [f32; 3] = self.material.base_color.into();
-                    if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
-                        .format(ColorFormat::Float)
-                        .alpha(true)
-                        .hdr(false)
-                        .picker(true)
-                        .build(&ui)
-                    {
-                        self.material.base_color = albedo_color.into()
-                    }
-                });
+                            let mut albedo_color: [f32; 3] = self.material.base_color.into();
+                            if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
+                                .format(ColorFormat::Float)
+                                .alpha(true)
+                                .hdr(false)
+                                .picker(true)
+                                .build(&ui)
+                            {
+                                self.material.base_color = albedo_color.into()
+                            }
+                        });
+                        ui.spacing();
+                        ui.spacing();
+                        ui.group(|| {
+                            ui.text(im_str!("Metallic/Roughness/Ao Map"));
+                            imgui::Image::new(
+                                (self.material.metallic_roughness_ao.get_id() as usize).into(),
+                                [128.0, 128.0],
+                            )
+                            .build(&ui);
+                            ui.spacing();
+                            imgui::Slider::new(
+                                im_str!("Metallic Scale"),
+                                RangeInclusive::new(0.0, 1.0),
+                            )
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut self.material.metallic_scale);
+                            imgui::Slider::new(
+                                im_str!("Roughness Scale"),
+                                RangeInclusive::new(0.0, 1.0),
+                            )
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut self.material.roughness_scale);
+                            imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
+                                .display_format(im_str!("%.2f"))
+                                .build(&ui, &mut self.material.ao_scale);
+                        });
+                        ui.new_line();
+                    });
+                }
 
-                ui.spacing();
-                ui.spacing();
-                ui.group(|| {
-                    ui.text(im_str!("Metallic/Roughness/Ao Map"));
-                    imgui::Image::new(
-                        (self.material.metallic_roughness_ao.get_id() as usize).into(),
-                        [128.0, 128.0],
-                    )
-                    .build(&ui);
+                // Lighting
+                if imgui::CollapsingHeader::new(im_str!("Lighting"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
                     ui.spacing();
-                    imgui::Slider::new(im_str!("Metallic Scale"), RangeInclusive::new(0.0, 1.0))
+                    ui.group(|| {
+                        // imgui::ComboBox::new("Light Color Presets")
+                        imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
+                            .format(ColorFormat::Float)
+                            .picker(true)
+                            .alpha(false)
+                            .hdr(true)
+                            .build(&ui);
+                        imgui::Slider::new(
+                            im_str!("Light Intensity"),
+                            RangeInclusive::new(0.0, 100.0),
+                        )
+                        .display_format(im_str!("%.1f"))
+                        .build(&ui, &mut self.light_intensity);
+                        ui.new_line();
+                    });
+                }
+
+                // Camera
+                if imgui::CollapsingHeader::new(im_str!("Camera"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    ui.spacing();
+                    ui.group(|| {
+                        imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.1, 40.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut self.exposure);
+                        ui.new_line();
+
+                        let mut orbit_speed = self.camera.orbit_speed();
+                        if imgui::Slider::new(
+                            im_str!("Orbit Speed"),
+                            RangeInclusive::new(1.0, 10.0),
+                        )
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.material.metallic_scale);
-                    imgui::Slider::new(im_str!("Roughness Scale"), RangeInclusive::new(0.0, 1.0))
+                        .build(&ui, &mut orbit_speed)
+                        {
+                            self.camera.set_orbit_speed(orbit_speed)
+                        }
+
+                        let mut orbit_dampening = self.camera.orbit_dampening();
+                        if imgui::Slider::new(
+                            im_str!("Orbit Dampening"),
+                            RangeInclusive::new(1.0, 10.0),
+                        )
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.material.roughness_scale);
-                    imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
+                        .build(&ui, &mut orbit_dampening)
+                        {
+                            self.camera.set_orbit_dampening(orbit_dampening)
+                        }
+
+                        let mut zoom_speed = self.camera.zoom_speed();
+                        if imgui::Slider::new(im_str!("Zoom Speed"), RangeInclusive::new(1.0, 40.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut zoom_speed)
+                        {
+                            self.camera.set_zoom_speed(zoom_speed)
+                        }
+
+                        let mut zoom_dampening = self.camera.zoom_dampening();
+                        if imgui::Slider::new(
+                            im_str!("Zoom Dampening"),
+                            RangeInclusive::new(0.1, 10.0),
+                        )
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.material.ao_scale);
-                });
-                ui.new_line();
+                        .build(&ui, &mut zoom_dampening)
+                        {
+                            self.camera.set_zoom_dampening(zoom_dampening)
+                        }
 
-                ui.text(im_str!("Lighting"));
-                ui.separator();
-                ui.spacing();
+                        ui.new_line();
+                    });
+                }
 
-                imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
-                    .format(ColorFormat::Float)
-                    .picker(true)
-                    .alpha(false)
-                    .hdr(true)
-                    .build(&ui);
-                imgui::Slider::new(im_str!("Light Intensity"), RangeInclusive::new(0.0, 100.0))
-                    .display_format(im_str!("%.1f"))
-                    .build(&ui, &mut self.light_intensity);
-                ui.new_line();
+                // Post processing
+                if imgui::CollapsingHeader::new(im_str!("Post-processing"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    ui.spacing();
+                    ui.group(|| {});
+                }
 
-                ui.text(im_str!("Camera"));
-                ui.separator();
-                ui.spacing();
-                imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.1, 40.0))
-                    .display_format(im_str!("%.2f"))
-                    .build(&ui, &mut self.exposure);
-
-                ui.new_line();
-                ui.text(im_str!("Post-processing"));
-                ui.separator();
-                ui.spacing();
-
+                ui.dummy([358.0, 0.0]);
                 self.cursor_over_ui = ui.is_window_hovered()
                     || ui.is_any_item_hovered()
                     || ui.is_window_focused()
-                    || ui.is_any_item_focused();
+                    || ui.is_any_item_focused()
+                    || ui.is_any_item_active();
             });
     }
 

@@ -353,12 +353,8 @@ impl PomScene {
                 ShaderStage::Fragment,
             )
             .set_matrix4f("model", &Mat4::identity(), ShaderStage::Vertex)
-            .set_matrix4f("view", &self.camera.get_transform(), ShaderStage::Vertex)
-            .set_vector3f(
-                "eyePosition",
-                &self.camera.get_position(),
-                ShaderStage::Vertex,
-            )
+            .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
+            .set_vector3f("eyePosition", &self.camera.position(), ShaderStage::Vertex)
             .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex)
             .set_integer(
                 "parallaxMappingMethod",
@@ -441,7 +437,7 @@ impl PomScene {
 
         self.skybox_program_pipeline.set_matrix4f(
             "view",
-            &self.camera.get_transform(),
+            &self.camera.transform(),
             ShaderStage::Vertex,
         );
 

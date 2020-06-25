@@ -51,12 +51,28 @@ impl Camera {
         }
     }
 
-    pub fn get_position(&self) -> &Vec3 {
+    pub fn position(&self) -> &Vec3 {
         &self.position
     }
 
-    pub fn get_transform(&self) -> &Mat4 {
+    pub fn transform(&self) -> &Mat4 {
         &self.transform
+    }
+
+    pub fn orbit_speed(&self) -> f32 {
+        self.orbit_speed
+    }
+
+    pub fn zoom_speed(&self) -> f32 {
+        self.zoom_speed
+    }
+
+    pub fn orbit_dampening(&self) -> f32 {
+        self.orbit_dampening
+    }
+
+    pub fn zoom_dampening(&self) -> f32 {
+        self.zoom_dampening
     }
 
     pub fn look_at(&mut self, position: Vec3, target: Vec3, up: Vec3) {
@@ -70,6 +86,22 @@ impl Camera {
     pub fn set_distance(&mut self, d: f32) {
         self.distance = d;
         self.prev_distance = self.distance;
+    }
+
+    pub fn set_orbit_speed(&mut self, orbit_speed: f32) {
+        self.orbit_speed = orbit_speed
+    }
+
+    pub fn set_zoom_speed(&mut self, zoom_speed: f32) {
+        self.zoom_speed = zoom_speed
+    }
+
+    pub fn set_orbit_dampening(&mut self, orbit_dampening: f32) {
+        self.orbit_dampening = orbit_dampening
+    }
+
+    pub fn set_zoom_dampening(&mut self, zoom_dampening: f32) {
+        self.zoom_dampening = zoom_dampening
     }
 
     pub fn update(&mut self, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
