@@ -73,6 +73,8 @@ pub struct PbsScene {
     light_intensity: f32,
     exposure: f32,
     cursor_over_ui: bool,
+    tone_mapping_operator: usize,
+    white_threshold: f32,
 }
 
 impl PbsScene {
@@ -340,6 +342,8 @@ impl PbsScene {
             light_intensity: 5.0,
             exposure: 1.5,
             cursor_over_ui: false,
+            tone_mapping_operator: 0,
+            white_threshold: 2.0,
         }
     }
 
@@ -486,7 +490,17 @@ impl PbsScene {
                 &self.sampler,
                 ShaderStage::Fragment,
             )
-            .set_float("exposure", self.exposure, ShaderStage::Fragment);
+            .set_integer(
+                "tonemappingOperator",
+                self.tone_mapping_operator as i32,
+                ShaderStage::Fragment,
+            )
+            .set_float("exposure", self.exposure, ShaderStage::Fragment)
+            .set_float(
+                "whiteThreshold",
+                self.white_threshold,
+                ShaderStage::Fragment,
+            );
 
         StateManager::set_front_face(FrontFace::Clockwise);
         self.fullscreen_mesh.draw();
@@ -697,7 +711,7 @@ impl Scene for PbsScene {
                                 .display_format(im_str!("%.2f"))
                                 .build(&ui, &mut self.material.ao_scale);
                         });
-                        ui.new_line();
+                        ui.new_line()
                     });
                 }
 
@@ -723,7 +737,7 @@ impl Scene for PbsScene {
                         )
                         .display_format(im_str!("%.1f"))
                         .build(&ui, &mut self.light_intensity);
-                        ui.new_line();
+                        ui.new_line()
                     });
                 }
 
@@ -736,11 +750,6 @@ impl Scene for PbsScene {
                 {
                     ui.spacing();
                     ui.group(|| {
-                        imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.1, 40.0))
-                            .display_format(im_str!("%.2f"))
-                            .build(&ui, &mut self.exposure);
-                        ui.new_line();
-
                         let mut orbit_speed = self.camera.orbit_speed();
                         if imgui::Slider::new(
                             im_str!("Orbit Speed"),
@@ -782,8 +791,45 @@ impl Scene for PbsScene {
                             self.camera.set_zoom_dampening(zoom_dampening)
                         }
 
-                        ui.new_line();
+                        ui.new_line()
                     });
+                }
+
+                // Tonemapping
+                if imgui::CollapsingHeader::new(im_str!("Tone Mapping"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    ui.spacing();
+                    imgui::ComboBox::new(im_str!("Operator")).build_simple_string(
+                        &ui,
+                        &mut self.tone_mapping_operator,
+                        &[
+                            im_str!("ACESFitted"),
+                            im_str!("ACESFilmic"),
+                            im_str!("Reinhard"),
+                            im_str!("Luma-Based Reinhard"),
+                            im_str!("White-Preserving Luma-Based Reinhard"),
+                            im_str!("Uncharted 2"),
+                            im_str!("RomBinDaHouse"),
+                        ],
+                    );
+
+                    if self.tone_mapping_operator == 4 {
+                        imgui::Slider::new(
+                            im_str!("White Threshold"),
+                            RangeInclusive::new(0.3, 30.0),
+                        )
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.white_threshold);
+                    }
+
+                    imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.05, 30.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.exposure);
+                    ui.new_line()
                 }
 
                 // Post processing
@@ -794,16 +840,23 @@ impl Scene for PbsScene {
                     .build(ui)
                 {
                     ui.spacing();
-                    ui.group(|| {});
+                    imgui::TreeNode::new(im_str!("Bloom"))
+                        .default_open(true)
+                        .open_on_arrow(true)
+                        .open_on_double_click(true)
+                        .framed(false)
+                        .build(&ui, || {});
                 }
 
                 ui.dummy([358.0, 0.0]);
-                self.cursor_over_ui = ui.is_window_hovered()
-                    || ui.is_any_item_hovered()
-                    || ui.is_window_focused()
-                    || ui.is_any_item_focused()
-                    || ui.is_any_item_active();
             });
+
+        self.cursor_over_ui = (ui.is_window_hovered()
+            || ui.is_any_item_hovered()
+            || ui.is_window_focused()
+            || ui.is_any_item_focused()
+            || ui.is_any_item_active())
+            && !ui.is_window_collapsed();
     }
 
     fn post_draw(&mut self, _: Context) {}

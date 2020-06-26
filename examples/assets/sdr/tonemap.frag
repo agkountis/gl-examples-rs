@@ -6,6 +6,8 @@
 layout(location = 0, binding = 0) uniform sampler2D image;
 layout(location = 1, binding = 1) uniform sampler2D bloomImage;
 layout(location = 2) uniform float exposure;
+layout(location = 3) uniform int tonemappingOperator;
+layout(location = 4) uniform float whiteThreshold;
 
 in VsOut {
     vec2 texcoord;
@@ -63,12 +65,70 @@ vec3 ACESFilm(vec3 x)
     return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
 }
 
+// https://www.shadertoy.com/view/lslGzl
+vec3 Reinhard(vec3 color)
+{
+    return color / (1.0 + color / exposure);
+}
+
+// https://www.shadertoy.com/view/lslGzl
+vec3 LumaBasedReinhard(vec3 color)
+{
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float toneMappedLuma = luma / (1.0 + luma);
+    color *= toneMappedLuma / luma;
+    return color;
+}
+
+// https://www.shadertoy.com/view/lslGzl
+vec3 WhitePreservingLumaBasedReinhard(vec3 color)
+{
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float toneMappedLuma = luma * (1. + luma / (whiteThreshold * whiteThreshold)) / (1.0 + luma);
+    color *= toneMappedLuma / luma;
+    return color;
+}
+
+// https://www.shadertoy.com/view/lslGzl
+vec3 Uncharted2(vec3 color)
+{
+    float A = 0.15;
+    float B = 0.50;
+    float C = 0.10;
+    float D = 0.20;
+    float E = 0.02;
+    float F = 0.30;
+    float W = 11.2;
+    color = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
+    float white = ((W * (A * W + C * B) + D * E) / (W * (A * W + B) + D * F)) - E / F;
+    color /= white;
+    return color;
+}
+
+// https://twitter.com/RomBinDaHouse/status/460354166788202496
+// https://www.shadertoy.com/view/lslGzl
+vec3 RomBinDaHouse(vec3 color)
+{
+    return exp(-1.0 / (2.72 * color + 0.15));
+}
+
 void main()
 {
     vec3 color = (texture(image, fsIn.texcoord).rgb + texture(bloomImage, fsIn.texcoord).rgb) * exposure;
-#ifdef ACES_FITTED
-    outColor = vec4(ACESFitted(color), 1.0);
-#else
-    outColor = vec4(ACESFilm(color), 1.0);
-#endif
+
+    if (tonemappingOperator == 0) {
+        outColor = vec4(ACESFitted(color), 1.0);
+    } else if (tonemappingOperator == 1) {
+        outColor = vec4(ACESFilm(color), 1.0);
+    } else if (tonemappingOperator == 2) {
+        outColor = vec4(Reinhard(color), 1.0);
+    } else if (tonemappingOperator == 3) {
+        outColor = vec4(LumaBasedReinhard(color), 1.0);
+    } else if (tonemappingOperator == 4) {
+        outColor = vec4(WhitePreservingLumaBasedReinhard(color), 1.0);
+    } else if (tonemappingOperator == 5) {
+        outColor = vec4(Uncharted2(color), 1.0);
+    } else {
+        outColor = vec4(RomBinDaHouse(color), 1.0);
+    }
 }

@@ -195,20 +195,24 @@ impl ProgramPipeline {
         self
     }
 
-    pub fn set_integer(&self, name: &str, value: i32, stage: ShaderStage) {
+    pub fn set_integer(&self, name: &str, value: i32, stage: ShaderStage) -> &Self {
         let (program_id, location) = self
             .get_shader_stage_id_and_resource_location(stage, gl::UNIFORM, name)
             .expect("Failed to get program id or uniform location");
 
         unsafe { gl::ProgramUniform1i(program_id, location, value) }
+
+        self
     }
 
-    pub fn set_float(&self, name: &str, value: f32, stage: ShaderStage) {
+    pub fn set_float(&self, name: &str, value: f32, stage: ShaderStage) -> &Self {
         let (program_id, location) = self
             .get_shader_stage_id_and_resource_location(stage, gl::UNIFORM, name)
             .expect("Failed to get program id or uniform location");
 
         unsafe { gl::ProgramUniform1f(program_id, location, value) }
+
+        self
     }
 
     pub fn bind(&self) {
