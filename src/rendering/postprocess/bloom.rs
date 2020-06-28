@@ -1,11 +1,17 @@
+use crate::imgui::{im_str, Gui, Ui};
 use crate::rendering::framebuffer::Framebuffer;
 use crate::rendering::postprocess::{AsAny, AsAnyMut, PostprocessingEffect};
 use crate::rendering::program_pipeline::ProgramPipeline;
 use crate::rendering::shader::{Shader, ShaderStage};
-use bitflags::_core::any::Any;
+use std::any::Any;
+use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 
 pub struct Bloom {
+    iterations: u32,
+    threshold: f32,
+    smooth_fade: f32,
+    intensity: f32,
     downsample_framebuffers: Vec<Framebuffer>,
     upsample_framebuffers: Vec<Framebuffer>,
     v_blur_program_pipeline: ProgramPipeline,
@@ -32,6 +38,37 @@ impl PostprocessingEffect for Bloom {
 
     fn apply(&self, input: &Framebuffer) {
         println!("Applying Bloom")
+    }
+}
+
+impl Gui for Bloom {
+    fn gui(&mut self, ui: &Ui) {
+        ui.group(|| {
+            if ui.checkbox(im_str!(""), &mut self.enabled) {
+                println!("Checkbox clicked")
+            }
+            ui.same_line(20.0);
+            imgui::TreeNode::new(im_str!("Bloom"))
+                .default_open(true)
+                .open_on_arrow(true)
+                .open_on_double_click(true)
+                .framed(false)
+                .build(&ui, || {
+                    ui.indent();
+                    imgui::Slider::new(im_str!("Iterations"), RangeInclusive::new(1, 16))
+                        .build(&ui, &mut self.iterations);
+                    imgui::Slider::new(im_str!("Threshold"), RangeInclusive::new(0.1, 16.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.threshold);
+                    imgui::Slider::new(im_str!("Smooth Fade"), RangeInclusive::new(0.1, 16.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.smooth_fade);
+                    imgui::Slider::new(im_str!("Intensity"), RangeInclusive::new(0.1, 16.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.intensity);
+                    ui.unindent()
+                });
+        });
     }
 }
 
@@ -133,6 +170,10 @@ impl BloomBuilder {
         };
 
         Bloom {
+            iterations: self.iterations,
+            threshold: self.threshold,
+            smooth_fade: self.smooth_fade,
+            intensity: self.intensity,
             downsample_framebuffers: vec![],
             upsample_framebuffers: vec![],
             v_blur_program_pipeline,
@@ -141,55 +182,3 @@ impl BloomBuilder {
         }
     }
 }
-
-pub struct Foo;
-
-impl PostprocessingEffect for Foo {
-    fn name(&self) -> &str {
-        "Foo"
-    }
-
-    fn enable(&mut self) {
-        unimplemented!()
-    }
-
-    fn disable(&mut self) {
-        unimplemented!()
-    }
-
-    fn enabled(&self) -> bool {
-        true
-    }
-
-    fn apply(&self, input: &Framebuffer) {
-        println!("Applying Foo")
-    }
-}
-
-impl_as_any!(Foo);
-
-pub struct Bla;
-
-impl PostprocessingEffect for Bla {
-    fn name(&self) -> &str {
-        "Bla"
-    }
-
-    fn enable(&mut self) {
-        unimplemented!()
-    }
-
-    fn disable(&mut self) {
-        unimplemented!()
-    }
-
-    fn enabled(&self) -> bool {
-        false
-    }
-
-    fn apply(&self, input: &Framebuffer) {
-        println!("Applying Bla!")
-    }
-}
-
-impl_as_any!(Bla);

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,

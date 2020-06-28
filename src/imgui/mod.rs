@@ -28,3 +28,7 @@ impl ImGui {
         }
     }
 }
+
+pub trait Gui {
+    fn gui(&mut self, ui: &Ui);
+}

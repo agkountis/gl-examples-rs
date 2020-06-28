@@ -1,12 +1,9 @@
 use crate::math::Vec3;
 
-#[derive(Debug)]
 #[repr(C)]
-struct DirectionalLight { //TODO: non physically accurate.
-    pub direction: Vec3,
-    pub diffuse: Vec3,
-    pub specular: Vec3,
-    pub ambient: Vec3
+#[derive(Debug)]
+pub enum Light {
+    Directional { direction: Vec3, temperature: u32 },
+    Point,
+    Spotlight,
 }
-
-

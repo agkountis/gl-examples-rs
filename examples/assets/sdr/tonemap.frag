@@ -39,14 +39,15 @@ vec3 RRTAndODTFit(vec3 v)
 }
 
 // Complex fit. Better for realistic rendering
+// Reference: https://github.com/TheRealMJP/BakingLab/blob/master/BakingLab/ACES.hlsl
 vec3 ACESFitted(vec3 color)
 {
-    color = ACESInputMat * color;
+    color = color * ACESInputMat;
 
     // Apply RRT and ODT
     color = RRTAndODTFit(color);
 
-    color = ACESOutputMat * color;
+    color = color * ACESOutputMat;
 
     // Clamp to [0, 1]
     color = clamp(color, 0.0, 1.0);
@@ -54,9 +55,15 @@ vec3 ACESFitted(vec3 color)
     return color;
 }
 
+
 //simple luminance fit. Oversaturates brights
+// Reference: https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 vec3 ACESFilm(vec3 x)
 {
+    // The input in the post has been pre-exposed.
+    // To get the original ACES curve we have to multiply by 0.6
+    // Reference: https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
+    x *= 0.6;
     float a = 2.51f;
     float b = 0.03f;
     float c = 2.43f;
@@ -65,13 +72,13 @@ vec3 ACESFilm(vec3 x)
     return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
 }
 
-// https://www.shadertoy.com/view/lslGzl
+// Reference: https://www.shadertoy.com/view/lslGzl
 vec3 Reinhard(vec3 color)
 {
     return color / (1.0 + color / exposure);
 }
 
-// https://www.shadertoy.com/view/lslGzl
+// Reference: https://www.shadertoy.com/view/lslGzl
 vec3 LumaBasedReinhard(vec3 color)
 {
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
@@ -80,7 +87,7 @@ vec3 LumaBasedReinhard(vec3 color)
     return color;
 }
 
-// https://www.shadertoy.com/view/lslGzl
+// Reference: https://www.shadertoy.com/view/lslGzl
 vec3 WhitePreservingLumaBasedReinhard(vec3 color)
 {
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
@@ -89,24 +96,26 @@ vec3 WhitePreservingLumaBasedReinhard(vec3 color)
     return color;
 }
 
-// https://www.shadertoy.com/view/lslGzl
+// Reference: https://www.shadertoy.com/view/lslGzl
+// Reference: https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting
+// Reference: https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting/53
 vec3 Uncharted2(vec3 color)
 {
-    float A = 0.15;
-    float B = 0.50;
-    float C = 0.10;
-    float D = 0.20;
-    float E = 0.02;
-    float F = 0.30;
-    float W = 11.2;
+    float A = 0.22; // Shoulder Strength
+    float B = 0.30; // Linear Strength
+    float C = 0.10; // Linear Angle
+    float D = 0.20; // Toe Strength
+    float E = 0.01; // Toe Numerator
+    float F = 0.30; // Toe Denominator
+    float W = 11.2; // Linear White Point
     color = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
     float white = ((W * (A * W + C * B) + D * E) / (W * (A * W + B) + D * F)) - E / F;
     color /= white;
     return color;
 }
 
-// https://twitter.com/RomBinDaHouse/status/460354166788202496
-// https://www.shadertoy.com/view/lslGzl
+// Reference: https://twitter.com/RomBinDaHouse/status/460354166788202496
+// Reference: https://www.shadertoy.com/view/lslGzl
 vec3 RomBinDaHouse(vec3 color)
 {
     return exp(-1.0 / (2.72 * color + 0.15));
@@ -128,7 +137,7 @@ void main()
         outColor = vec4(WhitePreservingLumaBasedReinhard(color), 1.0);
     } else if (tonemappingOperator == 5) {
         outColor = vec4(Uncharted2(color), 1.0);
-    } else {
+    } else if (tonemappingOperator == 6) {
         outColor = vec4(RomBinDaHouse(color), 1.0);
     }
 }

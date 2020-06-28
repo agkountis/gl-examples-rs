@@ -1,10 +1,14 @@
-use crate::core::math::{Vec3, Vec4};
-use crate::rendering::program_pipeline::ProgramPipeline;
-use crate::rendering::sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode};
-use crate::rendering::shader::{Shader, ShaderStage};
-use crate::rendering::texture::Texture2D;
-use std::path::Path;
-use std::rc::Rc;
+use crate::{
+    core::math::{Vec3, Vec4},
+    imgui::{im_str, ColorFormat, Gui, Ui},
+    rendering::{
+        program_pipeline::ProgramPipeline,
+        sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
+        shader::{Shader, ShaderStage},
+        texture::Texture2D,
+    },
+};
+use std::{ops::RangeInclusive, path::Path, rc::Rc};
 
 const ALBEDO_MAP_UNIFORM_NAME: &str = "albedoMap";
 // [Metalness (R), Roughness (G), AO (B)]
@@ -15,7 +19,7 @@ const BRDF_LUT_MAP_UNIFORM_NAME: &str = "brdfLUT";
 const BASE_COLOR_UNIFORM_NAME: &str = "baseColor";
 const M_R_AO_SCALE_UNIFORM_NAME: &str = "m_r_aoScale";
 
-pub trait Material {
+pub trait Material: Gui {
     fn bind(&self);
     fn unbind(&self);
     fn program_pipeline(&self) -> &ProgramPipeline;
@@ -162,5 +166,58 @@ impl Material for PbsMetallicRoughnessMaterial {
 
     fn program_pipeline(&self) -> &ProgramPipeline {
         &self.program_pipeline
+    }
+}
+
+impl Gui for PbsMetallicRoughnessMaterial {
+    fn gui(&mut self, ui: &Ui) {
+        if imgui::CollapsingHeader::new(im_str!("Material"))
+            .default_open(true)
+            .open_on_arrow(true)
+            .open_on_double_click(true)
+            .build(ui)
+        {
+            ui.spacing();
+            ui.group(|| {
+                ui.group(|| {
+                    ui.text(im_str!("Albedo Map"));
+                    imgui::Image::new((self.albedo.get_id() as usize).into(), [128.0, 128.0])
+                        .build(&ui);
+                    ui.spacing();
+
+                    let mut albedo_color: [f32; 3] = self.base_color.into();
+                    if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
+                        .format(ColorFormat::Float)
+                        .alpha(true)
+                        .hdr(false)
+                        .picker(true)
+                        .build(&ui)
+                    {
+                        self.base_color = albedo_color.into()
+                    }
+                });
+                ui.spacing();
+                ui.spacing();
+                ui.group(|| {
+                    ui.text(im_str!("Metallic/Roughness/Ao Map"));
+                    imgui::Image::new(
+                        (self.metallic_roughness_ao.get_id() as usize).into(),
+                        [128.0, 128.0],
+                    )
+                    .build(&ui);
+                    ui.spacing();
+                    imgui::Slider::new(im_str!("Metallic Scale"), RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.metallic_scale);
+                    imgui::Slider::new(im_str!("Roughness Scale"), RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.roughness_scale);
+                    imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.ao_scale);
+                });
+                ui.new_line()
+            });
+        }
     }
 }

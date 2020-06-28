@@ -32,3 +32,16 @@ pub mod capabilities {
         shader::check_spirv_support()
     }
 }
+
+pub mod color {
+    use crate::core::math::{Vec3, Vec4};
+    use nalgebra_glm::pow;
+
+    pub fn srgb_to_linear4f(color: &Vec4) -> Vec4 {
+        pow(&color, &Vec4::new(2.2, 2.2, 2.2, 2.2))
+    }
+
+    pub fn srgb_to_linear3f(color: &Vec3) -> Vec3 {
+        pow(&color, &Vec3::new(2.2, 2.2, 2.2))
+    }
+}

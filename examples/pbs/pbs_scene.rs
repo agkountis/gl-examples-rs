@@ -1,6 +1,8 @@
 use std::rc::Rc;
 
-use engine::rendering::postprocess::bloom::{Bla, BloomBuilder, Foo};
+use engine::color::srgb_to_linear3f;
+use engine::postprocess::PostprocessingEffect;
+use engine::rendering::postprocess::bloom::BloomBuilder;
 use engine::rendering::postprocess::PostprocessingStackBuilder;
 use engine::{
     application::clear_default_framebuffer,
@@ -266,8 +268,6 @@ impl PbsScene {
 
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(BloomBuilder::new(asset_path).build())
-            .with_effect(Foo)
-            .with_effect(Bla)
             .build();
 
         let sampler = Sampler::new(
@@ -339,7 +339,7 @@ impl PbsScene {
             prev_y: 0.0,
             dt: 0.0,
             light_color: [1.0, 1.0, 1.0],
-            light_intensity: 5.0,
+            light_intensity: 15.0,
             exposure: 1.5,
             cursor_over_ui: false,
             tone_mapping_operator: 0,
@@ -355,7 +355,7 @@ impl PbsScene {
 
         let program_pipeline = self.material.program_pipeline();
 
-        let mut light_color: Vec3 = self.light_color.into();
+        let mut light_color: Vec3 = srgb_to_linear3f(&self.light_color.into());
         light_color *= self.light_intensity;
         program_pipeline
             .set_texture_cube(
@@ -657,63 +657,7 @@ impl Scene for PbsScene {
                 ui.dummy([358.0, 0.0]);
 
                 // Material
-                if imgui::CollapsingHeader::new(im_str!("Material"))
-                    .default_open(true)
-                    .open_on_arrow(true)
-                    .open_on_double_click(true)
-                    .build(ui)
-                {
-                    ui.spacing();
-                    ui.group(|| {
-                        ui.group(|| {
-                            ui.text(im_str!("Albedo Map"));
-                            imgui::Image::new(
-                                (self.material.albedo.get_id() as usize).into(),
-                                [128.0, 128.0],
-                            )
-                            .build(&ui);
-                            ui.spacing();
-
-                            let mut albedo_color: [f32; 3] = self.material.base_color.into();
-                            if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
-                                .format(ColorFormat::Float)
-                                .alpha(true)
-                                .hdr(false)
-                                .picker(true)
-                                .build(&ui)
-                            {
-                                self.material.base_color = albedo_color.into()
-                            }
-                        });
-                        ui.spacing();
-                        ui.spacing();
-                        ui.group(|| {
-                            ui.text(im_str!("Metallic/Roughness/Ao Map"));
-                            imgui::Image::new(
-                                (self.material.metallic_roughness_ao.get_id() as usize).into(),
-                                [128.0, 128.0],
-                            )
-                            .build(&ui);
-                            ui.spacing();
-                            imgui::Slider::new(
-                                im_str!("Metallic Scale"),
-                                RangeInclusive::new(0.0, 1.0),
-                            )
-                            .display_format(im_str!("%.2f"))
-                            .build(&ui, &mut self.material.metallic_scale);
-                            imgui::Slider::new(
-                                im_str!("Roughness Scale"),
-                                RangeInclusive::new(0.0, 1.0),
-                            )
-                            .display_format(im_str!("%.2f"))
-                            .build(&ui, &mut self.material.roughness_scale);
-                            imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
-                                .display_format(im_str!("%.2f"))
-                                .build(&ui, &mut self.material.ao_scale);
-                        });
-                        ui.new_line()
-                    });
-                }
+                self.material.gui(ui);
 
                 // Lighting
                 if imgui::CollapsingHeader::new(im_str!("Lighting"))
@@ -727,13 +671,13 @@ impl Scene for PbsScene {
                         // imgui::ComboBox::new("Light Color Presets")
                         imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
                             .format(ColorFormat::Float)
+                            .options(true)
                             .picker(true)
                             .alpha(false)
-                            .hdr(true)
                             .build(&ui);
                         imgui::Slider::new(
                             im_str!("Light Intensity"),
-                            RangeInclusive::new(0.0, 100.0),
+                            RangeInclusive::new(0.01, 300.0),
                         )
                         .display_format(im_str!("%.1f"))
                         .build(&ui, &mut self.light_intensity);
@@ -833,20 +777,7 @@ impl Scene for PbsScene {
                 }
 
                 // Post processing
-                if imgui::CollapsingHeader::new(im_str!("Post-processing"))
-                    .default_open(true)
-                    .open_on_arrow(true)
-                    .open_on_double_click(true)
-                    .build(ui)
-                {
-                    ui.spacing();
-                    imgui::TreeNode::new(im_str!("Bloom"))
-                        .default_open(true)
-                        .open_on_arrow(true)
-                        .open_on_double_click(true)
-                        .framed(false)
-                        .build(&ui, || {});
-                }
+                self.post_stack.gui(ui);
 
                 ui.dummy([358.0, 0.0]);
             });
