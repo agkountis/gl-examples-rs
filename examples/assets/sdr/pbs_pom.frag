@@ -26,7 +26,12 @@ layout(location = 6, binding = 6) uniform samplerCube radianceMap;
 
 layout(location = 7) uniform vec3 wLightDirection;
 layout(location = 8) uniform vec3 lightColor;
-layout(location = 9) uniform int parallaxMappingMethod;
+
+layout(location = 9) uniform vec3 baseColor;
+layout(location = 10) uniform vec3 m_r_aoScale;
+
+layout(location = 11) uniform vec3 pomParameters;
+layout(location = 12) uniform int parallaxMappingMethod;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outBloomBrightColor;
@@ -129,7 +134,7 @@ vec3 SampleNormalMap(sampler2D normalMap, vec2 texcoords, float strength)
 // Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
 vec2 ParallaxMapping(vec2 texcoords, vec3 viewDirection)
 {
-    const float dispalcementScale = 0.018;
+    const float dispalcementScale = pomParameters.z;
     float displacement = texture(displacementMap, texcoords).r;
 
     // the amount to shift the texture coordinates per layer (from vector P)
@@ -141,7 +146,7 @@ vec2 ParallaxMapping(vec2 texcoords, vec3 viewDirection)
 // Reference: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
 vec2 ParallaxMappingOffsetLimiting(vec2 texcoords, vec3 viewDirection)
 {
-    const float depthScale = 0.018;
+    const float depthScale = pomParameters.z;
     float depth = texture(displacementMap, texcoords).r;
 
     // the amount to shift the texture coordinates per layer (from vector P)
@@ -154,9 +159,9 @@ vec2 ParallaxMappingOffsetLimiting(vec2 texcoords, vec3 viewDirection)
 vec2 SteepParallaxMapping(vec2 texcoords, vec3 viewDirection)
 {
     // number of depth layers
-    const float minLayers = 8;
-    const float maxLayers = 32;
-    const float depthScale = 0.018;
+    float minLayers = pomParameters.x;
+    float maxLayers = pomParameters.y;
+    float displacementScale = pomParameters.z;
 
     // Calculate how many layers to use based on the angle of the Z axis in tangent space (points upwards)
     // and the view vector.
@@ -169,7 +174,7 @@ vec2 SteepParallaxMapping(vec2 texcoords, vec3 viewDirection)
     float currentLayerDepth = 0.0;
 
     // the amount to shift the texture coordinates per layer (from vector P)
-    vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * depthScale;
+    vec2 P = viewDirection.xy / max(viewDirection.z, EPSILON) * displacementScale;
     vec2 deltaTexCoords = P / numLayers;
 
     vec2 currentTexCoords = texcoords;
@@ -192,9 +197,9 @@ vec2 SteepParallaxMapping(vec2 texcoords, vec3 viewDirection)
 vec2 ParallaxOcclusionMapping(vec2 texcoords, vec3 viewDirection)
 {
     // number of depth layers
-    const float minLayers = 8;
-    const float maxLayers = 32;
-    const float displacementScale = 0.018;
+    float minLayers = pomParameters.x;
+    float maxLayers = pomParameters.y;
+    float displacementScale = pomParameters.z;
 
     // Calculate how many layers to use based on the angle of the Z axis in tangent space (points upwards)
     // and the view vector.
@@ -271,11 +276,11 @@ void main()
     float NdotL = clamp(dot(n, l), 0.0, 1.0);
     float HdotV = clamp(dot(h, v), 0.0, 1.0);
 
-    vec4 albedo = texture(albedoMap, texcoord);
+    vec4 albedo = texture(albedoMap, texcoord) * vec4(baseColor, 1.0);
     vec3 m_r_ao = texture(m_r_aoMap, texcoord).rgb;
-    float metallic = m_r_ao.r;
-    float roughness = m_r_ao.g;
-    float ao = m_r_ao.b;
+    float metallic = m_r_ao.r * m_r_aoScale.x;
+    float roughness = m_r_ao.g * m_r_aoScale.y;
+    float ao = m_r_ao.b * m_r_aoScale.z;
 
     vec3 irradiance = texture(irradianceMap, n).rgb;
     vec3 radiance = textureLod(radianceMap, r, roughness * MAX_REFLECTION_LOD).rgb;

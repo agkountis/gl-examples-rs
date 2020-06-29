@@ -44,9 +44,7 @@ impl PostprocessingEffect for Bloom {
 impl Gui for Bloom {
     fn gui(&mut self, ui: &Ui) {
         ui.group(|| {
-            if ui.checkbox(im_str!(""), &mut self.enabled) {
-                println!("Checkbox clicked")
-            }
+            ui.checkbox(im_str!("##bloom"), &mut self.enabled);
             ui.same_line(20.0);
             imgui::TreeNode::new(im_str!("Bloom"))
                 .default_open(true)

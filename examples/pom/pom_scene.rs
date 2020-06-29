@@ -1,3 +1,8 @@
+use engine::color::srgb_to_linear3f;
+use engine::imgui::Gui;
+use engine::postprocess::bloom::BloomBuilder;
+use engine::postprocess::PostprocessingStackBuilder;
+use engine::rendering::postprocess::PostprocessingStack;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
@@ -23,21 +28,13 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
+use imgui::{im_str, ColorFormat, Condition, Ui};
+use std::ops::RangeInclusive;
 
 struct EnvironmentMaps {
     pub skybox: TextureCube,
     pub irradiance: TextureCube,
     pub radiance: TextureCube,
-}
-
-#[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum ParallaxMappingMethod {
-    None = 0,
-    ParallaxMapping = 1,
-    ParallaxMappingOffsetLimiting = 2,
-    SteepParallaxMapping = 3,
-    ParallaxOcclusionMapping = 4,
 }
 
 pub struct PomScene {
@@ -56,6 +53,7 @@ pub struct PomScene {
     sampler: Sampler,
     sampler_nearest: Sampler,
     projection_matrix: Mat4,
+    post_stack: PostprocessingStack,
     left_mouse_button_pressed: bool,
     mouse_x: f32,
     mouse_y: f32,
@@ -64,7 +62,12 @@ pub struct PomScene {
     prev_x: f32,
     prev_y: f32,
     dt: f32,
-    parallax_mapping_method: ParallaxMappingMethod,
+    light_color: [f32; 3],
+    light_intensity: f32,
+    exposure: f32,
+    cursor_over_ui: bool,
+    tone_mapping_operator: usize,
+    white_threshold: f32,
 }
 
 impl PomScene {
@@ -252,6 +255,10 @@ impl PomScene {
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
         ];
 
+        let post_stack = PostprocessingStackBuilder::new()
+            .with_effect(BloomBuilder::new(asset_path).build())
+            .build();
+
         let sampler = Sampler::new(
             MinificationFilter::LinearMipmapLinear,
             MagnificationFilter::Linear,
@@ -307,6 +314,7 @@ impl PomScene {
             sampler,
             sampler_nearest,
             projection_matrix: projection,
+            post_stack,
             left_mouse_button_pressed: false,
             mouse_x: 0.0,
             mouse_y: 0.0,
@@ -315,7 +323,12 @@ impl PomScene {
             prev_x: 0.0,
             prev_y: 0.0,
             dt: 0.0,
-            parallax_mapping_method: ParallaxMappingMethod::ParallaxOcclusionMapping,
+            light_color: [1.0, 1.0, 1.0],
+            light_intensity: 6.0,
+            exposure: 1.5,
+            cursor_over_ui: false,
+            tone_mapping_operator: 0,
+            white_threshold: 2.0,
         }
     }
 
@@ -327,6 +340,8 @@ impl PomScene {
 
         let program_pipeline = self.material.program_pipeline();
 
+        let mut light_color: Vec3 = srgb_to_linear3f(&self.light_color.into());
+        light_color *= self.light_intensity;
         program_pipeline
             .set_texture_cube(
                 "irradianceMap",
@@ -345,20 +360,11 @@ impl PomScene {
                 &Vec3::new(0.4, 0.0, -1.0),
                 ShaderStage::Fragment,
             )
-            .set_vector3f(
-                "lightColor",
-                &Vec3::new(1.0, 1.0, 1.0),
-                ShaderStage::Fragment,
-            )
+            .set_vector3f("lightColor", &light_color, ShaderStage::Fragment)
             .set_matrix4f("model", &Mat4::identity(), ShaderStage::Vertex)
             .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
             .set_vector3f("eyePosition", &self.camera.position(), ShaderStage::Vertex)
-            .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex)
-            .set_integer(
-                "parallaxMappingMethod",
-                self.parallax_mapping_method as i32,
-                ShaderStage::Fragment,
-            );
+            .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex);
 
         self.cube_mesh.draw();
 
@@ -453,7 +459,6 @@ impl PomScene {
 
         self.tonemapping_pipeline.bind();
 
-        let exposure: f32 = 1.5;
         self.tonemapping_pipeline
             .set_texture_2d_with_id(
                 "image",
@@ -467,7 +472,17 @@ impl PomScene {
                 &self.sampler,
                 ShaderStage::Fragment,
             )
-            .set_float("exposure", exposure, ShaderStage::Fragment);
+            .set_integer(
+                "tonemappingOperator",
+                self.tone_mapping_operator as i32,
+                ShaderStage::Fragment,
+            )
+            .set_float("exposure", self.exposure, ShaderStage::Fragment)
+            .set_float(
+                "whiteThreshold",
+                self.white_threshold,
+                ShaderStage::Fragment,
+            );
 
         StateManager::set_front_face(FrontFace::Clockwise);
         self.fullscreen_mesh.draw();
@@ -521,7 +536,7 @@ impl Scene for PomScene {
                 self.prev_y = 0.0;
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.left_mouse_button_pressed {
+                if self.left_mouse_button_pressed && !self.cursor_over_ui {
                     self.mouse_x = position.x as f32;
                     self.mouse_y = position.y as f32;
                 }
@@ -530,7 +545,9 @@ impl Scene for PomScene {
                 delta: MouseScrollDelta::LineDelta(_, y),
                 ..
             } => {
-                self.scroll = y;
+                if !self.cursor_over_ui {
+                    self.scroll = y;
+                }
             }
             WindowEvent::KeyboardInput {
                 input:
@@ -541,53 +558,6 @@ impl Scene for PomScene {
                     },
                 ..
             } => return Transition::Quit,
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Released,
-                        virtual_keycode: Some(VirtualKeyCode::Key1),
-                        ..
-                    },
-                ..
-            } => self.parallax_mapping_method = ParallaxMappingMethod::None,
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Released,
-                        virtual_keycode: Some(VirtualKeyCode::Key2),
-                        ..
-                    },
-                ..
-            } => self.parallax_mapping_method = ParallaxMappingMethod::ParallaxMapping,
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Released,
-                        virtual_keycode: Some(VirtualKeyCode::Key3),
-                        ..
-                    },
-                ..
-            } => {
-                self.parallax_mapping_method = ParallaxMappingMethod::ParallaxMappingOffsetLimiting
-            }
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Released,
-                        virtual_keycode: Some(VirtualKeyCode::Key4),
-                        ..
-                    },
-                ..
-            } => self.parallax_mapping_method = ParallaxMappingMethod::SteepParallaxMapping,
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Released,
-                        virtual_keycode: Some(VirtualKeyCode::Key5),
-                        ..
-                    },
-                ..
-            } => self.parallax_mapping_method = ParallaxMappingMethod::ParallaxOcclusionMapping,
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -653,6 +623,151 @@ impl Scene for PomScene {
         self.bloom_pass();
         self.skybox_pass();
         self.tonemap_pass();
+    }
+
+    fn gui(&mut self, ui: &Ui) {
+        imgui::Window::new(im_str!("Inspector"))
+            .size([358.0, 1079.0], Condition::Appearing)
+            .position([2.0, 0.0], Condition::Always)
+            .mouse_inputs(true)
+            .resizable(false)
+            .movable(false)
+            .always_auto_resize(true)
+            .build(ui, || {
+                ui.dummy([358.0, 0.0]);
+
+                // Material
+                self.material.gui(ui);
+
+                // Lighting
+                if imgui::CollapsingHeader::new(im_str!("Lighting"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    ui.spacing();
+                    ui.group(|| {
+                        // imgui::ComboBox::new("Light Color Presets")
+                        imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
+                            .format(ColorFormat::Float)
+                            .options(true)
+                            .picker(true)
+                            .alpha(false)
+                            .build(&ui);
+                        imgui::Slider::new(
+                            im_str!("Light Intensity"),
+                            RangeInclusive::new(0.01, 300.0),
+                        )
+                        .display_format(im_str!("%.1f"))
+                        .build(&ui, &mut self.light_intensity);
+                        ui.new_line()
+                    });
+                }
+
+                // Camera
+                if imgui::CollapsingHeader::new(im_str!("Camera"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    ui.spacing();
+                    ui.group(|| {
+                        let mut orbit_speed = self.camera.orbit_speed();
+                        if imgui::Slider::new(
+                            im_str!("Orbit Speed"),
+                            RangeInclusive::new(1.0, 10.0),
+                        )
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut orbit_speed)
+                        {
+                            self.camera.set_orbit_speed(orbit_speed)
+                        }
+
+                        let mut orbit_dampening = self.camera.orbit_dampening();
+                        if imgui::Slider::new(
+                            im_str!("Orbit Dampening"),
+                            RangeInclusive::new(1.0, 10.0),
+                        )
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut orbit_dampening)
+                        {
+                            self.camera.set_orbit_dampening(orbit_dampening)
+                        }
+
+                        let mut zoom_speed = self.camera.zoom_speed();
+                        if imgui::Slider::new(im_str!("Zoom Speed"), RangeInclusive::new(1.0, 40.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut zoom_speed)
+                        {
+                            self.camera.set_zoom_speed(zoom_speed)
+                        }
+
+                        let mut zoom_dampening = self.camera.zoom_dampening();
+                        if imgui::Slider::new(
+                            im_str!("Zoom Dampening"),
+                            RangeInclusive::new(0.1, 10.0),
+                        )
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut zoom_dampening)
+                        {
+                            self.camera.set_zoom_dampening(zoom_dampening)
+                        }
+
+                        ui.new_line()
+                    });
+                }
+
+                // Tonemapping
+                if imgui::CollapsingHeader::new(im_str!("Tone Mapping"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    ui.spacing();
+                    imgui::ComboBox::new(im_str!("Operator")).build_simple_string(
+                        &ui,
+                        &mut self.tone_mapping_operator,
+                        &[
+                            im_str!("ACESFitted"),
+                            im_str!("ACESFilmic"),
+                            im_str!("Reinhard"),
+                            im_str!("Luma-Based Reinhard"),
+                            im_str!("White-Preserving Luma-Based Reinhard"),
+                            im_str!("Uncharted 2"),
+                            im_str!("RomBinDaHouse"),
+                        ],
+                    );
+
+                    if self.tone_mapping_operator == 4 {
+                        imgui::Slider::new(
+                            im_str!("White Threshold"),
+                            RangeInclusive::new(0.3, 30.0),
+                        )
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.white_threshold);
+                    }
+
+                    imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.05, 30.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.exposure);
+                    ui.new_line()
+                }
+
+                // Post processing
+                self.post_stack.gui(ui);
+
+                ui.dummy([358.0, 0.0]);
+                self.cursor_over_ui = ui.is_window_focused() || ui.is_window_hovered();
+            });
+
+        self.cursor_over_ui = (self.cursor_over_ui
+            || ui.is_any_item_hovered()
+            || ui.is_any_item_focused()
+            || ui.is_any_item_active())
+            && !ui.is_window_collapsed();
     }
 
     fn post_draw(&mut self, _: Context) {}

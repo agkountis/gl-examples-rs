@@ -1,23 +1,22 @@
-use std::rc::Rc;
+use std::{ops::RangeInclusive, rc::Rc};
 
-use engine::color::srgb_to_linear3f;
-use engine::postprocess::PostprocessingEffect;
-use engine::rendering::postprocess::bloom::BloomBuilder;
-use engine::rendering::postprocess::PostprocessingStackBuilder;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
+    color::srgb_to_linear3f,
     imgui::*,
     math::{
-        matrix::{perspective, rotate, Mat4},
-        scale,
+        matrix::{perspective, Mat4},
         vector::{UVec2, Vec3, Vec4},
     },
     rendering::{
         framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
         material::{Material, PbsMetallicRoughnessMaterial},
         mesh::{FullscreenMesh, Mesh, MeshUtilities},
-        postprocess::{bloom::Bloom, PostprocessingStack},
+        postprocess::{
+            bloom::{Bloom, BloomBuilder},
+            PostprocessingEffect, PostprocessingStack, PostprocessingStackBuilder,
+        },
         program_pipeline::ProgramPipeline,
         sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
@@ -32,7 +31,6 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
-use std::ops::RangeInclusive;
 
 struct EnvironmentMaps {
     pub skybox: TextureCube,
@@ -339,7 +337,7 @@ impl PbsScene {
             prev_y: 0.0,
             dt: 0.0,
             light_color: [1.0, 1.0, 1.0],
-            light_intensity: 15.0,
+            light_intensity: 5.0,
             exposure: 1.5,
             cursor_over_ui: false,
             tone_mapping_operator: 0,
@@ -780,14 +778,15 @@ impl Scene for PbsScene {
                 self.post_stack.gui(ui);
 
                 ui.dummy([358.0, 0.0]);
+                self.cursor_over_ui = ui.is_window_focused() || ui.is_window_hovered();
             });
 
-        self.cursor_over_ui = (ui.is_window_hovered()
+        self.cursor_over_ui = (self.cursor_over_ui
             || ui.is_any_item_hovered()
-            || ui.is_window_focused()
             || ui.is_any_item_focused()
             || ui.is_any_item_active())
             && !ui.is_window_collapsed();
+        println!("over ui: {}", self.cursor_over_ui);
     }
 
     fn post_draw(&mut self, _: Context) {}

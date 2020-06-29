@@ -62,7 +62,7 @@ impl PostprocessingStack {
 
 impl Gui for PostprocessingStack {
     fn gui(&mut self, ui: &Ui) {
-        ui.checkbox(im_str!(""), &mut self.enabled);
+        ui.checkbox(im_str!("##post_stack"), &mut self.enabled);
         ui.same_line_with_spacing(30.0, 3.0);
 
         if imgui::CollapsingHeader::new(im_str!("Post-processing"))
