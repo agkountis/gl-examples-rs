@@ -786,7 +786,6 @@ impl Scene for PbsScene {
             || ui.is_any_item_focused()
             || ui.is_any_item_active())
             && !ui.is_window_collapsed();
-        println!("over ui: {}", self.cursor_over_ui);
     }
 
     fn post_draw(&mut self, _: Context) {}
