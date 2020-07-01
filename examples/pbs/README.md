@@ -2,14 +2,12 @@
 An example of physically based shading, image based lighting and hdr rendering.
 
 # Features
-* [x] Physically based BRDF (Cook-Torrance)
-* [x] Image Based Lighting
-* [x] HDR rendering
-* [x] ACES Tonemapping
-* [x] Bloom
-* [ ] Antialiasing
-* [ ] SSAO
-* [ ] SSR
+* Physically based BRDF (Cook-Torrance)
+* Image Based Lighting
+* HDR rendering
+* Tonemapping
+* Bloom
+* Antialiasing (MSAA)
 
 # Controls
 Use the following controls to manipulate the camera view.
