@@ -5,7 +5,7 @@ out gl_PerVertex {
     vec4 gl_Position;
 };
 
-out VsOut {
+layout(location = 0) out VsOut {
     vec2 texcoord;
 } vsOut;
 

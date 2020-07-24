@@ -4,12 +4,11 @@
 #define ACES_FITTED
 
 layout(location = 0, binding = 0) uniform sampler2D image;
-layout(location = 1, binding = 1) uniform sampler2D bloomImage;
 layout(location = 2) uniform float exposure;
 layout(location = 3) uniform int tonemappingOperator;
 layout(location = 4) uniform float whiteThreshold;
 
-in VsOut {
+layout(location = 0) in VsOut {
     vec2 texcoord;
 } fsIn;
 
@@ -123,7 +122,7 @@ vec3 RomBinDaHouse(vec3 color)
 
 void main()
 {
-    vec3 color = (texture(image, fsIn.texcoord).rgb + texture(bloomImage, fsIn.texcoord).rgb) * exposure;
+    vec3 color = texture(image, fsIn.texcoord).rgb * exposure;
 
     if (tonemappingOperator == 0) {
         outColor = vec4(ACESFitted(color), 1.0);

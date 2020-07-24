@@ -25,7 +25,7 @@ out gl_PerVertex {
 //layout(location = 1) out vec3 t_OutViewDirection;
 //layout(location = 2) out vec2 outTexcoord;
 
-out VsOut {
+layout(location = 0) out VsOut {
     vec3 tLightDirection;
     vec3 tViewDirection;
     vec2 texcoord;

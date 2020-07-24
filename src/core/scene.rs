@@ -29,7 +29,6 @@ pub trait Scene {
 
 pub struct SceneManager {
     scenes: Vec<Box<dyn Scene>>,
-    active_scene_index: usize,
     is_running: bool,
 }
 
@@ -37,7 +36,6 @@ impl SceneManager {
     pub(crate) fn new<S: Scene + 'static>(initial_scene: S) -> SceneManager {
         Self {
             scenes: vec![Box::new(initial_scene)],
-            active_scene_index: 0,
             is_running: false,
         }
     }
@@ -52,20 +50,22 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if self.is_running {
             let transition = match self.scenes.last_mut() {
-                Some(scene) => {
-                    scene.handle_event(Context::new(window, asset_manager, timer, settings), event)
-                }
+                Some(scene) => scene.handle_event(
+                    Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                    event,
+                ),
                 None => Transition::None,
             };
 
             self.handle_transition(
                 transition,
-                Context::new(window, asset_manager, timer, settings),
+                Context::new(window, asset_manager, timer, framebuffer_cache, settings),
             );
         }
     }
@@ -75,18 +75,25 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if self.is_running {
             let transition = match self.scenes.last_mut() {
-                Some(scene) => scene.update(Context::new(window, asset_manager, timer, settings)),
+                Some(scene) => scene.update(Context::new(
+                    window,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                )),
                 None => Transition::None,
             };
 
             self.handle_transition(
                 transition,
-                Context::new(window, asset_manager, timer, settings),
+                Context::new(window, asset_manager, timer, framebuffer_cache, settings),
             )
         }
     }
@@ -96,12 +103,19 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if self.is_running {
             if let Some(scene) = self.scenes.last_mut() {
-                scene.pre_draw(Context::new(window, asset_manager, timer, settings))
+                scene.pre_draw(Context::new(
+                    window,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ))
             }
         }
     }
@@ -111,12 +125,19 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if self.is_running {
             if let Some(scene) = self.scenes.last_mut() {
-                scene.draw(Context::new(window, asset_manager, timer, settings))
+                scene.draw(Context::new(
+                    window,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ))
             }
         }
     }
@@ -134,12 +155,19 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if self.is_running {
             if let Some(scene) = self.scenes.last_mut() {
-                scene.post_draw(Context::new(window, asset_manager, timer, settings))
+                scene.post_draw(Context::new(
+                    window,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ))
             }
         }
     }
@@ -153,17 +181,25 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         match transition {
-            Transition::Push(scene) => {
-                self.push(scene, Context::new(window, asset_manager, timer, settings))
-            }
+            Transition::Push(scene) => self.push(
+                scene,
+                Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+            ),
             Transition::Switch(_) => {}
             Transition::Pop => {}
             Transition::None => {}
-            Transition::Quit => self.stop(Context::new(window, asset_manager, timer, settings)),
+            Transition::Quit => self.stop(Context::new(
+                window,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            )),
         }
     }
 
@@ -172,18 +208,28 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if let Some(current) = self.scenes.last_mut() {
-            current.pause(Context::new(window, asset_manager, timer, settings))
+            current.pause(Context::new(
+                window,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            ))
         }
 
         self.scenes.push(scene);
-        self.scenes
-            .last_mut()
-            .unwrap()
-            .start(Context::new(window, asset_manager, timer, settings))
+        self.scenes.last_mut().unwrap().start(Context::new(
+            window,
+            asset_manager,
+            timer,
+            framebuffer_cache,
+            settings,
+        ))
     }
 
     pub(crate) fn stop(&mut self, context: Context) {
@@ -192,11 +238,18 @@ impl SceneManager {
                 window,
                 asset_manager,
                 timer,
+                framebuffer_cache,
                 settings,
             } = context;
 
             while let Some(mut scene) = self.scenes.pop() {
-                scene.stop(Context::new(window, asset_manager, timer, settings))
+                scene.stop(Context::new(
+                    window,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ))
             }
 
             self.is_running = false;
@@ -208,11 +261,18 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if let Some(scene) = self.scenes.last_mut() {
-            scene.pause(Context::new(window, asset_manager, timer, settings))
+            scene.pause(Context::new(
+                window,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            ))
         }
     }
 
@@ -221,11 +281,18 @@ impl SceneManager {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         } = context;
 
         if let Some(scene) = self.scenes.last_mut() {
-            scene.resume(Context::new(window, asset_manager, timer, settings))
+            scene.resume(Context::new(
+                window,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            ))
         }
     }
 }

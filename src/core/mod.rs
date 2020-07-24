@@ -11,6 +11,7 @@ mod model_loader;
 
 use self::math::{UVec2, Vec4};
 use crate::asset::AssetManager;
+use crate::rendering::framebuffer::TemporaryFramebufferPool;
 use crate::timer::Timer;
 use glutin::window::Window;
 use std::any::Any;
@@ -68,6 +69,7 @@ pub struct Context<'a> {
     pub window: &'a Window,
     pub asset_manager: &'a mut AssetManager,
     pub timer: &'a mut Timer,
+    pub framebuffer_cache: &'a mut TemporaryFramebufferPool,
     pub settings: &'a Settings,
 }
 
@@ -76,12 +78,14 @@ impl<'a> Context<'a> {
         window: &'a Window,
         asset_manager: &'a mut AssetManager,
         timer: &'a mut Timer,
+        framebuffer_cache: &'a mut TemporaryFramebufferPool,
         settings: &'a Settings,
     ) -> Self {
         Self {
             window,
             asset_manager,
             timer,
+            framebuffer_cache,
             settings,
         }
     }

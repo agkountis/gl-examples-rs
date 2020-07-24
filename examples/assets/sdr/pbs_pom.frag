@@ -7,7 +7,7 @@ const float PI = 3.14159265359;
 const float ONE_OVER_PI = 0.318309886;
 const float MAX_REFLECTION_LOD = 6.0;
 
-in VsOut {
+layout(location = 0) in VsOut {
     vec3 wLightDirection;
     vec3 wViewDirection;
     vec3 tViewDirection;

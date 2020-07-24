@@ -1,8 +1,10 @@
+use crate::core::math::UVec2;
 use crate::imgui::{im_str, Gui, Ui};
-use crate::rendering::framebuffer::Framebuffer;
+use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
 use crate::rendering::postprocess::{AsAny, AsAnyMut, PostprocessingEffect};
 use crate::rendering::program_pipeline::ProgramPipeline;
 use crate::rendering::shader::{Shader, ShaderStage};
+use crate::rendering::texture::SizedTextureFormat;
 use std::any::Any;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
@@ -18,6 +20,8 @@ pub struct Bloom {
     h_blur_program_pipeline: ProgramPipeline,
     enabled: bool,
 }
+
+impl_as_any!(Bloom);
 
 impl PostprocessingEffect for Bloom {
     fn name(&self) -> &str {
@@ -36,11 +40,26 @@ impl PostprocessingEffect for Bloom {
         self.enabled
     }
 
-    fn apply(&self, input: &Framebuffer) {
-        println!("Applying Bloom")
+    fn apply(&self, input: &Framebuffer, framebuffer_cache: &mut TemporaryFramebufferPool) {
+        let tmp1 =
+            framebuffer_cache.get_temporary(UVec2::new(64, 64), SizedTextureFormat::Rgba16f, None);
+
+        unsafe {
+            if FOO {
+                let tmp2 = framebuffer_cache.get_temporary(
+                    UVec2::new(128, 128),
+                    SizedTextureFormat::Rgba16f,
+                    Some(SizedTextureFormat::Depth24),
+                );
+
+                unsafe {
+                    FOO = false;
+                }
+            }
+        }
     }
 }
-
+static mut FOO: bool = true;
 impl Gui for Bloom {
     fn gui(&mut self, ui: &Ui) {
         ui.group(|| {
@@ -55,13 +74,13 @@ impl Gui for Bloom {
                     ui.indent();
                     imgui::Slider::new(im_str!("Iterations"), RangeInclusive::new(1, 16))
                         .build(&ui, &mut self.iterations);
-                    imgui::Slider::new(im_str!("Threshold"), RangeInclusive::new(0.1, 16.0))
+                    imgui::Slider::new(im_str!("Threshold"), RangeInclusive::new(0.1, 10.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.threshold);
-                    imgui::Slider::new(im_str!("Smooth Fade"), RangeInclusive::new(0.1, 16.0))
+                    imgui::Slider::new(im_str!("Smooth Fade"), RangeInclusive::new(0.1, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.smooth_fade);
-                    imgui::Slider::new(im_str!("Intensity"), RangeInclusive::new(0.1, 16.0))
+                    imgui::Slider::new(im_str!("Intensity"), RangeInclusive::new(0.1, 10.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.intensity);
                     ui.unindent()
@@ -69,8 +88,6 @@ impl Gui for Bloom {
         });
     }
 }
-
-impl_as_any!(Bloom);
 
 impl Into<Box<dyn PostprocessingEffect>> for Bloom {
     fn into(self) -> Box<dyn PostprocessingEffect> {

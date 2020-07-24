@@ -24,7 +24,7 @@ out gl_PerVertex {
 //           v -> view space
 //           t -> tangent space
 //           l -> local space
-out VsOut {
+layout(location = 0) out VsOut {
     vec3 wLightDirection;
     vec3 wViewDirection;
     vec2 texcoord;

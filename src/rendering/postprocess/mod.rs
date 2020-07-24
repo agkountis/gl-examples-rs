@@ -1,5 +1,5 @@
 use crate::imgui::{im_str, Gui, Ui};
-use crate::rendering::framebuffer::Framebuffer;
+use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
 use crate::{AsAny, AsAnyMut};
 
 pub mod bloom;
@@ -13,7 +13,7 @@ pub trait PostprocessingEffect: Gui + AsAny + AsAnyMut {
 
     fn enabled(&self) -> bool;
 
-    fn apply(&self, input: &Framebuffer);
+    fn apply(&self, input: &Framebuffer, framebuffer_chache: &mut TemporaryFramebufferPool);
 }
 
 pub struct PostprocessingStack {
@@ -30,12 +30,12 @@ impl PostprocessingStack {
         self
     }
 
-    pub fn apply(&self, input: &Framebuffer) {
+    pub fn apply(&self, input: &Framebuffer, framebuffer_cache: &mut TemporaryFramebufferPool) {
         if self.enabled {
             self.post_effects
                 .iter()
                 .filter(|&effect| effect.enabled())
-                .for_each(|effect| effect.apply(&input));
+                .for_each(|effect| effect.apply(&input, framebuffer_cache));
         }
     }
 

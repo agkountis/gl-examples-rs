@@ -1,5 +1,6 @@
 use std::{ops::RangeInclusive, rc::Rc};
 
+use engine::color::srgb_to_linear;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
@@ -51,12 +52,9 @@ pub struct PbsScene {
     material: PbsMetallicRoughnessMaterial,
     environment_maps: EnvironmentMaps,
     skybox_program_pipeline: ProgramPipeline,
-    horizontal_gaussian_pipeline: ProgramPipeline,
-    vertical_gaussian_pipeline: ProgramPipeline,
     tonemapping_pipeline: ProgramPipeline,
     framebuffer: Framebuffer,
     resolve_framebuffer: Framebuffer,
-    blur_framebuffers: [Framebuffer; 2],
     sampler: Sampler,
     sampler_nearest: Sampler,
     projection_matrix: Mat4,
@@ -100,48 +98,63 @@ impl PbsScene {
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(
-                &Shader::new_from_text(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert"))
-                    .unwrap(),
+                &Shader::new_from_spirv(
+                    ShaderStage::Vertex,
+                    "main",
+                    asset_path.join("sdr/skybox.vert.spv"),
+                )
+                .unwrap(),
             )
             .add_shader(
-                &Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag"))
-                    .unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        let fullscreen_shader =
-            Shader::new_from_text(ShaderStage::Vertex, asset_path.join("sdr/fullscreen.vert"))
-                .unwrap();
-        let horizontal_gaussian_prog = ProgramPipeline::new()
-            .add_shader(&fullscreen_shader)
-            .add_shader(
-                &Shader::new_from_text(
+                &Shader::new_from_spirv(
                     ShaderStage::Fragment,
-                    asset_path.join("sdr/gaussian_blur_horizontal.frag"),
+                    "main",
+                    asset_path.join("sdr/skybox.frag.spv"),
                 )
                 .unwrap(),
             )
             .build()
             .unwrap();
 
-        let vertical_gaussian_prog = ProgramPipeline::new()
-            .add_shader(&fullscreen_shader)
-            .add_shader(
-                &Shader::new_from_text(
-                    ShaderStage::Fragment,
-                    asset_path.join("sdr/gaussian_blur_vertical.frag"),
-                )
-                .unwrap(),
-            )
-            .build()
-            .unwrap();
+        let fullscreen_shader = Shader::new_from_spirv(
+            ShaderStage::Vertex,
+            "main",
+            asset_path.join("sdr/fullscreen.vert.spv"),
+        )
+        .unwrap();
+        // let horizontal_gaussian_prog = ProgramPipeline::new()
+        //     .add_shader(&fullscreen_shader)
+        //     .add_shader(
+        //         &Shader::new_from_text(
+        //             ShaderStage::Fragment,
+        //             asset_path.join("sdr/gaussian_blur_horizontal.frag"),
+        //         )
+        //         .unwrap(),
+        //     )
+        //     .build()
+        //     .unwrap();
+        //
+        // let vertical_gaussian_prog = ProgramPipeline::new()
+        //     .add_shader(&fullscreen_shader)
+        //     .add_shader(
+        //         &Shader::new_from_text(
+        //             ShaderStage::Fragment,
+        //             asset_path.join("sdr/gaussian_blur_vertical.frag"),
+        //         )
+        //         .unwrap(),
+        //     )
+        //     .build()
+        //     .unwrap();
 
         let tonemapping_prog = ProgramPipeline::new()
             .add_shader(&fullscreen_shader)
             .add_shader(
-                &Shader::new_from_text(ShaderStage::Fragment, asset_path.join("sdr/tonemap.frag"))
-                    .unwrap(),
+                &Shader::new_from_spirv(
+                    ShaderStage::Fragment,
+                    "main",
+                    asset_path.join("sdr/tonemap.frag.spv"),
+                )
+                .unwrap(),
             )
             .build()
             .unwrap();
@@ -237,33 +250,6 @@ impl PbsScene {
         )
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
-        let blur_framebuffers = [
-            Framebuffer::new(
-                UVec2::new(
-                    window.inner_size().width / 4,
-                    window.inner_size().height / 4,
-                ),
-                Msaa::None,
-                vec![FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Rgba16f,
-                    AttachmentType::Texture,
-                )],
-            )
-            .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
-            Framebuffer::new(
-                UVec2::new(
-                    window.inner_size().width / 4,
-                    window.inner_size().height / 4,
-                ),
-                Msaa::None,
-                vec![FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Rgba16f,
-                    AttachmentType::Texture,
-                )],
-            )
-            .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
-        ];
-
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(BloomBuilder::new(asset_path).build())
             .build();
@@ -318,12 +304,9 @@ impl PbsScene {
                 radiance,
             },
             skybox_program_pipeline: skybox_prog,
-            horizontal_gaussian_pipeline: horizontal_gaussian_prog,
-            vertical_gaussian_pipeline: vertical_gaussian_prog,
             tonemapping_pipeline: tonemapping_prog,
             framebuffer,
             resolve_framebuffer,
-            blur_framebuffers,
             sampler,
             sampler_nearest,
             projection_matrix: projection,
@@ -388,62 +371,62 @@ impl PbsScene {
         self.material.unbind()
     }
 
-    fn bloom_pass(&self) {
-        let blur_strength = 6;
-
-        self.blur_framebuffers.iter().for_each(|fb| {
-            fb.bind();
-            fb.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
-            fb.unbind(false)
-        });
-
-        for i in 0..blur_strength {
-            let ping_pong_index = i % 2;
-
-            let attachment_id: u32;
-            if ping_pong_index == 0 {
-                self.blur_framebuffers[ping_pong_index].bind();
-                self.vertical_gaussian_pipeline.bind();
-
-                if i == 0 {
-                    attachment_id = self.resolve_framebuffer.texture_attachment(1).id();
-                } else {
-                    attachment_id = self.blur_framebuffers[1 - ping_pong_index]
-                        .texture_attachment(0)
-                        .id();
-                }
-
-                self.vertical_gaussian_pipeline.set_texture_2d_with_id(
-                    "image",
-                    attachment_id,
-                    &self.sampler,
-                    ShaderStage::Fragment,
-                );
-                StateManager::set_front_face(FrontFace::Clockwise);
-                self.fullscreen_mesh.draw();
-                StateManager::set_front_face(FrontFace::CounterClockwise);
-                self.blur_framebuffers[ping_pong_index].unbind(false);
-            } else {
-                attachment_id = self.blur_framebuffers[1 - ping_pong_index]
-                    .texture_attachment(0)
-                    .id();
-                self.blur_framebuffers[ping_pong_index].bind();
-
-                self.horizontal_gaussian_pipeline.bind();
-                self.horizontal_gaussian_pipeline.set_texture_2d_with_id(
-                    "image",
-                    attachment_id,
-                    &self.sampler,
-                    ShaderStage::Fragment,
-                );
-
-                StateManager::set_front_face(FrontFace::Clockwise);
-                self.fullscreen_mesh.draw();
-                StateManager::set_front_face(FrontFace::CounterClockwise);
-                self.blur_framebuffers[ping_pong_index].unbind(false);
-            }
-        }
-    }
+    // fn bloom_pass(&self) {
+    //     let blur_strength = 6;
+    //
+    //     self.blur_framebuffers.iter().for_each(|fb| {
+    //         fb.bind();
+    //         fb.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
+    //         fb.unbind(false)
+    //     });
+    //
+    //     for i in 0..blur_strength {
+    //         let ping_pong_index = i % 2;
+    //
+    //         let attachment_id: u32;
+    //         if ping_pong_index == 0 {
+    //             self.blur_framebuffers[ping_pong_index].bind();
+    //             self.vertical_gaussian_pipeline.bind();
+    //
+    //             if i == 0 {
+    //                 attachment_id = self.resolve_framebuffer.texture_attachment(1).id();
+    //             } else {
+    //                 attachment_id = self.blur_framebuffers[1 - ping_pong_index]
+    //                     .texture_attachment(0)
+    //                     .id();
+    //             }
+    //
+    //             self.vertical_gaussian_pipeline.set_texture_2d_with_id(
+    //                 "image",
+    //                 attachment_id,
+    //                 &self.sampler,
+    //                 ShaderStage::Fragment,
+    //             );
+    //             StateManager::set_front_face(FrontFace::Clockwise);
+    //             self.fullscreen_mesh.draw();
+    //             StateManager::set_front_face(FrontFace::CounterClockwise);
+    //             self.blur_framebuffers[ping_pong_index].unbind(false);
+    //         } else {
+    //             attachment_id = self.blur_framebuffers[1 - ping_pong_index]
+    //                 .texture_attachment(0)
+    //                 .id();
+    //             self.blur_framebuffers[ping_pong_index].bind();
+    //
+    //             self.horizontal_gaussian_pipeline.bind();
+    //             self.horizontal_gaussian_pipeline.set_texture_2d_with_id(
+    //                 "image",
+    //                 attachment_id,
+    //                 &self.sampler,
+    //                 ShaderStage::Fragment,
+    //             );
+    //
+    //             StateManager::set_front_face(FrontFace::Clockwise);
+    //             self.fullscreen_mesh.draw();
+    //             StateManager::set_front_face(FrontFace::CounterClockwise);
+    //             self.blur_framebuffers[ping_pong_index].unbind(false);
+    //         }
+    //     }
+    // }
 
     fn skybox_pass(&self) {
         StateManager::set_depth_function(DepthFunction::LessOrEqual);
@@ -482,12 +465,6 @@ impl PbsScene {
                 &self.sampler_nearest,
                 ShaderStage::Fragment,
             )
-            .set_texture_2d_with_id(
-                "bloomImage",
-                self.blur_framebuffers[1].texture_attachment(0).id(),
-                &self.sampler,
-                ShaderStage::Fragment,
-            )
             .set_integer(
                 "tonemappingOperator",
                 self.tone_mapping_operator as i32,
@@ -516,7 +493,6 @@ impl Scene for PbsScene {
             &self.projection_matrix,
             ShaderStage::Vertex,
         );
-
         self.skybox_program_pipeline.set_texture_cube(
             "skybox",
             &self.environment_maps.radiance,
@@ -602,6 +578,7 @@ impl Scene for PbsScene {
             WindowEvent::Resized(size) => {
                 let x = size.width;
                 let y = size.height;
+                //TODO: Get this from the camera
                 self.projection_matrix = perspective(x, y, 60, 0.5, 500.0);
                 StateManager::set_viewport(0, 0, x as i32, y as i32)
             }
@@ -635,12 +612,16 @@ impl Scene for PbsScene {
 
     fn pre_draw(&mut self, _: Context) {}
 
-    fn draw(&mut self, _: Context) {
+    fn draw(&mut self, context: Context) {
+        let Context {
+            framebuffer_cache, ..
+        } = context;
         self.geometry_pass();
         self.skybox_pass();
-        self.bloom_pass();
+        //self.bloom_pass();
         self.tonemap_pass();
-        // self.post_stack.apply(&self.resolve_framebuffer)
+        self.post_stack
+            .apply(&self.resolve_framebuffer, framebuffer_cache)
     }
 
     fn gui(&mut self, ui: &Ui) {
@@ -666,7 +647,6 @@ impl Scene for PbsScene {
                 {
                     ui.spacing();
                     ui.group(|| {
-                        // imgui::ComboBox::new("Light Color Presets")
                         imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
                             .format(ColorFormat::Float)
                             .options(true)

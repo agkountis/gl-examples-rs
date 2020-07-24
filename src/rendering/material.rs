@@ -68,14 +68,16 @@ impl PbsMetallicRoughnessMaterial {
                 .unwrap(),
             ),
             None => (
-                Shader::new_from_text(
+                Shader::new_from_spirv(
                     ShaderStage::Vertex,
-                    asset_path.as_ref().join("sdr/pbs.vert"),
+                    "main",
+                    asset_path.as_ref().join("sdr/pbs.vert.spv"),
                 )
                 .unwrap(),
-                Shader::new_from_text(
+                Shader::new_from_spirv(
                     ShaderStage::Fragment,
-                    asset_path.as_ref().join("sdr/pbs.frag"),
+                    "main",
+                    asset_path.as_ref().join("sdr/pbs.frag.spv"),
                 )
                 .unwrap(),
             ),

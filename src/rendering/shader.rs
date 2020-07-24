@@ -51,15 +51,15 @@ pub struct Shader {
 }
 
 impl Shader {
-    pub fn new_from_spirv(
+    pub fn new_from_spirv<P: AsRef<Path>>(
         stage: ShaderStage,
         entry_point: &str,
-        filename: &str,
+        filename: P,
     ) -> Result<Shader, String> {
         let mut spir_v = Vec::new();
 
         {
-            let mut file = File::open(filename).unwrap();
+            let mut file = File::open(filename.as_ref()).unwrap();
 
             let file_size_in_bytes = file.metadata().unwrap().len() as usize;
 
