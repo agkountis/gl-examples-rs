@@ -1,8 +1,12 @@
 [package]
 name = "engine"
 version = "0.1.0"
-authors = ["Angelos Gkountis <agelosbb@gmail.com>"]
+authors = ["Angelos Gkountis <angelos.gkountis@gmail.com>"]
 edition = "2018"
+
+[features]
+default = []
+auto-compile-spirv = []
 
 [dependencies]
 nalgebra-glm = "^0.5.0"

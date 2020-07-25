@@ -653,28 +653,6 @@ impl TemporaryFramebufferPool {
         framebuffer
     }
 
-    // pub fn release_temporary(&mut self, framebuffer: Rc<Framebuffer>) {
-    //     assert!(framebuffer.texture_attachments.len() < 2, "Temporary Framebuffers can only have 1 color texture attachment and 1 depth texture attachment.");
-    //     assert!(
-    //         !framebuffer.texture_attachments.is_empty(),
-    //         "Temporary Framebuffers must have at least 1 texture attachment."
-    //     );
-    //
-    //     let key = framebuffer
-    //         .texture_attachments
-    //         .iter()
-    //         .fold(0u32, |acc, attachment| acc + attachment.format as u32);
-    //
-    //     if let Some(framebuffers) = self.free_framebuffers_map.get_mut(&key) {
-    //         if let Some((_, in_use, _)) = framebuffers
-    //             .iter_mut()
-    //             .find(|(_, _, fb)| framebuffer.id == fb.id)
-    //         {
-    //             *in_use = false;
-    //         }
-    //     }
-    // }
-
     pub(crate) fn collect(&mut self) {
         let current_frame = self.current_frame;
         let keepalive_frames = self.keepalive_frames;
@@ -695,18 +673,7 @@ impl TemporaryFramebufferPool {
 
                 // Keep only the values that satisfy the condition. Discard the rest.
                 framebuffers.retain(|(last_used, in_use, framebuffer)| {
-                    let val = *in_use || (current_frame - *last_used) < keepalive_frames as u64;
-
-                    if !val {
-                        println!("Collecting temp Framebuffer: {:?}", framebuffer);
-                        println!("In Use: {}", *in_use);
-                        println!("Last Frame Used: {}", last_used);
-                        println!("Current Frame: {}", current_frame);
-                    }
-
-                    println!("Retaining framebuffer: {:?}", framebuffer);
-
-                    val
+                    *in_use || (current_frame - *last_used) < keepalive_frames as u64
                 });
             });
 

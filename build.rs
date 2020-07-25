@@ -2,6 +2,10 @@ use glob;
 use std::process::Command;
 
 fn main() {
+    if !cfg!(feature = "auto-compile-spirv") {
+        return
+    }
+
     let paths = [
         "**/examples/**/sdr/*.vert",
         "**/examples/**/sdr/*.tesc",
