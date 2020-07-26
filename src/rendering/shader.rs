@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::ptr;
+use spirv_cross::spirv::Decoration;
 
 pub fn check_spirv_support() -> bool {
     let mut format_count: GLint = 0;
@@ -56,6 +57,7 @@ impl Shader {
         entry_point: &str,
         filename: P,
     ) -> Result<Shader, String> {
+        use spirv_cross::{spirv, glsl};
         let mut spir_v = Vec::new();
 
         {
@@ -70,6 +72,30 @@ impl Shader {
                 "Could not read the entirety of the file."
             );
         }
+
+        let module = spirv::Module::from_words({
+            unsafe {
+                std::slice::from_raw_parts(
+                    spir_v.as_ptr() as *const u32,
+                    spir_v.len() / std::mem::size_of::<u32>(),
+                )
+            }
+        } );
+
+        //TODO: Remove this after testing on integrated intel GPUs
+        let ast = spirv::Ast::<glsl::Target>::parse(&module).unwrap();
+        let resources = ast.get_shader_resources().unwrap();
+        resources.uniform_buffers.iter().for_each(|resource| {
+            let location = ast.get_decoration(resource.id, Decoration::Location).unwrap();
+            println!("Name: {},  id: {}, location: {}", resource.name, resource.id, location);
+        });
+
+        resources.sampled_images.iter().for_each(|resource| {
+            let location = ast.get_decoration(resource.id, Decoration::Location).unwrap();
+            let binding = ast.get_decoration(resource.id, Decoration::Binding).unwrap();
+            println!("layout(location = {}, binding = {}) uniform sampler2D {}", location, binding, resource.name)
+        });
+
 
         let id: GLuint;
 
