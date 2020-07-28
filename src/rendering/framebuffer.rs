@@ -8,7 +8,6 @@ use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
 use crate::Msaa;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::rc::Rc;
 
 #[repr(u32)]

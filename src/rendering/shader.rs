@@ -1,12 +1,13 @@
+use crate::core::asset::Asset;
 use gl::types::*;
 use gl_bindings as gl;
+use spirv_cross::{glsl, spirv};
 use std::ffi::CString;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::ptr;
-use spirv_cross::spirv::Decoration;
 
 pub fn check_spirv_support() -> bool {
     let mut format_count: GLint = 0;
@@ -45,19 +46,14 @@ pub enum ShaderStage {
     Compute = gl::COMPUTE_SHADER,
 }
 
-#[derive(Debug, Clone)]
 pub struct Shader {
     id: GLuint,
     stage: ShaderStage,
+    reflection: spirv::Ast<glsl::Target>,
 }
 
 impl Shader {
-    pub fn new_from_spirv<P: AsRef<Path>>(
-        stage: ShaderStage,
-        entry_point: &str,
-        filename: P,
-    ) -> Result<Shader, String> {
-        use spirv_cross::{spirv, glsl};
+    pub fn new<P: AsRef<Path>>(stage: ShaderStage, filename: P) -> Result<Shader, String> {
         let mut spir_v = Vec::new();
 
         {
@@ -73,30 +69,6 @@ impl Shader {
             );
         }
 
-        let module = spirv::Module::from_words({
-            unsafe {
-                std::slice::from_raw_parts(
-                    spir_v.as_ptr() as *const u32,
-                    spir_v.len() / std::mem::size_of::<u32>(),
-                )
-            }
-        } );
-
-        //TODO: Remove this after testing on integrated intel GPUs
-        let ast = spirv::Ast::<glsl::Target>::parse(&module).unwrap();
-        let resources = ast.get_shader_resources().unwrap();
-        resources.uniform_buffers.iter().for_each(|resource| {
-            let location = ast.get_decoration(resource.id, Decoration::Location).unwrap();
-            println!("Name: {},  id: {}, location: {}", resource.name, resource.id, location);
-        });
-
-        resources.sampled_images.iter().for_each(|resource| {
-            let location = ast.get_decoration(resource.id, Decoration::Location).unwrap();
-            let binding = ast.get_decoration(resource.id, Decoration::Binding).unwrap();
-            println!("layout(location = {}, binding = {}) uniform sampler2D {}", location, binding, resource.name)
-        });
-
-
         let id: GLuint;
 
         unsafe {
@@ -110,7 +82,7 @@ impl Shader {
                 spir_v.len() as i32,
             );
 
-            let cstr = CString::new(entry_point).unwrap();
+            let cstr = CString::new("main").unwrap();
 
             // Specify shader module entry point and specialization constants
             gl::SpecializeShaderARB(
@@ -147,67 +119,22 @@ impl Shader {
             }
         }
 
-        Ok(Shader { id, stage })
-    }
-
-    pub fn new_from_text<P: AsRef<Path> + Debug>(
-        stage: ShaderStage,
-        path: P,
-    ) -> Result<Shader, String> {
-        let mut text_source = String::new();
-
-        {
-            let mut file = match File::open(path.as_ref()) {
-                Err(why) => panic!("couldn't open {:?}: {}", path, why),
-                Ok(file) => file,
-            };
-
-            let size = file.read_to_string(&mut text_source).unwrap();
-
-            assert_eq!(
-                size,
-                text_source.len(),
-                "Could not read the entirety of the file."
-            );
-        }
-
-        let id: GLuint;
-        let c_string_source = CString::new(text_source).unwrap();
-
-        unsafe {
-            id = gl::CreateShader(stage as u32);
-
-            gl::ShaderSource(id, 1, &c_string_source.as_ptr(), ptr::null());
-
-            gl::CompileShader(id);
-
-            let mut compilation_status: GLint = 0;
-
-            gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut compilation_status);
-
-            if compilation_status != gl::TRUE as i32 {
-                let mut message_size = 0;
-
-                gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut message_size);
-
-                let mut buffer = Vec::with_capacity(message_size as usize + 1); //+1 for nul termination
-
-                buffer.extend([b' '].iter().cycle().take(message_size as usize));
-
-                let message = CString::from_vec_unchecked(buffer);
-
-                gl::GetShaderInfoLog(
-                    id,
-                    message_size as i32,
-                    ptr::null_mut(),
-                    message.as_ptr() as *mut GLchar,
-                );
-
-                return Err(message.to_string_lossy().into_owned());
+        let module = spirv::Module::from_words({
+            unsafe {
+                std::slice::from_raw_parts(
+                    spir_v.as_ptr() as *const u32,
+                    spir_v.len() / std::mem::size_of::<u32>(),
+                )
             }
+        });
 
-            Ok(Shader { id, stage })
-        }
+        let reflection = spirv::Ast::<glsl::Target>::parse(&module).unwrap();
+
+        Ok(Shader {
+            id,
+            stage,
+            reflection,
+        })
     }
 
     pub fn get_id(&self) -> GLuint {
@@ -216,6 +143,19 @@ impl Shader {
 
     pub fn get_stage(&self) -> ShaderStage {
         self.stage
+    }
+}
+
+impl Asset for Shader {
+    type Output = Self;
+    type Error = String;
+    type LoadConfig = ShaderStage;
+
+    fn load<P: AsRef<Path> + Debug>(
+        path: P,
+        load_config: Option<Self::LoadConfig>,
+    ) -> Result<Self::Output, Self::Error> {
+        Shader::new(load_config.unwrap(), path)
     }
 }
 

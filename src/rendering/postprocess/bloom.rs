@@ -151,19 +151,19 @@ impl BloomBuilder {
 
     pub fn build(self) -> Bloom {
         let (v_blur_program_pipeline, h_blur_program_pipeline) = {
-            let blur_vs = Shader::new_from_text(
+            let blur_vs = Shader::new(
                 ShaderStage::Vertex,
                 self.assets_path.join("sdr/fullscreen.vert"),
             )
             .unwrap();
 
-            let v_blur_fs = Shader::new_from_text(
+            let v_blur_fs = Shader::new(
                 ShaderStage::Fragment,
                 self.assets_path.join("sdr/gaussian_blur_vertical.frag"),
             )
             .unwrap();
 
-            let h_blur_fs = Shader::new_from_text(
+            let h_blur_fs = Shader::new(
                 ShaderStage::Fragment,
                 self.assets_path.join("sdr/gaussian_blur_horizontal.frag"),
             )

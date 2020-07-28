@@ -98,17 +98,11 @@ impl PbsScene {
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(
-                &Shader::new_from_spirv(
-                    ShaderStage::Vertex,
-                    "main",
-                    asset_path.join("sdr/skybox.vert.spv"),
-                )
-                .unwrap(),
+                &Shader::new(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert.spv")).unwrap(),
             )
             .add_shader(
-                &Shader::new_from_spirv(
+                &Shader::new(
                     ShaderStage::Fragment,
-                    "main",
                     asset_path.join("sdr/skybox.frag.spv"),
                 )
                 .unwrap(),
@@ -116,42 +110,17 @@ impl PbsScene {
             .build()
             .unwrap();
 
-        let fullscreen_shader = Shader::new_from_spirv(
+        let fullscreen_shader = Shader::new(
             ShaderStage::Vertex,
-            "main",
             asset_path.join("sdr/fullscreen.vert.spv"),
         )
         .unwrap();
-        // let horizontal_gaussian_prog = ProgramPipeline::new()
-        //     .add_shader(&fullscreen_shader)
-        //     .add_shader(
-        //         &Shader::new_from_text(
-        //             ShaderStage::Fragment,
-        //             asset_path.join("sdr/gaussian_blur_horizontal.frag"),
-        //         )
-        //         .unwrap(),
-        //     )
-        //     .build()
-        //     .unwrap();
-        //
-        // let vertical_gaussian_prog = ProgramPipeline::new()
-        //     .add_shader(&fullscreen_shader)
-        //     .add_shader(
-        //         &Shader::new_from_text(
-        //             ShaderStage::Fragment,
-        //             asset_path.join("sdr/gaussian_blur_vertical.frag"),
-        //         )
-        //         .unwrap(),
-        //     )
-        //     .build()
-        //     .unwrap();
 
         let tonemapping_prog = ProgramPipeline::new()
             .add_shader(&fullscreen_shader)
             .add_shader(
-                &Shader::new_from_spirv(
+                &Shader::new(
                     ShaderStage::Fragment,
-                    "main",
                     asset_path.join("sdr/tonemap.frag.spv"),
                 )
                 .unwrap(),
@@ -286,7 +255,6 @@ impl PbsScene {
             metallic_roughness_ao.clone(),
             normals.clone(),
             None,
-            ibl_brdf_lut.clone(),
         );
 
         PbsScene {

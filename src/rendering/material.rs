@@ -1,3 +1,5 @@
+use crate::core::asset::Asset;
+use crate::rendering::texture::Texture2DLoadConfig;
 use crate::{
     core::math::{Vec3, Vec4},
     imgui::{im_str, ColorFormat, Gui, Ui},
@@ -27,21 +29,27 @@ pub trait Material: Gui {
     fn program_pipeline(&self) -> &ProgramPipeline;
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct MaterialPropertyBlock {
+    base_color: Vec3,
+    metallic_scale: f32,
+    roughness_scale: f32,
+    ao_scale: f32,
+    min_pom_layers: f32,
+    max_pom_layers: f32,
+    displacement_scale: f32,
+    parallax_mapping_method: usize,
+}
+
 pub struct PbsMetallicRoughnessMaterial {
     albedo: Rc<Texture2D>,
     metallic_roughness_ao: Rc<Texture2D>,
     normals: Rc<Texture2D>,
     displacement: Option<Rc<Texture2D>>,
-    ibl_brdf_lut: Rc<Texture2D>,
-    base_color: Vec3,
-    metallic_scale: f32,
-    roughness_scale: f32,
-    ao_scale: f32,
+    ibl_brdf_lut: Texture2D,
     sampler: Sampler,
-    min_pom_layers: f32,
-    max_pom_layers: f32,
-    displacement_scale: f32,
-    parallax_mapping_method: usize,
+    property_block: MaterialPropertyBlock,
     program_pipeline: ProgramPipeline,
 }
 
@@ -52,31 +60,28 @@ impl PbsMetallicRoughnessMaterial {
         metallic_roughness_ao: Rc<Texture2D>,
         normals: Rc<Texture2D>,
         displacement: Option<Rc<Texture2D>>,
-        ibl_brdf_lut: Rc<Texture2D>,
     ) -> Self {
         let (vertex_shader, fragment_shader) = match displacement {
             Some(_) => (
-                Shader::new_from_text(
+                Shader::new(
                     ShaderStage::Vertex,
-                    asset_path.as_ref().join("sdr/pbs_pom.vert"),
+                    asset_path.as_ref().join("sdr/pbs_pom.vert.spv"),
                 )
                 .unwrap(),
-                Shader::new_from_text(
+                Shader::new(
                     ShaderStage::Fragment,
-                    asset_path.as_ref().join("sdr/pbs_pom.frag"),
+                    asset_path.as_ref().join("sdr/pbs_pom.frag.spv"),
                 )
                 .unwrap(),
             ),
             None => (
-                Shader::new_from_spirv(
+                Shader::new(
                     ShaderStage::Vertex,
-                    "main",
                     asset_path.as_ref().join("sdr/pbs.vert.spv"),
                 )
                 .unwrap(),
-                Shader::new_from_spirv(
+                Shader::new(
                     ShaderStage::Fragment,
-                    "main",
                     asset_path.as_ref().join("sdr/pbs.frag.spv"),
                 )
                 .unwrap(),
@@ -98,21 +103,32 @@ impl PbsMetallicRoughnessMaterial {
             Vec4::new(0.0, 0.0, 0.0, 0.0),
         );
 
+        let ibl_brdf_lut = Texture2D::load(
+            asset_path.as_ref().join("textures/pbs/ibl_brdf_lut.png"),
+            Some(Texture2DLoadConfig {
+                is_srgb: false,
+                generate_mipmap: false,
+            }),
+        )
+        .expect("Failed to load BRDF LUT texture");
+
         Self {
             albedo,
             metallic_roughness_ao,
             normals,
             displacement,
             ibl_brdf_lut,
-            base_color: Vec3::new(1.0, 1.0, 1.0),
-            metallic_scale: 1.0,
-            roughness_scale: 1.0,
-            ao_scale: 1.0,
             sampler,
-            min_pom_layers: 8.0,
-            max_pom_layers: 32.0,
-            displacement_scale: 0.018,
-            parallax_mapping_method: 4,
+            property_block: MaterialPropertyBlock {
+                base_color: Vec3::new(1.0, 1.0, 1.0),
+                metallic_scale: 1.0,
+                roughness_scale: 1.0,
+                ao_scale: 1.0,
+                min_pom_layers: 8.0,
+                max_pom_layers: 32.0,
+                displacement_scale: 0.018,
+                parallax_mapping_method: 4,
+            },
             program_pipeline,
         }
     }
@@ -153,12 +169,16 @@ impl Material for PbsMetallicRoughnessMaterial {
             )
             .set_vector3f(
                 BASE_COLOR_UNIFORM_NAME,
-                &self.base_color,
+                &self.property_block.base_color,
                 ShaderStage::Fragment,
             )
             .set_vector3f(
                 M_R_AO_SCALE_UNIFORM_NAME,
-                &Vec3::new(self.metallic_scale, self.roughness_scale, self.ao_scale),
+                &Vec3::new(
+                    self.property_block.metallic_scale,
+                    self.property_block.roughness_scale,
+                    self.property_block.ao_scale,
+                ),
                 ShaderStage::Fragment,
             );
 
@@ -173,15 +193,15 @@ impl Material for PbsMetallicRoughnessMaterial {
                 .set_vector3f(
                     POM_PARAMETERS_UNIFORM_NAME,
                     &Vec3::new(
-                        self.min_pom_layers,
-                        self.max_pom_layers,
-                        self.displacement_scale,
+                        self.property_block.min_pom_layers,
+                        self.property_block.max_pom_layers,
+                        self.property_block.displacement_scale,
                     ),
                     ShaderStage::Fragment,
                 )
                 .set_integer(
                     PARALLAX_MAPPING_METHOD_UNIFORM_NAME,
-                    self.parallax_mapping_method as i32,
+                    self.property_block.parallax_mapping_method as i32,
                     ShaderStage::Fragment,
                 );
         }
@@ -212,7 +232,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .build(&ui);
                     ui.spacing();
 
-                    let mut albedo_color: [f32; 3] = self.base_color.into();
+                    let mut albedo_color: [f32; 3] = self.property_block.base_color.into();
                     if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
                         .format(ColorFormat::Float)
                         .alpha(true)
@@ -220,7 +240,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .picker(true)
                         .build(&ui)
                     {
-                        self.base_color = albedo_color.into()
+                        self.property_block.base_color = albedo_color.into()
                     }
                 });
                 ui.spacing();
@@ -235,13 +255,13 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     ui.spacing();
                     imgui::Slider::new(im_str!("Metallic Scale"), RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.metallic_scale);
+                        .build(&ui, &mut self.property_block.metallic_scale);
                     imgui::Slider::new(im_str!("Roughness Scale"), RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.roughness_scale);
+                        .build(&ui, &mut self.property_block.roughness_scale);
                     imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.ao_scale);
+                        .build(&ui, &mut self.property_block.ao_scale);
 
                     ui.spacing();
                     ui.spacing();
@@ -274,7 +294,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                             ui.group(|| {
                                 imgui::ComboBox::new(im_str!("Method")).build_simple_string(
                                     ui,
-                                    &mut self.parallax_mapping_method,
+                                    &mut self.property_block.parallax_mapping_method,
                                     &[
                                         im_str!("None"),
                                         im_str!("Parallax Mapping"),
@@ -286,7 +306,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
 
                                 ui.drag_float(
                                     im_str!("Displacement Scale"),
-                                    &mut self.displacement_scale,
+                                    &mut self.property_block.displacement_scale,
                                 )
                                 .min(0.001)
                                 .max(1.0)
@@ -300,13 +320,13 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                     ));
                                 }
 
-                                if self.parallax_mapping_method == 3
-                                    || self.parallax_mapping_method == 4
+                                if self.property_block.parallax_mapping_method == 3
+                                    || self.property_block.parallax_mapping_method == 4
                                 {
                                     ui.drag_float_range2(
                                         im_str!("Min/Max Layers"),
-                                        &mut self.min_pom_layers,
-                                        &mut self.max_pom_layers,
+                                        &mut self.property_block.min_pom_layers,
+                                        &mut self.property_block.max_pom_layers,
                                     )
                                     .min(1.0)
                                     .max(256.0)

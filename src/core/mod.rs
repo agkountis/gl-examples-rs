@@ -98,3 +98,12 @@ pub trait AsAny {
 pub trait AsAnyMut {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
+
+pub fn slice_as_bytes<T>(slice: &[T]) -> &[u8] {
+    unsafe {
+        std::slice::from_raw_parts(
+            slice.as_ptr() as *const u8,
+            slice.len() * std::mem::size_of::<T>(),
+        )
+    }
+}
