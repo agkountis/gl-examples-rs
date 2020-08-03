@@ -468,10 +468,10 @@ impl PbsScene {
         StateManager::set_face_culling(FaceCulling::Back)
     }
 
-    pub fn tonemap_pass(&self) {
+    pub fn tonemap_pass(&self, width: u32, height: u32) {
         clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
 
-        StateManager::set_viewport(0, 0, 1920, 1080);
+        StateManager::set_viewport(0, 0, width as i32, height as i32);
 
         self.tonemapping_pipeline.bind();
 
@@ -635,11 +635,15 @@ impl Scene for PbsScene {
 
     fn pre_draw(&mut self, _: Context) {}
 
-    fn draw(&mut self, _: Context) {
+    fn draw(&mut self, context: Context) {
+        let Context { window, .. } = context;
+
         self.geometry_pass();
         self.skybox_pass();
         self.bloom_pass();
-        self.tonemap_pass();
+
+        let size = window.inner_size();
+        self.tonemap_pass(size.width, size.height);
         // self.post_stack.apply(&self.resolve_framebuffer)
     }
 
