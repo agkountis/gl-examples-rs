@@ -5,7 +5,7 @@ const float EPSILON = 0.001;
 const float F0_DIELECTRIC = 0.04;
 const float PI = 3.14159265359;
 const float ONE_OVER_PI = 0.318309886;
-const float MAX_REFLECTION_LOD = 6.0;
+const float MAX_REFLECTION_LOD = 5.0;
 
 layout(location = 0) in VsOut {
     vec3 wLightDirection;
@@ -39,6 +39,11 @@ layout(location = 0) out vec4 outColor;
 vec3 FresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+vec3 FresnelSchlickRoughness(float NdotV, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
 }
 
 float DistributionGGX(float NdotH, float roughness)
@@ -76,6 +81,7 @@ float GeometrySmith(float NdotV, float NdotL, float roughness)
 vec3 BRDF(float NdotH, float NdotV, float NdotL, float HdotV, vec3 lightColor, vec3 F0, vec3 albedo, float metallic, float roughness)
 {
     vec3 F = FresnelSchlick(HdotV, F0);
+//    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
     float NDF = DistributionGGX(NdotH, roughness);
     float G = GeometrySmith(NdotV, NdotL, roughness);
 
@@ -94,23 +100,29 @@ vec3 BRDF(float NdotH, float NdotV, float NdotL, float HdotV, vec3 lightColor, v
 // --------------------
 
 // IBL-----------------
-vec3 FresnelSchlickRoughness(float NdotV, vec3 F0, float roughness)
-{
-    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
-}
-
 vec3 IBL(float NdotV, vec3 F0, vec3 albedo, float metallic, float roughness, float ao, vec2 brdfLUT, vec3 irradiance, vec3 radiance)
 {
-    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 F = FresnelSchlickRoughness(NdotV, F0 * brdfLUT.x + brdfLUT.y, roughness);
 
-    vec3 kS = F;
-    vec3 kD = 1.0 - kS;
+    vec3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
 
     vec3 diffuse = irradiance * albedo;
-    vec3 specular = radiance * (F * brdfLUT.x + brdfLUT.y);
+    vec3 specular = radiance * F;
 
     return (kD * diffuse + specular) * ao;
+}
+
+// reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
+vec3 GetSpecularDominantDirection(const vec3 n, const vec3 r, float roughness)
+{
+    return mix(r, n, roughness * roughness);
+}
+
+// reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
+float PerceptualRoughnessToLod(float perceptualRoughness)
+{
+    return MAX_REFLECTION_LOD * perceptualRoughness * (2.0 - perceptualRoughness);
 }
 // --------------------
 
@@ -150,13 +162,17 @@ void main()
     float ao = m_r_ao.b * m_r_aoScale.z;
 
     vec3 irradiance = texture(irradianceMap, n).rgb;
-    vec3 radiance = textureLod(radianceMap, r, roughness * MAX_REFLECTION_LOD).rgb;
+
+    float lod = PerceptualRoughnessToLod(roughness);
+    vec3 specular_direction = GetSpecularDominantDirection(n, r, roughness);
+    vec3 radiance = textureLod(radianceMap, specular_direction, lod).rgb;
+
     vec2 lutSample = texture(brdfLUT, vec2(NdotV, roughness)).rg;
 
     vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo.rgb, metallic);
 
-    vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor, F0, albedo.rgb, metallic, roughness) +
-                      IBL(NdotV, F0, albedo.rgb, metallic, roughness, ao, lutSample, irradiance, radiance);
+    vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor, F0, albedo.rgb, metallic, roughness)
+    + IBL(NdotV, F0, albedo.rgb, metallic, roughness, ao, lutSample, irradiance, radiance);
 
     outColor = vec4(finalColor, 1.0);
 }
