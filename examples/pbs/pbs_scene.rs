@@ -591,7 +591,6 @@ impl Scene for PbsScene {
         //self.bloom_pass();
         let size = window.inner_size();
         self.tonemap_pass(size.width, size.height);
-        self.tonemap_pass();
         self.post_stack
             .apply(&self.resolve_framebuffer, framebuffer_cache);
     }

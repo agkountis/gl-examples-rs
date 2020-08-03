@@ -1,13 +1,7 @@
 use crate::core::asset::Asset;
 use gl::types::*;
 use gl_bindings as gl;
-use spirv_cross::{glsl, spirv};
-use std::ffi::CString;
-use std::fmt::Debug;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
-use std::ptr;
+use std::{ffi::CString, fmt::Debug, fs::File, io::Read, path::Path, ptr};
 
 pub fn check_spirv_support() -> bool {
     let mut format_count: GLint = 0;
@@ -49,7 +43,6 @@ pub enum ShaderStage {
 pub struct Shader {
     id: GLuint,
     stage: ShaderStage,
-    reflection: spirv::Ast<glsl::Target>,
 }
 
 impl Shader {
@@ -119,22 +112,7 @@ impl Shader {
             }
         }
 
-        let module = spirv::Module::from_words({
-            unsafe {
-                std::slice::from_raw_parts(
-                    spir_v.as_ptr() as *const u32,
-                    spir_v.len() / std::mem::size_of::<u32>(),
-                )
-            }
-        });
-
-        let reflection = spirv::Ast::<glsl::Target>::parse(&module).unwrap();
-
-        Ok(Shader {
-            id,
-            stage,
-            reflection,
-        })
+        Ok(Shader { id, stage })
     }
 
     pub fn get_id(&self) -> GLuint {
