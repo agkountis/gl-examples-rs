@@ -7,6 +7,8 @@ use crate::core::math::{UVec2, Vec4};
 use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
 use crate::Msaa;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy)]
@@ -405,7 +407,15 @@ impl Framebuffer {
     }
 
     pub fn unbind(&self, invalidate: bool) {
-        if !self.renderbuffer_attachments.is_empty() && invalidate {
+        if invalidate {
+            self.invalidate()
+        }
+
+        unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, 0) }
+    }
+
+    pub fn invalidate(&self) {
+        if !self.renderbuffer_attachments.is_empty() {
             unsafe {
                 let attachment_bind_points = self
                     .renderbuffer_attachments
@@ -425,8 +435,6 @@ impl Framebuffer {
                 )
             }
         }
-
-        unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, 0) }
     }
 
     pub fn texture_attachment(&self, index: usize) -> FramebufferAttachment {
@@ -502,7 +510,7 @@ impl Framebuffer {
                 gl::NEAREST,
             );
 
-            gl::NamedFramebufferReadBuffer(source.id(), gl::BACK);
+            gl::NamedFramebufferReadBuffer(source.id(), gl::COLOR_ATTACHMENT0);
             gl::NamedFramebufferDrawBuffers(
                 destination.id(),
                 destination.output_locations.len() as i32,
@@ -572,5 +580,105 @@ impl Framebuffer {
 impl Drop for Framebuffer {
     fn drop(&mut self) {
         unsafe { gl::DeleteFramebuffers(1, &self.id) }
+    }
+}
+
+pub struct TemporaryFramebufferPool {
+    free_framebuffers_map: HashMap<u32, Vec<(u64, bool, Rc<Framebuffer>)>>,
+    keepalive_frames: u8,
+    current_frame: u64,
+}
+
+impl TemporaryFramebufferPool {
+    pub fn new(keepalive_frames: u8) -> Self {
+        Self {
+            free_framebuffers_map: Default::default(),
+            keepalive_frames,
+            current_frame: 0,
+        }
+    }
+
+    pub fn get_temporary(
+        &mut self,
+        size: UVec2,
+        format: SizedTextureFormat,
+        depth_format: Option<SizedTextureFormat>,
+    ) -> Rc<Framebuffer> {
+        let key = format as u32 + depth_format.map_or(0, |value| value as u32);
+
+        if let Some(framebuffers) = self.free_framebuffers_map.get_mut(&key) {
+            if let Some((_, in_use, framebuffer)) = framebuffers
+                .iter_mut()
+                .find(|(_, in_use, framebuffer)| !*in_use && framebuffer.size == size)
+            {
+                *in_use = true;
+                return Rc::clone(framebuffer);
+            }
+
+            let framebuffer = Rc::new(
+                Framebuffer::new(
+                    size,
+                    Msaa::None,
+                    vec![FramebufferAttachmentCreateInfo {
+                        format,
+                        attachment_type: AttachmentType::Texture,
+                    }],
+                )
+                .expect("Failed to create framebuffer!"),
+            );
+
+            framebuffers.push((self.current_frame, true, Rc::clone(&framebuffer)));
+
+            return framebuffer;
+        }
+
+        let framebuffer = Rc::new(
+            Framebuffer::new(
+                size,
+                Msaa::None,
+                vec![FramebufferAttachmentCreateInfo {
+                    format,
+                    attachment_type: AttachmentType::Texture,
+                }],
+            )
+            .expect("Failed to create framebuffer!"),
+        );
+
+        self.free_framebuffers_map.insert(
+            key,
+            vec![(self.current_frame, true, Rc::clone(&framebuffer))],
+        );
+
+        framebuffer
+    }
+
+    pub(crate) fn collect(&mut self) {
+        let current_frame = self.current_frame;
+        let keepalive_frames = self.keepalive_frames;
+        self.free_framebuffers_map
+            .values_mut()
+            .for_each(|framebuffers| {
+                framebuffers
+                    .iter_mut()
+                    .filter(|(_, in_use, framebuffer)| {
+                        *in_use
+                            && Rc::strong_count(framebuffer) == 1
+                            && Rc::weak_count(framebuffer) == 0
+                    })
+                    .for_each(|(last_used, in_use, _)| {
+                        *in_use = false;
+                        *last_used = current_frame
+                    });
+
+                // Keep only the values that satisfy the condition. Discard the rest.
+                framebuffers.retain(|(last_used, in_use, framebuffer)| {
+                    *in_use || (current_frame - *last_used) < keepalive_frames as u64
+                });
+            });
+
+        // Retain only the entries that have allocated framebuffers. Clear the rest.
+        self.free_framebuffers_map.retain(|k, v| !v.is_empty());
+
+        self.current_frame += 1
     }
 }

@@ -8,7 +8,7 @@ const float ONE_OVER_PI = 0.318309886;
 const float MAX_REFLECTION_LOD = 5.0;
 const float MIN_ROUGHNESS = 0.023;
 
-in VsOut {
+layout(location = 0) in VsOut {
     vec3 wLightDirection;
     vec3 wViewDirection;
     vec3 wNormal;
@@ -34,7 +34,6 @@ layout(location = 10) uniform int fresnelMode;
 layout(location = 11) uniform vec3 m_r_ao_bias;
 
 layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec4 outBloomBrightColor;
 
 
 mat3 CreateTBN(in vec3 n, in vec3 t)
@@ -230,7 +229,4 @@ void main()
     + IBL(NdotV, F0, albedo.rgb, metallic, roughness, ao, lutSample, irradiance, radiance);
 
     outColor = vec4(finalColor, 1.0);
-
-    float brightness = ConvertToGrayscale(finalColor);
-    outBloomBrightColor = vec4(finalColor * step(1.0, brightness), 1.0) * 0.08;
 }

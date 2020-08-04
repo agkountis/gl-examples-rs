@@ -1,11 +1,7 @@
+use crate::core::asset::Asset;
 use gl::types::*;
 use gl_bindings as gl;
-use std::ffi::CString;
-use std::fmt::Debug;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
-use std::ptr;
+use std::{ffi::CString, fmt::Debug, fs::File, io::Read, path::Path, ptr};
 
 pub fn check_spirv_support() -> bool {
     let mut format_count: GLint = 0;
@@ -44,22 +40,17 @@ pub enum ShaderStage {
     Compute = gl::COMPUTE_SHADER,
 }
 
-#[derive(Debug, Clone)]
 pub struct Shader {
     id: GLuint,
     stage: ShaderStage,
 }
 
 impl Shader {
-    pub fn new_from_spirv(
-        stage: ShaderStage,
-        entry_point: &str,
-        filename: &str,
-    ) -> Result<Shader, String> {
+    pub fn new<P: AsRef<Path>>(stage: ShaderStage, filename: P) -> Result<Shader, String> {
         let mut spir_v = Vec::new();
 
         {
-            let mut file = File::open(filename).unwrap();
+            let mut file = File::open(filename.as_ref()).unwrap();
 
             let file_size_in_bytes = file.metadata().unwrap().len() as usize;
 
@@ -84,7 +75,7 @@ impl Shader {
                 spir_v.len() as i32,
             );
 
-            let cstr = CString::new(entry_point).unwrap();
+            let cstr = CString::new("main").unwrap();
 
             // Specify shader module entry point and specialization constants
             gl::SpecializeShaderARB(
@@ -124,72 +115,25 @@ impl Shader {
         Ok(Shader { id, stage })
     }
 
-    pub fn new_from_text<P: AsRef<Path> + Debug>(
-        stage: ShaderStage,
-        path: P,
-    ) -> Result<Shader, String> {
-        let mut text_source = String::new();
-
-        {
-            let mut file = match File::open(path.as_ref()) {
-                Err(why) => panic!("couldn't open {:?}: {}", path, why),
-                Ok(file) => file,
-            };
-
-            let size = file.read_to_string(&mut text_source).unwrap();
-
-            assert_eq!(
-                size,
-                text_source.len(),
-                "Could not read the entirety of the file."
-            );
-        }
-
-        let id: GLuint;
-        let c_string_source = CString::new(text_source).unwrap();
-
-        unsafe {
-            id = gl::CreateShader(stage as u32);
-
-            gl::ShaderSource(id, 1, &c_string_source.as_ptr(), ptr::null());
-
-            gl::CompileShader(id);
-
-            let mut compilation_status: GLint = 0;
-
-            gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut compilation_status);
-
-            if compilation_status != gl::TRUE as i32 {
-                let mut message_size = 0;
-
-                gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut message_size);
-
-                let mut buffer = Vec::with_capacity(message_size as usize + 1); //+1 for nul termination
-
-                buffer.extend([b' '].iter().cycle().take(message_size as usize));
-
-                let message = CString::from_vec_unchecked(buffer);
-
-                gl::GetShaderInfoLog(
-                    id,
-                    message_size as i32,
-                    ptr::null_mut(),
-                    message.as_ptr() as *mut GLchar,
-                );
-
-                return Err(message.to_string_lossy().into_owned());
-            }
-
-            Ok(Shader { id, stage })
-        }
-    }
-
     pub fn get_id(&self) -> GLuint {
         self.id
     }
 
     pub fn get_stage(&self) -> ShaderStage {
         self.stage
+    }
+}
+
+impl Asset for Shader {
+    type Output = Self;
+    type Error = String;
+    type LoadConfig = ShaderStage;
+
+    fn load<P: AsRef<Path> + Debug>(
+        path: P,
+        load_config: Option<Self::LoadConfig>,
+    ) -> Result<Self::Output, Self::Error> {
+        Shader::new(load_config.unwrap(), path)
     }
 }
 

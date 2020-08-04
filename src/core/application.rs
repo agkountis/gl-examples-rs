@@ -2,6 +2,7 @@ use gl::types::*;
 use gl_bindings as gl;
 
 use crate::imgui::ImGui;
+use crate::rendering::framebuffer::TemporaryFramebufferPool;
 use crate::{
     core::{
         asset::AssetManager,
@@ -34,10 +35,13 @@ impl Application {
 
         let (event_loop, windowed_context) = Self::create_windowed_context(&settings).unwrap();
 
+        let mut framebuffer_cache = TemporaryFramebufferPool::new(3);
+
         let initial_scene = scene_constructor(Context::new(
             windowed_context.window(),
             &mut asset_manager,
             &mut timer,
+            &mut framebuffer_cache,
             &settings,
         ));
 
@@ -46,6 +50,7 @@ impl Application {
             windowed_context.window(),
             &mut asset_manager,
             &mut timer,
+            &mut framebuffer_cache,
             &settings,
         ));
 
@@ -72,6 +77,7 @@ impl Application {
                             windowed_context.window(),
                             &mut asset_manager,
                             &mut timer,
+                            &mut framebuffer_cache,
                             &settings,
                         ),
                         event,
@@ -87,12 +93,14 @@ impl Application {
                     windowed_context.window(),
                     &mut asset_manager,
                     &mut timer,
+                    &mut framebuffer_cache,
                     &settings,
                 )),
                 Event::Resumed => scene_manager.resume(Context::new(
                     windowed_context.window(),
                     &mut asset_manager,
                     &mut timer,
+                    &mut framebuffer_cache,
                     &settings,
                 )),
                 Event::MainEventsCleared => {
@@ -100,6 +108,7 @@ impl Application {
                         windowed_context.window(),
                         &mut asset_manager,
                         &mut timer,
+                        &mut framebuffer_cache,
                         &settings,
                     ));
 
@@ -115,6 +124,7 @@ impl Application {
                         windowed_context.window(),
                         &mut asset_manager,
                         &mut timer,
+                        &mut framebuffer_cache,
                         &settings,
                     ));
 
@@ -128,11 +138,12 @@ impl Application {
 
                     windowed_context.swap_buffers().unwrap()
                 }
-                Event::RedrawEventsCleared => {}
+                Event::RedrawEventsCleared => framebuffer_cache.collect(),
                 Event::LoopDestroyed => scene_manager.stop(Context::new(
                     windowed_context.window(),
                     &mut asset_manager,
                     &mut timer,
+                    &mut framebuffer_cache,
                     &settings,
                 )),
             }

@@ -4,12 +4,13 @@ use std::ffi::CString;
 use std::ptr;
 
 use super::shader::Shader;
-use crate::core::math::matrix::Mat4;
-use crate::core::math::{utilities, Vec4};
-use crate::core::math::{Vec2, Vec3};
-use crate::rendering::sampler::Sampler;
-use crate::rendering::shader::ShaderStage;
-use crate::rendering::texture::{Texture2D, TextureCube};
+use crate::core::math::{matrix::Mat4, utilities, Vec3, Vec4};
+use crate::rendering::{
+    buffer::Buffer,
+    sampler::Sampler,
+    shader::ShaderStage,
+    texture::{Texture2D, TextureCube},
+};
 
 pub struct ProgramPipeline {
     id: GLuint,
@@ -145,6 +146,14 @@ impl ProgramPipeline {
             )
         }
 
+        self
+    }
+
+    pub fn set_uniform_buffer(&self, name: &str, buffer: &Buffer) -> &Self {
+        unsafe {
+            //TODO
+            //gl::BindBufferBase()
+        }
         self
     }
 

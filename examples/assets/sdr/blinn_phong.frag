@@ -5,7 +5,7 @@
 //layout(location = 1) in vec3 t_InViewDirection;
 //layout(location = 2) in vec2 inTexcoord;
 
-in VsOut {
+layout(location = 0) in VsOut {
     vec3 tLightDirection;
     vec3 tViewDirection;
     vec2 texcoord;

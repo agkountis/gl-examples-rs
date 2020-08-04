@@ -1,8 +1,8 @@
 use crate::rendering::format::{BufferInternalFormat, DataFormat, DataType};
+use crate::slice_as_bytes;
 use gl::types::*;
 use gl_bindings as gl;
-use std::mem;
-use std::ptr;
+use std::{mem, ptr};
 
 bitflags! {
     pub struct BufferStorageFlags : u32 {
@@ -13,6 +13,8 @@ bitflags! {
         const MAP_COHERENT = gl::MAP_COHERENT_BIT;
         const CLIENT_STORAGE = gl::CLIENT_STORAGE_BIT;
         const MAP_READ_WRITE = Self::MAP_READ.bits | Self::MAP_WRITE.bits;
+        const MAP_READ_WRITE_COHERENT = Self::MAP_READ.bits | Self::MAP_WRITE.bits | Self::MAP_COHERENT.bits;
+        const MAP_WRITE_COHERENT = Self::MAP_WRITE.bits | Self::MAP_COHERENT.bits;
     }
 }
 
@@ -100,17 +102,6 @@ impl Buffer {
         }
     }
 
-    pub fn bind(&self, buffer_target: BufferTarget) {
-        unsafe { gl::BindBuffer(buffer_target as u32, self.id) }
-    }
-
-    pub fn unbind(&mut self) {
-        unsafe {
-            gl::BindBuffer(BufferTarget::None as u32, self.id);
-            self.current_bound_target = BufferTarget::None;
-        }
-    }
-
     pub fn map(&mut self, buffer_access: BufferAccess) {
         self.map_range(0, self.size, buffer_access)
     }
@@ -159,7 +150,16 @@ impl Buffer {
         self.mapped_ptr = ptr::null_mut();
     }
 
-    pub fn fill(&self, offset: isize, size: isize, data: &[u8]) {
+    pub fn fill<T>(&self, offset: isize, data: &[T]) {
+        self.fill_bytes(offset, slice_as_bytes(data))
+    }
+
+    pub fn fill_mapped<T>(&self, data: &[T]) {
+        let bytes = slice_as_bytes(data);
+        self.fill_bytes_mapped(bytes)
+    }
+
+    pub fn fill_bytes(&self, offset: isize, data: &[u8]) {
         assert!(
             self.storage_flags.intersects(BufferStorageFlags::DYNAMIC),
             "Cannot fill non-mapped buffer. \n \
@@ -168,10 +168,17 @@ impl Buffer {
                 for non-mapped data updates."
         );
 
-        unsafe { gl::NamedBufferSubData(self.id, offset, size, data.as_ptr() as *const GLvoid) }
+        unsafe {
+            gl::NamedBufferSubData(
+                self.id,
+                offset,
+                data.len() as isize,
+                data.as_ptr() as *const GLvoid,
+            )
+        }
     }
 
-    pub fn fill_mapped(&mut self, data: &[u8], size: usize) {
+    pub fn fill_bytes_mapped(&self, data: &[u8]) {
         assert_ne!(
             self.mapped_ptr,
             ptr::null_mut(),
@@ -186,7 +193,7 @@ impl Buffer {
                 Hint: Create the buffer using BufferStorageFlags::MAP_WRITE"
         );
 
-        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), self.mapped_ptr as *mut u8, size) }
+        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), self.mapped_ptr as *mut u8, data.len()) }
     }
 
     pub fn get_id(&self) -> GLuint {
@@ -303,7 +310,7 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe {
-            self.unbind();
+            // self.unbind();
             gl::DeleteBuffers(1, &mut self.id)
         }
     }
