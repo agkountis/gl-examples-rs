@@ -19,6 +19,7 @@ pub enum SizedTextureFormat {
     Srgb8 = gl::SRGB8,
     Rgba8 = gl::RGBA8,
     Srgb8A8 = gl::SRGB8_ALPHA8,
+    Rg16f = gl::RG16F,
     Rgb16f = gl::RGB16F,
     Rgba16f = gl::RGBA16F,
     Rgb32f = gl::RGB32F,

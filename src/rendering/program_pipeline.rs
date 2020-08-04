@@ -5,8 +5,8 @@ use std::ptr;
 
 use super::shader::Shader;
 use crate::core::math::matrix::Mat4;
-use crate::core::math::Vec3;
 use crate::core::math::{utilities, Vec4};
+use crate::core::math::{Vec2, Vec3};
 use crate::rendering::sampler::Sampler;
 use crate::rendering::shader::ShaderStage;
 use crate::rendering::texture::{Texture2D, TextureCube};
@@ -98,6 +98,16 @@ impl ProgramPipeline {
         }
 
         Ok(self)
+    }
+
+    pub fn set_vector2f(&self, name: &str, value: &Vec2, stage: ShaderStage) -> &Self {
+        let (program_id, location) = self
+            .get_shader_stage_id_and_resource_location(stage, gl::UNIFORM, name)
+            .expect("Failed to get program id or uniform location");
+
+        unsafe { gl::ProgramUniform2fv(program_id, location, 1, utilities::value_ptr(value)) }
+
+        self
     }
 
     pub fn set_vector3f(&self, name: &str, value: &Vec3, stage: ShaderStage) -> &Self {

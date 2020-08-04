@@ -1,3 +1,4 @@
+use crate::core::math::Vec2;
 use crate::{
     core::math::{Vec3, Vec4},
     imgui::{im_str, ColorFormat, Gui, Ui},
@@ -35,13 +36,17 @@ pub struct PbsMetallicRoughnessMaterial {
     ibl_brdf_lut: Rc<Texture2D>,
     base_color: Vec3,
     metallic_scale: f32,
+    metallic_bias: f32,
     roughness_scale: f32,
+    roughness_bias: f32,
     ao_scale: f32,
+    ao_bias: f32,
     sampler: Sampler,
     min_pom_layers: f32,
     max_pom_layers: f32,
     displacement_scale: f32,
     parallax_mapping_method: usize,
+    fresnel_mode: usize,
     program_pipeline: ProgramPipeline,
 }
 
@@ -104,13 +109,17 @@ impl PbsMetallicRoughnessMaterial {
             ibl_brdf_lut,
             base_color: Vec3::new(1.0, 1.0, 1.0),
             metallic_scale: 1.0,
+            metallic_bias: 0.0,
             roughness_scale: 1.0,
+            roughness_bias: 0.0,
             ao_scale: 1.0,
+            ao_bias: 0.0,
             sampler,
             min_pom_layers: 8.0,
             max_pom_layers: 32.0,
             displacement_scale: 0.018,
             parallax_mapping_method: 4,
+            fresnel_mode: 0,
             program_pipeline,
         }
     }
@@ -157,6 +166,16 @@ impl Material for PbsMetallicRoughnessMaterial {
             .set_vector3f(
                 M_R_AO_SCALE_UNIFORM_NAME,
                 &Vec3::new(self.metallic_scale, self.roughness_scale, self.ao_scale),
+                ShaderStage::Fragment,
+            )
+            .set_vector3f(
+                "m_r_ao_bias",
+                &Vec3::new(self.metallic_bias, self.roughness_bias, self.ao_bias),
+                ShaderStage::Fragment,
+            )
+            .set_integer(
+                "fresnelMode",
+                self.fresnel_mode as i32,
                 ShaderStage::Fragment,
             );
 
@@ -234,12 +253,23 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     imgui::Slider::new(im_str!("Metallic Scale"), RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.metallic_scale);
+                    imgui::Slider::new(im_str!("Metallic Bias"), RangeInclusive::new(-1.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.metallic_bias);
+                    ui.spacing();
                     imgui::Slider::new(im_str!("Roughness Scale"), RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.roughness_scale);
+                    imgui::Slider::new(im_str!("Roughness Bias"), RangeInclusive::new(-1.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.roughness_bias);
+                    ui.spacing();
                     imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.ao_scale);
+                    imgui::Slider::new(im_str!("AO Bias"), RangeInclusive::new(-1.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(&ui, &mut self.ao_bias);
 
                     ui.spacing();
                     ui.spacing();
@@ -251,6 +281,16 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         ui.spacing();
                     });
                 });
+
+                imgui::ComboBox::new(im_str!("IBL Method")).build_simple_string(
+                    ui,
+                    &mut self.fresnel_mode,
+                    &[
+                        im_str!("radiance + (F * lut.x + lut.y)"),
+                        im_str!("fresnel(..., F0 * lut.x + lut.y, ...)"),
+                        im_str!("radiance + (F0 * lut.x + lut.y"),
+                    ],
+                );
 
                 if let Some(displacement) = self.displacement.clone() {
                     ui.spacing();

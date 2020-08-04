@@ -27,8 +27,9 @@ out gl_PerVertex {
 out VsOut {
     vec3 wLightDirection;
     vec3 wViewDirection;
+    vec3 wNormal;
+    vec3 wTangent;
     vec2 texcoord;
-    mat3 TBN;
 } vsOut;
 
 void main()
@@ -42,18 +43,10 @@ void main()
     mat3 normalMatrix = mat3(transpose(inverse(model)));
 
     //Calculate the normal. Bring it to world space
-    vec3 wNormal = normalMatrix * inNormal;
+    vsOut.wNormal = normalMatrix * inNormal;
 
     // Bring tangent to world space.
-    vec3 wTangent = normalize(normalMatrix * inTangent);
-
-    wTangent = normalize(wTangent - dot(wTangent, wNormal) * wNormal);
-
-    //Calculate the binormal
-    vec3 wBinormal = normalize(cross(wNormal, wTangent));
-
-    // Pass the TBN matrix to the fragment shader.
-    vsOut.TBN = mat3(wTangent, wBinormal, wNormal);
+    vsOut.wTangent = normalMatrix * inTangent;
 
     //Assign the view direction for output.
     vsOut.wViewDirection = eyePosition - wVertexPosition.xyz;

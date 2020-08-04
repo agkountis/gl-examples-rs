@@ -49,7 +49,7 @@ pub struct PbsScene {
     skybox_mesh: Mesh,
     fullscreen_mesh: FullscreenMesh,
     material: PbsMetallicRoughnessMaterial,
-    environment_maps: EnvironmentMaps,
+    environment_maps: [EnvironmentMaps; 2],
     skybox_program_pipeline: ProgramPipeline,
     horizontal_gaussian_pipeline: ProgramPipeline,
     vertical_gaussian_pipeline: ProgramPipeline,
@@ -75,6 +75,7 @@ pub struct PbsScene {
     cursor_over_ui: bool,
     tone_mapping_operator: usize,
     white_threshold: f32,
+    active_environment: usize,
 }
 
 impl PbsScene {
@@ -184,18 +185,45 @@ impl PbsScene {
             )
             .expect("Failed to load BRDF LUT texture");
 
-        let skybox =
+        let skybox_exterior =
             TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/skybox2.ktx"))
                 .expect("Failed to load Skybox");
 
-        let irradiance = TextureCube::new_from_file(
+        let irradiance_exterior = TextureCube::new_from_file(
             asset_path.join("textures/pbs/ktx/irradiance/irradiance2.ktx"),
         )
         .expect("Failed to load Irradiance map");
 
-        let radiance =
+        let radiance_exterior =
             TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/radiance/radiance2.ktx"))
                 .expect("Failed to load Radiance map");
+
+        let skybox_interior =
+            TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/ibl_skybox.ktx"))
+                .expect("Failed to load Skybox");
+
+        let irradiance_interior = TextureCube::new_from_file(
+            asset_path.join("textures/pbs/ktx/irradiance/ibl_irradiance.ktx"),
+        )
+        .expect("Failed to load Irradiance map");
+
+        let radiance_interior = TextureCube::new_from_file(
+            asset_path.join("textures/pbs/ktx/radiance/ibl_radiance.ktx"),
+        )
+        .expect("Failed to load Radiance map");
+
+        let environments = [
+            EnvironmentMaps {
+                skybox: skybox_exterior,
+                irradiance: irradiance_exterior,
+                radiance: radiance_exterior,
+            },
+            EnvironmentMaps {
+                skybox: skybox_interior,
+                irradiance: irradiance_interior,
+                radiance: radiance_interior,
+            },
+        ];
 
         let framebuffer = Framebuffer::new(
             UVec2::new(window.inner_size().width, window.inner_size().height),
@@ -312,11 +340,7 @@ impl PbsScene {
             skybox_mesh,
             fullscreen_mesh: FullscreenMesh::new(),
             material,
-            environment_maps: EnvironmentMaps {
-                skybox,
-                irradiance,
-                radiance,
-            },
+            environment_maps: environments,
             skybox_program_pipeline: skybox_prog,
             horizontal_gaussian_pipeline: horizontal_gaussian_prog,
             vertical_gaussian_pipeline: vertical_gaussian_prog,
@@ -342,6 +366,7 @@ impl PbsScene {
             cursor_over_ui: false,
             tone_mapping_operator: 0,
             white_threshold: 2.0,
+            active_environment: 0,
         }
     }
 
@@ -358,13 +383,13 @@ impl PbsScene {
         program_pipeline
             .set_texture_cube(
                 "irradianceMap",
-                &self.environment_maps.irradiance,
+                &self.environment_maps[self.active_environment].irradiance,
                 &self.sampler,
                 ShaderStage::Fragment,
             )
             .set_texture_cube(
                 "radianceMap",
-                &self.environment_maps.radiance,
+                &self.environment_maps[self.active_environment].radiance,
                 &self.sampler,
                 ShaderStage::Fragment,
             )
@@ -453,11 +478,14 @@ impl PbsScene {
 
         self.skybox_program_pipeline.bind();
 
-        self.skybox_program_pipeline.set_matrix4f(
-            "view",
-            &self.camera.transform(),
-            ShaderStage::Vertex,
-        );
+        self.skybox_program_pipeline
+            .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
+            .set_texture_cube(
+                "skybox",
+                &self.environment_maps[self.active_environment].radiance,
+                &self.sampler,
+                ShaderStage::Fragment,
+            );
 
         self.skybox_mesh.draw();
 
@@ -517,12 +545,6 @@ impl Scene for PbsScene {
             ShaderStage::Vertex,
         );
 
-        self.skybox_program_pipeline.set_texture_cube(
-            "skybox",
-            &self.environment_maps.radiance,
-            &self.sampler,
-            ShaderStage::Fragment,
-        );
         self.skybox_program_pipeline.unbind();
     }
 
@@ -640,7 +662,7 @@ impl Scene for PbsScene {
 
         self.geometry_pass();
         self.skybox_pass();
-        self.bloom_pass();
+        //self.bloom_pass();
 
         let size = window.inner_size();
         self.tonemap_pass(size.width, size.height);
@@ -660,6 +682,14 @@ impl Scene for PbsScene {
 
                 // Material
                 self.material.gui(ui);
+
+                imgui::ComboBox::new(im_str!("Environment")).build_simple_string(
+                    ui,
+                    &mut self.active_environment,
+                    &[im_str!("Exterior"), im_str!("Interior")],
+                );
+
+                ui.spacing();
 
                 // Lighting
                 if imgui::CollapsingHeader::new(im_str!("Lighting"))
