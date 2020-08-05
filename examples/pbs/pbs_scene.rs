@@ -34,9 +34,37 @@ use glutin::event::{
 };
 
 struct EnvironmentMaps {
-    pub skybox: TextureCube,
-    pub irradiance: TextureCube,
-    pub radiance: TextureCube,
+    skybox: TextureCube,
+    irradiance: TextureCube,
+    radiance: TextureCube,
+}
+
+#[repr(usize)]
+enum SkyboxType {
+    Original,
+    Radiance,
+    Irradiance,
+}
+
+struct Environment {
+    maps: [EnvironmentMaps; 2],
+    skybox_program_pipeline: ProgramPipeline,
+    skybox_mesh: Mesh,
+    active_environment: usize,
+    skybox_type: SkyboxType,
+}
+
+struct Lighting {
+    light_direction: [f32; 3],
+    light_color: [f32; 3],
+    light_intensity: f32,
+}
+
+struct ToneMapping {
+    pipeline: ProgramPipeline,
+    operator: usize,
+    white_threshold: f32,
+    exposure: f32,
 }
 
 struct Model {
@@ -44,21 +72,8 @@ struct Model {
     pub transform: Mat4,
 }
 
-pub struct PbsScene {
-    camera: Camera,
-    model: Model,
-    skybox_mesh: Mesh,
-    fullscreen_mesh: FullscreenMesh,
-    material: PbsMetallicRoughnessMaterial,
-    environment_maps: [EnvironmentMaps; 2],
-    skybox_program_pipeline: ProgramPipeline,
-    tonemapping_pipeline: ProgramPipeline,
-    framebuffer: Framebuffer,
-    resolve_framebuffer: Framebuffer,
-    sampler: Sampler,
-    sampler_nearest: Sampler,
-    projection_matrix: Mat4,
-    post_stack: PostprocessingStack,
+#[derive(Default)]
+struct Controls {
     left_mouse_button_pressed: bool,
     mouse_x: f32,
     mouse_y: f32,
@@ -66,14 +81,29 @@ pub struct PbsScene {
     scroll: f32,
     prev_x: f32,
     prev_y: f32,
-    dt: f32,
-    light_color: [f32; 3],
-    light_intensity: f32,
-    exposure: f32,
     cursor_over_ui: bool,
-    tone_mapping_operator: usize,
-    white_threshold: f32,
-    active_environment: usize,
+}
+
+struct Samplers {
+    linear: Sampler,
+    nearest: Sampler,
+}
+
+pub struct PbsScene {
+    camera: Camera,
+    model: Model,
+    fullscreen_mesh: FullscreenMesh,
+    material: PbsMetallicRoughnessMaterial,
+    environment: Environment,
+    framebuffer: Framebuffer,
+    resolve_framebuffer: Framebuffer,
+    samplers: Samplers,
+    projection_matrix: Mat4,
+    post_stack: PostprocessingStack,
+    controls: Controls,
+    lighting: Lighting,
+    tone_mapping: ToneMapping,
+    dt: f32,
 }
 
 impl PbsScene {
@@ -158,14 +188,6 @@ impl PbsScene {
                 true,
             )
             .expect("Failed to load normals texture");
-
-        let ibl_brdf_lut = asset_manager
-            .load_texture_2d(
-                asset_path.join("textures/pbs/ibl_brdf_lut.png"),
-                false,
-                false,
-            )
-            .expect("Failed to load BRDF LUT texture");
 
         let skybox_exterior =
             TextureCube::new_from_file(asset_path.join("textures/pbs/ktx/skybox/skybox2.ktx"))
@@ -291,33 +313,39 @@ impl PbsScene {
                 mesh,
                 transform: Mat4::identity(),
             },
-            skybox_mesh,
             fullscreen_mesh: FullscreenMesh::new(),
             material,
-            environment_maps: environments,
-            skybox_program_pipeline: skybox_prog,
-            tonemapping_pipeline: tonemapping_prog,
+            environment: Environment {
+                maps: environments,
+                skybox_program_pipeline: skybox_prog,
+                skybox_mesh,
+                active_environment: 1,
+                skybox_type: SkyboxType::Radiance,
+            },
             framebuffer,
             resolve_framebuffer,
-            sampler,
-            sampler_nearest,
+            samplers: Samplers {
+                linear: sampler,
+                nearest: sampler_nearest,
+            },
             projection_matrix: projection,
             post_stack,
-            left_mouse_button_pressed: false,
-            mouse_x: 0.0,
-            mouse_y: 0.0,
-            mouse_sensitivity: 2.0,
-            scroll: 0.0,
-            prev_x: 0.0,
-            prev_y: 0.0,
+            controls: Controls {
+                mouse_sensitivity: 2.0,
+                ..Default::default()
+            },
+            lighting: Lighting {
+                light_direction: [0.4, 0.0, -1.0],
+                light_color: [1.0, 1.0, 1.0],
+                light_intensity: 5.0,
+            },
+            tone_mapping: ToneMapping {
+                pipeline: tonemapping_prog,
+                operator: 0,
+                white_threshold: 2.0,
+                exposure: 1.5,
+            },
             dt: 0.0,
-            light_color: [1.0, 1.0, 1.0],
-            light_intensity: 5.0,
-            exposure: 1.5,
-            cursor_over_ui: false,
-            tone_mapping_operator: 0,
-            white_threshold: 2.0,
-            active_environment: 0,
         }
     }
 
@@ -329,24 +357,24 @@ impl PbsScene {
 
         let program_pipeline = self.material.program_pipeline();
 
-        let mut light_color: Vec3 = srgb_to_linear3f(&self.light_color.into());
-        light_color *= self.light_intensity;
+        let mut light_color: Vec3 = srgb_to_linear3f(&self.lighting.light_color.into());
+        light_color *= self.lighting.light_intensity;
         program_pipeline
             .set_texture_cube(
                 "irradianceMap",
-                &self.environment_maps[self.active_environment].irradiance,
-                &self.sampler,
+                &self.environment.maps[self.environment.active_environment].irradiance,
+                &self.samplers.linear,
                 ShaderStage::Fragment,
             )
             .set_texture_cube(
                 "radianceMap",
-                &self.environment_maps[self.active_environment].radiance,
-                &self.sampler,
+                &self.environment.maps[self.environment.active_environment].radiance,
+                &self.samplers.linear,
                 ShaderStage::Fragment,
             )
             .set_vector3f(
                 "wLightDirection",
-                &Vec3::new(0.4, 0.0, -1.0),
+                &self.lighting.light_direction.into(),
                 ShaderStage::Fragment,
             )
             .set_vector3f("lightColor", &light_color, ShaderStage::Fragment)
@@ -364,84 +392,40 @@ impl PbsScene {
         self.material.unbind()
     }
 
-    // fn bloom_pass(&self) {
-    //     let blur_strength = 6;
-    //
-    //     self.blur_framebuffers.iter().for_each(|fb| {
-    //         fb.bind();
-    //         fb.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
-    //         fb.unbind(false)
-    //     });
-    //
-    //     for i in 0..blur_strength {
-    //         let ping_pong_index = i % 2;
-    //
-    //         let attachment_id: u32;
-    //         if ping_pong_index == 0 {
-    //             self.blur_framebuffers[ping_pong_index].bind();
-    //             self.vertical_gaussian_pipeline.bind();
-    //
-    //             if i == 0 {
-    //                 attachment_id = self.resolve_framebuffer.texture_attachment(1).id();
-    //             } else {
-    //                 attachment_id = self.blur_framebuffers[1 - ping_pong_index]
-    //                     .texture_attachment(0)
-    //                     .id();
-    //             }
-    //
-    //             self.vertical_gaussian_pipeline.set_texture_2d_with_id(
-    //                 "image",
-    //                 attachment_id,
-    //                 &self.sampler,
-    //                 ShaderStage::Fragment,
-    //             );
-    //             StateManager::set_front_face(FrontFace::Clockwise);
-    //             self.fullscreen_mesh.draw();
-    //             StateManager::set_front_face(FrontFace::CounterClockwise);
-    //             self.blur_framebuffers[ping_pong_index].unbind(false);
-    //         } else {
-    //             attachment_id = self.blur_framebuffers[1 - ping_pong_index]
-    //                 .texture_attachment(0)
-    //                 .id();
-    //             self.blur_framebuffers[ping_pong_index].bind();
-    //
-    //             self.horizontal_gaussian_pipeline.bind();
-    //             self.horizontal_gaussian_pipeline.set_texture_2d_with_id(
-    //                 "image",
-    //                 attachment_id,
-    //                 &self.sampler,
-    //                 ShaderStage::Fragment,
-    //             );
-    //
-    //             StateManager::set_front_face(FrontFace::Clockwise);
-    //             self.fullscreen_mesh.draw();
-    //             StateManager::set_front_face(FrontFace::CounterClockwise);
-    //             self.blur_framebuffers[ping_pong_index].unbind(false);
-    //         }
-    //     }
-    // }
-
     fn skybox_pass(&self) {
         StateManager::set_depth_function(DepthFunction::LessOrEqual);
         StateManager::set_face_culling(FaceCulling::Front);
 
         self.resolve_framebuffer.bind();
 
-        self.skybox_program_pipeline.bind();
+        self.environment.skybox_program_pipeline.bind();
 
-        self.skybox_program_pipeline
+        let environment_map = match self.environment.skybox_type {
+            SkyboxType::Original => {
+                &self.environment.maps[self.environment.active_environment].skybox
+            }
+            SkyboxType::Radiance => {
+                &self.environment.maps[self.environment.active_environment].radiance
+            }
+            SkyboxType::Irradiance => {
+                &self.environment.maps[self.environment.active_environment].irradiance
+            }
+        };
+
+        self.environment
+            .skybox_program_pipeline
             .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
             .set_texture_cube(
                 "skybox",
-                &self.environment_maps[self.active_environment].radiance,
-                &self.sampler,
+                &environment_map,
+                &self.samplers.linear,
                 ShaderStage::Fragment,
             );
 
-        self.skybox_mesh.draw();
+        self.environment.skybox_mesh.draw();
 
         self.resolve_framebuffer.unbind(false);
-        self.skybox_program_pipeline.unbind();
+        self.environment.skybox_program_pipeline.unbind();
 
         StateManager::set_depth_function(DepthFunction::Less);
         StateManager::set_face_culling(FaceCulling::Back)
@@ -452,24 +436,29 @@ impl PbsScene {
 
         StateManager::set_viewport(0, 0, width as i32, height as i32);
 
-        self.tonemapping_pipeline.bind();
+        self.tone_mapping.pipeline.bind();
 
-        self.tonemapping_pipeline
+        self.tone_mapping
+            .pipeline
             .set_texture_2d_with_id(
                 "image",
                 self.resolve_framebuffer.texture_attachment(0).id(),
-                &self.sampler_nearest,
+                &self.samplers.nearest,
                 ShaderStage::Fragment,
             )
             .set_integer(
                 "tonemappingOperator",
-                self.tone_mapping_operator as i32,
+                self.tone_mapping.operator as i32,
                 ShaderStage::Fragment,
             )
-            .set_float("exposure", self.exposure, ShaderStage::Fragment)
+            .set_float(
+                "exposure",
+                self.tone_mapping.exposure,
+                ShaderStage::Fragment,
+            )
             .set_float(
                 "whiteThreshold",
-                self.white_threshold,
+                self.tone_mapping.white_threshold,
                 ShaderStage::Fragment,
             );
 
@@ -477,20 +466,20 @@ impl PbsScene {
         self.fullscreen_mesh.draw();
         StateManager::set_front_face(FrontFace::CounterClockwise);
 
-        self.tonemapping_pipeline.unbind()
+        self.tone_mapping.pipeline.unbind()
     }
 }
 
 impl Scene for PbsScene {
     fn start(&mut self, _: Context) {
-        self.skybox_program_pipeline.bind();
-        self.skybox_program_pipeline.set_matrix4f(
+        self.environment.skybox_program_pipeline.bind();
+        self.environment.skybox_program_pipeline.set_matrix4f(
             "projection",
             &self.projection_matrix,
             ShaderStage::Vertex,
         );
 
-        self.skybox_program_pipeline.unbind();
+        self.environment.skybox_program_pipeline.unbind();
     }
 
     fn stop(&mut self, _: Context) {}
@@ -505,31 +494,31 @@ impl Scene for PbsScene {
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
                 ..
-            } => self.left_mouse_button_pressed = true,
+            } => self.controls.left_mouse_button_pressed = true,
             WindowEvent::MouseInput {
                 state: ElementState::Released,
                 button: MouseButton::Left,
                 ..
             } => {
-                self.left_mouse_button_pressed = false;
+                self.controls.left_mouse_button_pressed = false;
 
-                self.mouse_x = 0.0;
-                self.mouse_y = 0.0;
-                self.prev_x = 0.0;
-                self.prev_y = 0.0;
+                self.controls.mouse_x = 0.0;
+                self.controls.mouse_y = 0.0;
+                self.controls.prev_x = 0.0;
+                self.controls.prev_y = 0.0;
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if self.left_mouse_button_pressed && !self.cursor_over_ui {
-                    self.mouse_x = position.x as f32;
-                    self.mouse_y = position.y as f32;
+                if self.controls.left_mouse_button_pressed && !self.controls.cursor_over_ui {
+                    self.controls.mouse_x = position.x as f32;
+                    self.controls.mouse_y = position.y as f32;
                 }
             }
             WindowEvent::MouseWheel {
                 delta: MouseScrollDelta::LineDelta(_, y),
                 ..
             } => {
-                if !self.cursor_over_ui {
-                    self.scroll = y;
+                if !self.controls.cursor_over_ui {
+                    self.controls.scroll = y;
                 }
             }
             WindowEvent::KeyboardInput {
@@ -556,8 +545,6 @@ impl Scene for PbsScene {
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
-                        scancode,
-                        state,
                         virtual_keycode: Some(VirtualKeyCode::S),
                         ..
                     },
@@ -586,17 +573,17 @@ impl Scene for PbsScene {
         let mut dx = 0.0;
         let mut dy = 0.0;
 
-        if self.prev_x != 0.0 || self.prev_y != 0.0 {
-            dx = (self.mouse_x - self.prev_x) * self.mouse_sensitivity;
-            dy = (self.mouse_y - self.prev_y) * self.mouse_sensitivity;
+        if self.controls.prev_x != 0.0 || self.controls.prev_y != 0.0 {
+            dx = (self.controls.mouse_x - self.controls.prev_x) * self.controls.mouse_sensitivity;
+            dy = (self.controls.mouse_y - self.controls.prev_y) * self.controls.mouse_sensitivity;
         }
 
-        self.prev_x = self.mouse_x;
-        self.prev_y = self.mouse_y;
+        self.controls.prev_x = self.controls.mouse_x;
+        self.controls.prev_y = self.controls.mouse_y;
 
-        self.camera.update(dx, dy, self.scroll, self.dt);
+        self.camera.update(dx, dy, self.controls.scroll, self.dt);
 
-        self.scroll = 0.0;
+        self.controls.scroll = 0.0;
 
         Transition::None
     }
@@ -632,12 +619,6 @@ impl Scene for PbsScene {
                 // Material
                 self.material.gui(ui);
 
-                imgui::ComboBox::new(im_str!("Environment")).build_simple_string(
-                    ui,
-                    &mut self.active_environment,
-                    &[im_str!("Exterior"), im_str!("Interior")],
-                );
-
                 ui.spacing();
 
                 // Lighting
@@ -648,21 +629,66 @@ impl Scene for PbsScene {
                     .build(ui)
                 {
                     ui.spacing();
-                    ui.group(|| {
-                        imgui::ColorEdit::new(im_str!("Light Color"), &mut self.light_color)
+                    imgui::TreeNode::new(im_str!("Punctual"))
+                        .default_open(true)
+                        .open_on_arrow(true)
+                        .open_on_double_click(true)
+                        .framed(false)
+                        .build(ui, || {
+                            imgui::DragFloat3::new(
+                                ui,
+                                im_str!("Light Direction"),
+                                &mut self.lighting.light_direction,
+                            )
+                            .min(-1.0)
+                            .max(1.0)
+                            .display_format(im_str!("%.2f"))
+                            .speed(0.01)
+                            .build();
+                            imgui::ColorEdit::new(
+                                im_str!("Light Color"),
+                                &mut self.lighting.light_color,
+                            )
                             .format(ColorFormat::Float)
                             .options(true)
                             .picker(true)
                             .alpha(false)
                             .build(&ui);
-                        imgui::Slider::new(
-                            im_str!("Light Intensity"),
-                            RangeInclusive::new(0.01, 300.0),
-                        )
-                        .display_format(im_str!("%.1f"))
-                        .build(&ui, &mut self.light_intensity);
-                        ui.new_line()
-                    });
+                            imgui::Slider::new(
+                                im_str!("Light Intensity"),
+                                RangeInclusive::new(0.01, 300.0),
+                            )
+                            .display_format(im_str!("%.1f"))
+                            .build(&ui, &mut self.lighting.light_intensity);
+                            ui.new_line()
+                        });
+
+                    imgui::TreeNode::new(im_str!("Image-Based"))
+                        .default_open(true)
+                        .open_on_arrow(true)
+                        .open_on_double_click(true)
+                        .framed(false)
+                        .build(ui, || {
+                            imgui::ComboBox::new(im_str!("Environment")).build_simple_string(
+                                ui,
+                                &mut self.environment.active_environment,
+                                &[im_str!("Exterior"), im_str!("Interior")],
+                            );
+
+                            let skybox_type_ref = unsafe {
+                                &mut *(&mut self.environment.skybox_type as *mut SkyboxType
+                                    as *mut usize)
+                            };
+                            imgui::ComboBox::new(im_str!("Skybox")).build_simple_string(
+                                ui,
+                                skybox_type_ref,
+                                &[
+                                    im_str!("Original"),
+                                    im_str!("Radiance"),
+                                    im_str!("Irradiance"),
+                                ],
+                            );
+                        });
                 }
 
                 // Camera
@@ -729,7 +755,7 @@ impl Scene for PbsScene {
                     ui.spacing();
                     imgui::ComboBox::new(im_str!("Operator")).build_simple_string(
                         &ui,
-                        &mut self.tone_mapping_operator,
+                        &mut self.tone_mapping.operator,
                         &[
                             im_str!("ACESFitted"),
                             im_str!("ACESFilmic"),
@@ -741,18 +767,18 @@ impl Scene for PbsScene {
                         ],
                     );
 
-                    if self.tone_mapping_operator == 4 {
+                    if self.tone_mapping.operator == 4 {
                         imgui::Slider::new(
                             im_str!("White Threshold"),
                             RangeInclusive::new(0.3, 30.0),
                         )
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.white_threshold);
+                        .build(&ui, &mut self.tone_mapping.white_threshold);
                     }
 
                     imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.05, 30.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.exposure);
+                        .build(&ui, &mut self.tone_mapping.exposure);
                     ui.new_line()
                 }
 
@@ -760,10 +786,10 @@ impl Scene for PbsScene {
                 self.post_stack.gui(ui);
 
                 ui.dummy([358.0, 0.0]);
-                self.cursor_over_ui = ui.is_window_focused() || ui.is_window_hovered();
+                self.controls.cursor_over_ui = ui.is_window_focused() || ui.is_window_hovered();
             });
 
-        self.cursor_over_ui = (self.cursor_over_ui
+        self.controls.cursor_over_ui = (self.controls.cursor_over_ui
             || ui.is_any_item_hovered()
             || ui.is_any_item_focused()
             || ui.is_any_item_active())

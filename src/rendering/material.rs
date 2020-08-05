@@ -20,6 +20,7 @@ const DISPLACEMENT_MAP_UNIFORM_NAME: &str = "displacementMap";
 const BRDF_LUT_MAP_UNIFORM_NAME: &str = "brdfLUT";
 const BASE_COLOR_UNIFORM_NAME: &str = "baseColor";
 const M_R_AO_SCALE_UNIFORM_NAME: &str = "m_r_aoScale";
+const M_R_AO_BIAS_UNIFORM_NAME: &str = "m_r_aoBias";
 const POM_PARAMETERS_UNIFORM_NAME: &str = "pomParameters";
 const PARALLAX_MAPPING_METHOD_UNIFORM_NAME: &str = "parallaxMappingMethod";
 
@@ -39,12 +40,10 @@ struct MaterialPropertyBlock {
     roughness_bias: f32,
     ao_scale: f32,
     ao_bias: f32,
-    sampler: Sampler,
     min_pom_layers: f32,
     max_pom_layers: f32,
     displacement_scale: f32,
     parallax_mapping_method: usize,
-    fresnel_mode: usize,
 }
 
 pub struct PbsMetallicRoughnessMaterial {
@@ -136,7 +135,6 @@ impl PbsMetallicRoughnessMaterial {
                 max_pom_layers: 32.0,
                 displacement_scale: 0.018,
                 parallax_mapping_method: 4,
-                fresnel_mode: 0,
             },
             program_pipeline,
         }
@@ -191,17 +189,12 @@ impl Material for PbsMetallicRoughnessMaterial {
                 ShaderStage::Fragment,
             )
             .set_vector3f(
-                "m_r_ao_bias",
+                M_R_AO_BIAS_UNIFORM_NAME,
                 &Vec3::new(
                     self.property_block.metallic_bias,
                     self.property_block.roughness_bias,
                     self.property_block.ao_bias,
                 ),
-                ShaderStage::Fragment,
-            )
-            .set_integer(
-                "fresnelMode",
-                self.property_block.fresnel_mode as i32,
                 ShaderStage::Fragment,
             );
 
@@ -308,17 +301,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     });
                 });
 
-                imgui::ComboBox::new(im_str!("IBL Method")).build_simple_string(
-                    ui,
-                    &mut self.property_block.fresnel_mode,
-                    &[
-                        im_str!("radiance + (F * lut.x + lut.y)"),
-                        im_str!("fresnel(..., F0 * lut.x + lut.y, ...)"),
-                        im_str!("radiance + (F0 * lut.x + lut.y"),
-                    ],
-                );
-
-                if let Some(displacement) = self.displacement.clone() {
+                if let Some(displacement) = self.displacement.as_ref() {
                     ui.spacing();
                     ui.spacing();
 

@@ -4,7 +4,7 @@ use std::ffi::CString;
 use std::ptr;
 
 use super::shader::Shader;
-use crate::core::math::{matrix::Mat4, utilities, Vec3, Vec4};
+use crate::core::math::{matrix::Mat4, utilities, Vec2, Vec3, Vec4};
 use crate::rendering::{
     buffer::Buffer,
     sampler::Sampler,

@@ -30,8 +30,7 @@ layout(location = 7) uniform vec3 lightColor;
 layout(location = 8) uniform vec3 baseColor;
 layout(location = 9) uniform vec3 m_r_aoScale;
 
-layout(location = 10) uniform int fresnelMode;
-layout(location = 11) uniform vec3 m_r_ao_bias;
+layout(location = 10) uniform vec3 m_r_aoBias;
 
 layout(location = 0) out vec4 outColor;
 
@@ -124,45 +123,15 @@ vec3 EnvironmentBRDFApprox( vec3 F0, float roughness, float NoV )
 
 vec3 IBL(in float NdotV, in vec3 F0, in vec3 albedo, in float metallic, in float roughness, in float ao, in vec2 brdfLUT, in vec3 irradiance, in vec3 radiance)
 {
-    if (fresnelMode == 0) {
-        vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
 
-        vec3 kD = 1.0 - F;
-        kD *= 1.0 - metallic;
+    vec3 kD = 1.0 - F;
+    kD *= 1.0 - metallic;
 
-        vec3 diffuse = irradiance * albedo;
-        vec3 specular = radiance * (F * brdfLUT.x + brdfLUT.y);
+    vec3 diffuse = irradiance * albedo;
+    vec3 specular = radiance * (F * brdfLUT.x + brdfLUT.y);
 
-        return (kD * diffuse + specular) * ao;
-    }
-    else if (fresnelMode == 1) {
-        vec3 F = FresnelSchlickRoughness(NdotV, F0 * brdfLUT.x + brdfLUT.y, roughness);
-
-        vec3 kD = 1.0 - F;
-        kD *= 1.0 - metallic;
-
-        vec3 diffuse = irradiance * albedo;
-        vec3 specular = radiance * F;
-
-        return (kD * diffuse + specular) * ao;
-    }
-    else if (fresnelMode == 2) {
-        vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
-
-//        vec3 F = EnvironmentBRDFApprox(F0, roughness, NdotV);
-
-//        vec3 F = F0 * brdfLUT.x + brdfLUT.y;
-
-        vec3 kD = 1.0 - F;
-        kD *= 1.0 - metallic;
-
-        vec3 diffuse = irradiance * albedo;
-        vec3 specular = radiance * F * EnvironmentBRDFApprox(F0, roughness, NdotV);
-
-        return (kD * diffuse + specular) * ao;
-    }
-
-    return vec3(1.0);
+    return (kD * diffuse + specular) * ao;
 }
 
 // reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
@@ -211,9 +180,9 @@ void main()
     vec4 albedo = texture(albedoMap, fsIn.texcoord) * vec4(baseColor, 1.0);
 
     vec3 m_r_ao = texture(m_r_aoMap, fsIn.texcoord).rgb;
-    float metallic = clamp(0.0, 1.0, m_r_ao.r + m_r_ao_bias.r) * m_r_aoScale.x;
-    float roughness = clamp(MIN_ROUGHNESS, 1.0, m_r_ao.g + m_r_ao_bias.g) * m_r_aoScale.y;
-    float ao = clamp(0.0, 1.0, m_r_ao.b + m_r_ao_bias.b) * m_r_aoScale.z;
+    float metallic = clamp((m_r_ao.r + m_r_aoBias.r) * m_r_aoScale.x, 0.0, 1.0);
+    float roughness =  clamp((m_r_ao.g + m_r_aoBias.g) * m_r_aoScale.y, MIN_ROUGHNESS, 1.0) ;
+    float ao = clamp((m_r_ao.b + m_r_aoBias.b) * m_r_aoScale.z, 0.0, 1.0);
 
     vec3 irradiance = texture(irradianceMap, n).rgb;
 

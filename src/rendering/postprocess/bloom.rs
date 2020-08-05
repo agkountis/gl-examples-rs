@@ -41,25 +41,10 @@ impl PostprocessingEffect for Bloom {
     }
 
     fn apply(&self, input: &Framebuffer, framebuffer_cache: &mut TemporaryFramebufferPool) {
-        let tmp1 =
-            framebuffer_cache.get_temporary(UVec2::new(64, 64), SizedTextureFormat::Rgba16f, None);
-
-        unsafe {
-            if FOO {
-                let tmp2 = framebuffer_cache.get_temporary(
-                    UVec2::new(128, 128),
-                    SizedTextureFormat::Rgba16f,
-                    Some(SizedTextureFormat::Depth24),
-                );
-
-                unsafe {
-                    FOO = false;
-                }
-            }
-        }
+        //TODO: Implement me
     }
 }
-static mut FOO: bool = true;
+
 impl Gui for Bloom {
     fn gui(&mut self, ui: &Ui) {
         ui.group(|| {
@@ -70,7 +55,7 @@ impl Gui for Bloom {
                 .open_on_arrow(true)
                 .open_on_double_click(true)
                 .framed(false)
-                .build(&ui, || {
+                .build(ui, || {
                     ui.indent();
                     imgui::Slider::new(im_str!("Iterations"), RangeInclusive::new(1, 16))
                         .build(&ui, &mut self.iterations);

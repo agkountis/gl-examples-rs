@@ -3,7 +3,7 @@ use std::process::Command;
 
 fn main() {
     if !cfg!(feature = "auto-compile-spirv") {
-        return
+        return;
     }
 
     let paths = [
