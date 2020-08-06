@@ -1,6 +1,7 @@
 use std::{ops::RangeInclusive, rc::Rc};
 
 use engine::color::srgb_to_linear;
+use engine::math::Vec2;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
@@ -58,6 +59,9 @@ struct Lighting {
     light_direction: [f32; 3],
     light_color: [f32; 3],
     light_intensity: f32,
+    disney_ggx_hotness: bool,
+    geometric_specular_aa: bool,
+    ss_variance_and_threshold: Vec2,
 }
 
 struct ToneMapping {
@@ -338,6 +342,9 @@ impl PbsScene {
                 light_direction: [0.4, 0.0, -1.0],
                 light_color: [1.0, 1.0, 1.0],
                 light_intensity: 5.0,
+                disney_ggx_hotness: true,
+                geometric_specular_aa: true,
+                ss_variance_and_threshold: Vec2::new(0.25, 0.18),
             },
             tone_mapping: ToneMapping {
                 pipeline: tonemapping_prog,
@@ -378,6 +385,21 @@ impl PbsScene {
                 ShaderStage::Fragment,
             )
             .set_vector3f("lightColor", &light_color, ShaderStage::Fragment)
+            .set_integer(
+                "disneyGgxHotness",
+                self.lighting.disney_ggx_hotness as i32,
+                ShaderStage::Fragment,
+            )
+            .set_integer(
+                "specularAA",
+                self.lighting.geometric_specular_aa as i32,
+                ShaderStage::Fragment,
+            )
+            .set_vector2f(
+                "ssVarianceAndThreshold",
+                &self.lighting.ss_variance_and_threshold,
+                ShaderStage::Fragment,
+            )
             .set_matrix4f("model", &self.model.transform, ShaderStage::Vertex)
             .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
             .set_vector3f("eyePosition", &self.camera.position(), ShaderStage::Vertex)
@@ -635,32 +657,95 @@ impl Scene for PbsScene {
                         .open_on_double_click(true)
                         .framed(false)
                         .build(ui, || {
-                            imgui::DragFloat3::new(
-                                ui,
-                                im_str!("Light Direction"),
-                                &mut self.lighting.light_direction,
-                            )
-                            .min(-1.0)
-                            .max(1.0)
-                            .display_format(im_str!("%.2f"))
-                            .speed(0.01)
-                            .build();
-                            imgui::ColorEdit::new(
-                                im_str!("Light Color"),
-                                &mut self.lighting.light_color,
-                            )
-                            .format(ColorFormat::Float)
-                            .options(true)
-                            .picker(true)
-                            .alpha(false)
-                            .build(&ui);
-                            imgui::Slider::new(
-                                im_str!("Light Intensity"),
-                                RangeInclusive::new(0.01, 300.0),
-                            )
-                            .display_format(im_str!("%.1f"))
-                            .build(&ui, &mut self.lighting.light_intensity);
-                            ui.new_line()
+                            imgui::TreeNode::new(im_str!("Directional Light"))
+                                .default_open(true)
+                                .open_on_arrow(true)
+                                .open_on_double_click(true)
+                                .framed(false)
+                                .build(ui, || {
+                                    imgui::DragFloat3::new(
+                                        ui,
+                                        im_str!("Light Direction"),
+                                        &mut self.lighting.light_direction,
+                                    )
+                                        .min(-1.0)
+                                        .max(1.0)
+                                        .display_format(im_str!("%.2f"))
+                                        .speed(0.01)
+                                        .build();
+                                    imgui::ColorEdit::new(
+                                        im_str!("Light Color"),
+                                        &mut self.lighting.light_color,
+                                    )
+                                        .format(ColorFormat::Float)
+                                        .options(true)
+                                        .picker(true)
+                                        .alpha(false)
+                                        .build(&ui);
+                                    imgui::Slider::new(
+                                        im_str!("Light Intensity"),
+                                        RangeInclusive::new(0.01, 300.0),
+                                    )
+                                        .display_format(im_str!("%.1f"))
+                                        .build(&ui, &mut self.lighting.light_intensity);
+                                });
+
+                            imgui::TreeNode::new(im_str!("BRDF"))
+                                .default_open(true)
+                                .open_on_arrow(true)
+                                .open_on_double_click(true)
+                                .framed(false)
+                                .build(ui, || {
+                                    ui.checkbox(im_str!("Disney's roughness remapping (GGX)"), &mut self.lighting.disney_ggx_hotness);
+
+                                    if ui.is_item_hovered() {
+                                        ui.tooltip(|| {
+                                            ui.text(im_str!("Details"));
+                                            ui.separator();
+                                            let stack_token = ui.push_text_wrap_pos(800.0);
+                                            ui.text(im_str!("In his talk named \"Real Shading in Unreal Engine 4\" Brian Karis mentions that they used Disney's remapping to perceptual roughness \
+                    to reduce \"hotness\" in the geometry term of the BRDF. However, in a later blog \
+                    post he mentions completely removing this remapping."));
+                                            stack_token.pop(ui);
+
+                                            ui.spacing();
+                                            ui.text(im_str!("Formulas"));
+                                            ui.separator();
+                                            ui.bullet_text(im_str!("Default geometry term (GGX) 'k' value: roughness^2 / 2"));
+                                            ui.bullet_text(im_str!("Disney's hotness modification: ((roughness + 1) / 2)^2 / 2"));
+                                            ui.spacing();
+
+                                            ui.text(im_str!("References"));
+                                            ui.separator();
+                                            ui.bullet_text(im_str!("Original Paper: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf"));
+                                            ui.bullet_text(im_str!("Blog post: https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile"))
+                                        });
+                                    }
+
+                                    ui.checkbox(im_str!("##geomspecaa"), &mut self.lighting.geometric_specular_aa);
+                                    ui.same_line(72.0);
+                                    imgui::TreeNode::new(im_str!("Geometric Specular AA"))
+                                        .default_open(true)
+                                        .open_on_arrow(true)
+                                        .open_on_double_click(true)
+                                        .framed(false)
+                                        .build(ui, || {
+                                            ui.indent();
+                                            imgui::Slider::new(
+                                                im_str!("Screen Space Variance"),
+                                                RangeInclusive::new(0.01, 1.0),
+                                            )
+                                                .display_format(im_str!("%.2f"))
+                                                .build(&ui, &mut self.lighting.ss_variance_and_threshold.x);
+                                            imgui::Slider::new(
+                                                im_str!("Threshold"),
+                                                RangeInclusive::new(0.01, 1.0),
+                                            )
+                                                .display_format(im_str!("%.2f"))
+                                                .build(&ui, &mut self.lighting.ss_variance_and_threshold.y);
+                                            ui.unindent()
+                                        });
+                                });
                         });
 
                     imgui::TreeNode::new(im_str!("Image-Based"))
@@ -700,48 +785,53 @@ impl Scene for PbsScene {
                 {
                     ui.spacing();
                     ui.group(|| {
-                        let mut orbit_speed = self.camera.orbit_speed();
-                        if imgui::Slider::new(
-                            im_str!("Orbit Speed"),
-                            RangeInclusive::new(1.0, 10.0),
-                        )
-                        .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut orbit_speed)
-                        {
-                            self.camera.set_orbit_speed(orbit_speed)
-                        }
+                        imgui::TreeNode::new(im_str!("Controls"))
+                            .default_open(true)
+                            .open_on_arrow(true)
+                            .open_on_double_click(true)
+                            .framed(false)
+                            .build(ui, ||{
+                                let mut orbit_speed = self.camera.orbit_speed();
+                                if imgui::Slider::new(
+                                    im_str!("Orbit Speed"),
+                                    RangeInclusive::new(1.0, 10.0),
+                                )
+                                    .display_format(im_str!("%.2f"))
+                                    .build(&ui, &mut orbit_speed)
+                                {
+                                    self.camera.set_orbit_speed(orbit_speed)
+                                }
 
-                        let mut orbit_dampening = self.camera.orbit_dampening();
-                        if imgui::Slider::new(
-                            im_str!("Orbit Dampening"),
-                            RangeInclusive::new(1.0, 10.0),
-                        )
-                        .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut orbit_dampening)
-                        {
-                            self.camera.set_orbit_dampening(orbit_dampening)
-                        }
+                                let mut orbit_dampening = self.camera.orbit_dampening();
+                                if imgui::Slider::new(
+                                    im_str!("Orbit Dampening"),
+                                    RangeInclusive::new(1.0, 10.0),
+                                )
+                                    .display_format(im_str!("%.2f"))
+                                    .build(&ui, &mut orbit_dampening)
+                                {
+                                    self.camera.set_orbit_dampening(orbit_dampening)
+                                }
 
-                        let mut zoom_speed = self.camera.zoom_speed();
-                        if imgui::Slider::new(im_str!("Zoom Speed"), RangeInclusive::new(1.0, 40.0))
-                            .display_format(im_str!("%.2f"))
-                            .build(&ui, &mut zoom_speed)
-                        {
-                            self.camera.set_zoom_speed(zoom_speed)
-                        }
+                                let mut zoom_speed = self.camera.zoom_speed();
+                                if imgui::Slider::new(im_str!("Zoom Speed"), RangeInclusive::new(1.0, 40.0))
+                                    .display_format(im_str!("%.2f"))
+                                    .build(&ui, &mut zoom_speed)
+                                {
+                                    self.camera.set_zoom_speed(zoom_speed)
+                                }
 
-                        let mut zoom_dampening = self.camera.zoom_dampening();
-                        if imgui::Slider::new(
-                            im_str!("Zoom Dampening"),
-                            RangeInclusive::new(0.1, 10.0),
-                        )
-                        .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut zoom_dampening)
-                        {
-                            self.camera.set_zoom_dampening(zoom_dampening)
-                        }
-
-                        ui.new_line()
+                                let mut zoom_dampening = self.camera.zoom_dampening();
+                                if imgui::Slider::new(
+                                    im_str!("Zoom Dampening"),
+                                    RangeInclusive::new(0.1, 10.0),
+                                )
+                                    .display_format(im_str!("%.2f"))
+                                    .build(&ui, &mut zoom_dampening)
+                                {
+                                    self.camera.set_zoom_dampening(zoom_dampening)
+                                }
+                            });
                     });
                 }
 
