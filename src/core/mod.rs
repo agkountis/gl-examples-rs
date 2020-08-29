@@ -6,9 +6,6 @@ pub mod math;
 pub mod scene;
 pub mod timer;
 
-mod messaging;
-mod model_loader;
-
 use self::math::{UVec2, Vec4};
 use crate::asset::AssetManager;
 use crate::rendering::framebuffer::TemporaryFramebufferPool;

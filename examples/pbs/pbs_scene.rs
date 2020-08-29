@@ -1,6 +1,5 @@
 use std::{ops::RangeInclusive, rc::Rc};
 
-use engine::color::srgb_to_linear;
 use engine::core::math::{inverse, transpose};
 use engine::math::Vec2;
 use engine::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
@@ -20,7 +19,7 @@ use engine::{
         mesh::{FullscreenMesh, Mesh, MeshUtilities},
         postprocess::{
             bloom::{Bloom, BloomBuilder},
-            PostprocessingEffect, PostprocessingStack, PostprocessingStackBuilder,
+            PostprocessingStack, PostprocessingStackBuilder,
         },
         program_pipeline::ProgramPipeline,
         sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
@@ -195,7 +194,7 @@ impl PbsScene {
             .unwrap();
 
         let mesh = asset_manager
-            .load_mesh(asset_path.join("models/cerberus/cerberus.fbx"))
+            .load_mesh(asset_path.join("models/cerberus/cerberus.glb"))
             .expect("Failed to load mesh");
 
         let skybox_mesh = MeshUtilities::generate_cube(1.0);

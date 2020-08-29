@@ -474,7 +474,7 @@ impl Framebuffer {
         source_color_attachments
             .iter()
             .enumerate()
-            .for_each(|(i, attachment)| unsafe {
+            .for_each(|(i, _)| unsafe {
                 gl::NamedFramebufferReadBuffer(source.id(), gl::COLOR_ATTACHMENT0 + i as u32);
                 gl::NamedFramebufferDrawBuffer(destination.id(), gl::COLOR_ATTACHMENT0 + i as u32);
 
@@ -671,13 +671,13 @@ impl TemporaryFramebufferPool {
                     });
 
                 // Keep only the values that satisfy the condition. Discard the rest.
-                framebuffers.retain(|(last_used, in_use, framebuffer)| {
+                framebuffers.retain(|(last_used, in_use, _)| {
                     *in_use || (current_frame - *last_used) < keepalive_frames as u64
                 });
             });
 
         // Retain only the entries that have allocated framebuffers. Clear the rest.
-        self.free_framebuffers_map.retain(|k, v| !v.is_empty());
+        self.free_framebuffers_map.retain(|_, v| !v.is_empty());
 
         self.current_frame += 1
     }

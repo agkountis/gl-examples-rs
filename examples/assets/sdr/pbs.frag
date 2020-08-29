@@ -11,7 +11,7 @@ const float MIN_ROUGHNESS = 0.023;
 layout(location = 0) in VsOut {
     vec3 wViewDirection;
     vec3 wNormal;
-    vec3 wTangent;
+    vec4 wTangent;
     vec2 texcoord;
 } fsIn;
 
@@ -43,16 +43,14 @@ layout(binding = 3) uniform sampler2D brdfLUT;
 layout(binding = 4) uniform samplerCube irradianceMap;
 layout(binding = 5) uniform samplerCube radianceMap;
 
-
 layout(location = 0) out vec4 outColor;
 
-
-mat3 CreateTBN(in vec3 n, in vec3 t)
+mat3 CreateTBN(in vec3 n, in vec3 t, in float tSign)
 {
     t = normalize(t - dot(t, n) * n);
 
     //Calculate the binormal
-    vec3 b = normalize(cross(n, t));
+    vec3 b = normalize(cross(n, t) * tSign);
 
     return mat3(t, b, n);
 }
@@ -224,7 +222,7 @@ vec3 SampleNormalMap(in sampler2D normalMap, in vec2 texcoords, in float strengt
 
 void main()
 {
-    mat3 TBN = CreateTBN(normalize(fsIn.wNormal), normalize(fsIn.wTangent));
+    mat3 TBN = CreateTBN(normalize(fsIn.wNormal), normalize(fsIn.wTangent.xyz), fsIn.wTangent.w);
 
     vec3 n = normalize(TBN * SampleNormalMap(normalMap, fsIn.texcoord, 1.0));
 

@@ -9,18 +9,20 @@ default = []
 use-spirv = []
 auto-compile-spirv = []
 
-
 [dependencies]
 nalgebra-glm = "^0.8.0"
 bitflags = "^1.0.0"
 image = "^0.22.0"
 gli-rs = "^0.4.0"
-assimp = "0.3.1"
 glutin = "^0.24.0"
 gl_bindings = {path = "gl_bindings"}
 imgui = "0.4.0"
 imgui-winit-support = "0.4.0"
 imgui-opengl-renderer = "0.8.0"
+
+[dependencies.gltf]
+version = "0.15"
+features = ["extras", "names", "utils"]
 
 [build-dependencies]
 glob = "^0.3.0"

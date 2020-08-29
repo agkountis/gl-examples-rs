@@ -33,7 +33,7 @@ impl ProgramPipeline {
     pub fn add_shader(mut self, shader: &Shader) -> Self {
         let idx = Self::shader_stage_to_array_index(shader.get_stage());
 
-        if let Some(ref sdr) = self.shaders[idx] {
+        if let Some(_) = self.shaders[idx] {
             println!(
                 "Shader of type {:?} already exists in the program pipeline... Replacing...",
                 shader.get_stage()

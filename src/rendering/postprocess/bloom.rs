@@ -1,4 +1,3 @@
-use crate::core::math::UVec2;
 use crate::imgui::{im_str, Gui, Ui};
 use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
 use crate::rendering::postprocess::{AsAny, AsAnyMut, PostprocessingEffect};

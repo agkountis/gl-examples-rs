@@ -3,7 +3,7 @@ use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapMode
 use crate::rendering::texture::Texture2DLoadConfig;
 use crate::sampler::Anisotropy;
 use crate::{
-    core::math::{Vec3, Vec4},
+    core::math::Vec4,
     imgui::{im_str, ColorFormat, Gui, Ui},
     rendering::{
         program_pipeline::ProgramPipeline,

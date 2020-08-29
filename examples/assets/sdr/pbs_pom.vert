@@ -4,7 +4,7 @@
 //Vertex attributes
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inTangent;
+layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inTexcoord;
 layout(location = 4) in vec3 inColor;
 
@@ -46,12 +46,12 @@ void main()
     vec3 wNormal = normalMatrix * inNormal;
 
     // Bring tangent to world space.
-    vec3 wTangent = normalize(normalMatrix * inTangent);
+    vec3 wTangent = normalize(normalMatrix * inTangent.xyz);
 
     wTangent = normalize(wTangent - dot(wTangent, wNormal) * wNormal);
 
     //Calculate the binormal
-    vec3 wBinormal = normalize(cross(wNormal, wTangent));
+    vec3 wBinormal = normalize(cross(wNormal, wTangent) * inTangent.w);
 
     // Pass the TBN matrix to the fragment shader.
     vsOut.TBN = mat3(wTangent, wBinormal, wNormal);

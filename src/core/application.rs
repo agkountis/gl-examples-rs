@@ -1,18 +1,15 @@
 use gl::types::*;
 use gl_bindings as gl;
 
+use crate::core::{
+    asset::AssetManager,
+    math::Vec4,
+    scene::{Scene, SceneManager},
+    timer::Timer,
+    Context, Settings,
+};
 use crate::imgui::ImGui;
 use crate::rendering::framebuffer::TemporaryFramebufferPool;
-use crate::{
-    core::{
-        asset::AssetManager,
-        math::Vec4,
-        scene::{Scene, SceneManager},
-        timer::Timer,
-        Context, Settings,
-    },
-    Msaa,
-};
 use glutin::{
     dpi::LogicalSize,
     event::{Event, WindowEvent},

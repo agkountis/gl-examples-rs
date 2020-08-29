@@ -18,7 +18,7 @@ use std::{mem, path::Path, ptr};
 pub struct Vertex {
     position: Vec3,
     normal: Vec3,
-    tangent: Vec3,
+    tangent: Vec4,
     tex_coord: Vec2,
     color: Vec4,
 }
@@ -90,7 +90,7 @@ impl Mesh {
             gl::VertexArrayAttribFormat(
                 vao,
                 2,
-                3,
+                4,
                 gl::FLOAT,
                 gl::FALSE,
                 offset_of!(Vertex, tangent) as u32,
@@ -167,43 +167,53 @@ impl Asset for Mesh {
         path: P,
         _: Option<Self::LoadConfig>,
     ) -> Result<Self::Output, Self::Error> {
-        use assimp::Importer;
+        use gltf::buffer;
 
-        let mut importer = Importer::new();
-        importer.triangulate(true);
-        importer.calc_tangent_space(|calc| calc.enable = true);
-        importer.flip_uvs(true);
+        if let Ok((document, buffers, _)) = gltf::import(path) {
+            let scene = document
+                .scenes()
+                .next()
+                .expect("Gltf document has no scenes");
+            let node = scene.nodes().next().expect("Gltf scene has no nodes");
+            let mesh = node.mesh().expect("Gltf node has no mesh");
+            let primitive = mesh.primitives().next().unwrap();
+            let reader = primitive.reader(|buffer| {
+                buffers
+                    .get(buffer.index())
+                    .and_then(|buffer::Data(data)| data.as_slice().into())
+            });
 
-        if let Ok(scene) = importer.read_file(path.as_ref().to_string_lossy().to_owned().as_ref()) {
-            if scene.num_meshes() > 0 {
-                let ai_mesh = scene.mesh(0).unwrap();
+            let positions = reader.read_positions().expect("Mesh has no positions");
+            let normals = reader.read_normals().expect("Mesh has no normals");
+            let tangents = reader.read_tangents().expect("Mesh has no tangents");
+            let tex_coords = reader
+                .read_tex_coords(0)
+                .expect("Mesh has no UV channel 0.");
 
-                let verts = ai_mesh
-                    .vertex_iter()
-                    .zip(ai_mesh.normal_iter())
-                    .zip(ai_mesh.tangent_iter())
-                    .zip(ai_mesh.texture_coords_iter(0))
-                    .map(|(((v, n), t), tc)| Vertex {
-                        position: Vec3::new(v.x, v.y, v.z),
-                        normal: Vec3::new(n.x, n.y, n.z),
-                        tangent: Vec3::new(t.x, t.y, t.z),
-                        tex_coord: Vec2::new(tc.x, tc.y),
-                        color: Vec4::new(1.0, 1.0, 1.0, 1.0),
-                    })
-                    .collect::<Vec<Vertex>>();
+            let vertices = positions
+                .zip(normals)
+                .zip(tangents)
+                .zip(tex_coords.into_f32())
+                .map(|(((v, n), t), tc)| Vertex {
+                    position: Vec3::new(v[0], v[1], v[2]),
+                    normal: Vec3::new(n[0], n[1], n[2]),
+                    tangent: t.into(),
+                    tex_coord: Vec2::new(tc[0], tc[1]),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                })
+                .collect::<Vec<_>>();
 
-                let mut indices: Vec<u32> = Vec::with_capacity(ai_mesh.num_faces() as usize * 3);
-                for face in ai_mesh.face_iter() {
-                    indices.push(face[0]);
-                    indices.push(face[1]);
-                    indices.push(face[2]);
-                }
+            let indices = reader
+                .read_indices()
+                .expect("Mesh has no indices.")
+                .into_u32()
+                .map(|index| index)
+                .collect::<Vec<_>>();
 
-                return Ok(Mesh::new(verts, indices));
-            }
+            Ok(Mesh::new(vertices, indices))
+        } else {
+            Err("Failed to load Gltf file".to_string())
         }
-
-        Err("f".to_string())
     }
 }
 
@@ -242,28 +252,28 @@ impl MeshUtilities {
             Vertex {
                 position: Vec3::new(-half_dimensions.x, -half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, 1.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, 1.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, -half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, 1.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, 1.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
@@ -271,28 +281,28 @@ impl MeshUtilities {
             Vertex {
                 position: Vec3::new(half_dimensions.x, -half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec4::new(0.0, 0.0, -1.0, 1.0),
                 tex_coord: Vec2::new(0.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec4::new(0.0, 0.0, -1.0, 1.0),
                 tex_coord: Vec2::new(0.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec4::new(0.0, 0.0, -1.0, 1.0),
                 tex_coord: Vec2::new(1.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, -1.0),
+                tangent: Vec4::new(0.0, 0.0, -1.0, 1.0),
                 tex_coord: Vec2::new(1.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
@@ -300,28 +310,28 @@ impl MeshUtilities {
             Vertex {
                 position: Vec3::new(-half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(-1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec4::new(0.0, 0.0, 1.0, 1.0),
                 tex_coord: Vec2::new(0.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(-1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec4::new(0.0, 0.0, 1.0, 1.0),
                 tex_coord: Vec2::new(0.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, -half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(-1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec4::new(0.0, 0.0, 1.0, 1.0),
                 tex_coord: Vec2::new(1.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(-1.0, 0.0, 0.0),
-                tangent: Vec3::new(0.0, 0.0, 1.0),
+                tangent: Vec4::new(0.0, 0.0, 1.0, 1.0),
                 tex_coord: Vec2::new(1.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
@@ -329,28 +339,28 @@ impl MeshUtilities {
             Vertex {
                 position: Vec3::new(half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, -1.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, -1.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, -1.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, 0.0, -1.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
@@ -358,28 +368,28 @@ impl MeshUtilities {
             Vertex {
                 position: Vec3::new(-half_dimensions.x, half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, 1.0, 0.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, 1.0, 0.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, 1.0, 0.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, 1.0, 0.0),
-                tangent: Vec3::new(1.0, 0.0, 0.0),
+                tangent: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
@@ -387,28 +397,28 @@ impl MeshUtilities {
             Vertex {
                 position: Vec3::new(half_dimensions.x, -half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, -1.0, 0.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, -1.0, 0.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(0.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, -half_dimensions.y, half_dimensions.z),
                 normal: Vec3::new(0.0, -1.0, 0.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 0.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },
             Vertex {
                 position: Vec3::new(-half_dimensions.x, -half_dimensions.y, -half_dimensions.z),
                 normal: Vec3::new(0.0, -1.0, 0.0),
-                tangent: Vec3::new(-1.0, 0.0, 0.0),
+                tangent: Vec4::new(-1.0, 0.0, 0.0, 1.0),
                 tex_coord: Vec2::new(1.0, 1.0),
                 color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             },

@@ -4,7 +4,7 @@
 //Vertex attributes
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inTangent;
+layout(location = 2) in vec4 inTangent;
 layout(location = 3) in vec2 inTexcoord;
 layout(location = 4) in vec3 inColor;
 
@@ -32,7 +32,7 @@ out gl_PerVertex {
 layout(location = 0) out VsOut {
     vec3 wViewDirection;
     vec3 wNormal;
-    vec3 wTangent;
+    vec4 wTangent;
     vec2 texcoord;
 } vsOut;
 
@@ -48,7 +48,7 @@ void main()
     vsOut.wNormal = normalMat * inNormal;
 
     // Bring tangent to world space.
-    vsOut.wTangent = normalMat * inTangent;
+    vsOut.wTangent = vec4(normalMat * inTangent.xyz, inTangent.w);
 
     //Assign the view direction for output.
     vsOut.wViewDirection = eyePosition.xyz - wVertexPosition.xyz;
