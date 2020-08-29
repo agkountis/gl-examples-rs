@@ -1,7 +1,10 @@
 use std::{ops::RangeInclusive, rc::Rc};
 
 use engine::color::srgb_to_linear;
+use engine::core::math::{inverse, transpose};
 use engine::math::Vec2;
+use engine::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
+use engine::rendering::sampler::Anisotropy;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
@@ -93,6 +96,40 @@ struct Samplers {
     nearest: Sampler,
 }
 
+#[repr(C)]
+struct VertexPerFrameUniforms {
+    view_projection_matrix: Mat4,
+    eye_position: Vec4,
+}
+
+#[repr(C)]
+struct VertexPerDrawUniforms {
+    model_matrix: Mat4,
+    normal_matrix: Mat4,
+}
+
+#[repr(C)]
+struct FragmentPerFrameUniforms {
+    light_direction: Vec4,
+    light_color: Vec4,
+    ss_variance_and_threshold: Vec2,
+    geometric_specular_aa: i32,
+    disney_ggx_hotness: i32,
+}
+
+#[repr(C)]
+struct ToneMappingPerFrameUniforms {
+    operator: i32,
+    white_threshold: f32,
+    exposure: f32,
+    _pad: f32,
+}
+
+#[repr(C)]
+struct SkyboxPerFrameUniforms {
+    view_projection_matrix: Mat4,
+}
+
 pub struct PbsScene {
     camera: Camera,
     model: Model,
@@ -107,6 +144,11 @@ pub struct PbsScene {
     controls: Controls,
     lighting: Lighting,
     tone_mapping: ToneMapping,
+    vertex_per_frame_ubo: Buffer,
+    vertex_per_draw_ubo: Buffer,
+    fragment_per_frame_ubo: Buffer,
+    tone_mapping_ubo: Buffer,
+    skybox_per_frame_ubo: Buffer,
     dt: f32,
 }
 
@@ -133,32 +175,21 @@ impl PbsScene {
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(
-                &Shader::new(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert.spv")).unwrap(),
+                &Shader::new(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert")).unwrap(),
             )
             .add_shader(
-                &Shader::new(
-                    ShaderStage::Fragment,
-                    asset_path.join("sdr/skybox.frag.spv"),
-                )
-                .unwrap(),
+                &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag")).unwrap(),
             )
             .build()
             .unwrap();
 
-        let fullscreen_shader = Shader::new(
-            ShaderStage::Vertex,
-            asset_path.join("sdr/fullscreen.vert.spv"),
-        )
-        .unwrap();
+        let fullscreen_shader =
+            Shader::new(ShaderStage::Vertex, asset_path.join("sdr/fullscreen.vert")).unwrap();
 
         let tonemapping_prog = ProgramPipeline::new()
             .add_shader(&fullscreen_shader)
             .add_shader(
-                &Shader::new(
-                    ShaderStage::Fragment,
-                    asset_path.join("sdr/tonemap.frag.spv"),
-                )
-                .unwrap(),
+                &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/tonemap.frag")).unwrap(),
             )
             .build()
             .unwrap();
@@ -235,7 +266,7 @@ impl PbsScene {
 
         let framebuffer = Framebuffer::new(
             UVec2::new(window.inner_size().width, window.inner_size().height),
-            Msaa::X8,
+            Msaa::X4,
             vec![
                 FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
@@ -246,7 +277,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth24Stencil8,
+                    SizedTextureFormat::Depth16,
                     AttachmentType::Renderbuffer,
                 ),
             ],
@@ -266,7 +297,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth24Stencil8,
+                    SizedTextureFormat::Depth16,
                     AttachmentType::Renderbuffer,
                 ),
             ],
@@ -284,6 +315,7 @@ impl PbsScene {
             WrappingMode::ClampToEdge,
             WrappingMode::ClampToEdge,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
+            Anisotropy::X16,
         );
 
         let sampler_nearest = Sampler::new(
@@ -293,6 +325,7 @@ impl PbsScene {
             WrappingMode::ClampToEdge,
             WrappingMode::ClampToEdge,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
+            Anisotropy::None,
         );
 
         let projection = perspective(
@@ -310,6 +343,51 @@ impl PbsScene {
             normals.clone(),
             None,
         );
+
+        let mut vertex_per_frame_ubo = Buffer::new(
+            "Vertex Per Frame UBO",
+            std::mem::size_of::<VertexPerFrameUniforms>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        vertex_per_frame_ubo.bind(0);
+        vertex_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
+
+        let mut vertex_per_draw_ubo = Buffer::new(
+            "Vertex Per Draw UBO",
+            std::mem::size_of::<VertexPerDrawUniforms>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        vertex_per_draw_ubo.bind(1);
+        vertex_per_draw_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
+
+        let mut fragment_per_frame_ubo = Buffer::new(
+            "Fragment Per Frame UBO",
+            std::mem::size_of::<FragmentPerFrameUniforms>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        fragment_per_frame_ubo.bind(2);
+        fragment_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
+
+        let mut tone_mapping_ubo = Buffer::new(
+            "Tonemapping Fragment UBO",
+            std::mem::size_of::<ToneMappingPerFrameUniforms>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        tone_mapping_ubo.bind(3);
+        tone_mapping_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
+
+        let mut skybox_per_frame_ubo = Buffer::new(
+            "Skybox Matrices UBO",
+            std::mem::size_of::<SkyboxPerFrameUniforms>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        skybox_per_frame_ubo.bind(5);
+        skybox_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
 
         PbsScene {
             camera,
@@ -352,6 +430,11 @@ impl PbsScene {
                 white_threshold: 2.0,
                 exposure: 1.5,
             },
+            vertex_per_frame_ubo,
+            vertex_per_draw_ubo,
+            fragment_per_frame_ubo,
+            tone_mapping_ubo,
+            skybox_per_frame_ubo,
             dt: 0.0,
         }
     }
@@ -360,50 +443,63 @@ impl PbsScene {
         self.framebuffer.bind();
         self.framebuffer.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
 
+        let vertex_per_frame_uniforms = VertexPerFrameUniforms {
+            view_projection_matrix: &self.projection_matrix * self.camera.transform(),
+            eye_position: Vec4::new(
+                self.camera.position().x,
+                self.camera.position().y,
+                self.camera.position().z,
+                1.0,
+            ),
+        };
+
+        let vertex_per_draw_uniforms = VertexPerDrawUniforms {
+            model_matrix: self.model.transform.clone_owned(),
+            normal_matrix: transpose(&inverse(&self.model.transform)),
+        };
+
+        self.vertex_per_frame_ubo
+            .fill_mapped(0, &vertex_per_frame_uniforms);
+
+        self.vertex_per_draw_ubo
+            .fill_mapped(0, &vertex_per_draw_uniforms);
+
         self.material.bind();
 
         let program_pipeline = self.material.program_pipeline();
 
         let mut light_color: Vec3 = srgb_to_linear3f(&self.lighting.light_color.into());
         light_color *= self.lighting.light_intensity;
+
+        let fragment_per_frame_uniforms = FragmentPerFrameUniforms {
+            light_direction: Vec4::new(
+                self.lighting.light_direction[0],
+                self.lighting.light_direction[1],
+                self.lighting.light_direction[2],
+                1.0,
+            ),
+            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 0.0),
+            ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned(),
+            geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
+            disney_ggx_hotness: self.lighting.disney_ggx_hotness as i32,
+        };
+
+        self.fragment_per_frame_ubo
+            .fill_mapped(0, &fragment_per_frame_uniforms);
+
+        const IRRADIANCE_MAP_BINDING_INDEX: u32 = 4;
+        const RADIANCE_MAP_BINDING_INDEX: u32 = 5;
         program_pipeline
             .set_texture_cube(
-                "irradianceMap",
+                IRRADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].irradiance,
                 &self.samplers.linear,
-                ShaderStage::Fragment,
             )
             .set_texture_cube(
-                "radianceMap",
+                RADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].radiance,
                 &self.samplers.linear,
-                ShaderStage::Fragment,
-            )
-            .set_vector3f(
-                "wLightDirection",
-                &self.lighting.light_direction.into(),
-                ShaderStage::Fragment,
-            )
-            .set_vector3f("lightColor", &light_color, ShaderStage::Fragment)
-            .set_integer(
-                "disneyGgxHotness",
-                self.lighting.disney_ggx_hotness as i32,
-                ShaderStage::Fragment,
-            )
-            .set_integer(
-                "specularAA",
-                self.lighting.geometric_specular_aa as i32,
-                ShaderStage::Fragment,
-            )
-            .set_vector2f(
-                "ssVarianceAndThreshold",
-                &self.lighting.ss_variance_and_threshold,
-                ShaderStage::Fragment,
-            )
-            .set_matrix4f("model", &self.model.transform, ShaderStage::Vertex)
-            .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
-            .set_vector3f("eyePosition", &self.camera.position(), ShaderStage::Vertex)
-            .set_matrix4f("projection", &self.projection_matrix, ShaderStage::Vertex);
+            );
 
         self.model.mesh.draw();
 
@@ -434,15 +530,24 @@ impl PbsScene {
             }
         };
 
-        self.environment
-            .skybox_program_pipeline
-            .set_matrix4f("view", &self.camera.transform(), ShaderStage::Vertex)
-            .set_texture_cube(
-                "skybox",
-                &environment_map,
-                &self.samplers.linear,
-                ShaderStage::Fragment,
-            );
+        let mut view = self.camera.transform().clone_owned();
+        view.m14 = 0.0;
+        view.m24 = 0.0;
+        view.m34 = 0.0;
+        view.m44 = 1.0;
+
+        let skybox_per_frame_uniforms = SkyboxPerFrameUniforms {
+            view_projection_matrix: &self.projection_matrix * &view,
+        };
+
+        self.skybox_per_frame_ubo
+            .fill_mapped(0, &skybox_per_frame_uniforms);
+
+        self.environment.skybox_program_pipeline.set_texture_cube(
+            0,
+            &environment_map,
+            &self.samplers.linear,
+        );
 
         self.environment.skybox_mesh.draw();
 
@@ -460,29 +565,20 @@ impl PbsScene {
 
         self.tone_mapping.pipeline.bind();
 
-        self.tone_mapping
-            .pipeline
-            .set_texture_2d_with_id(
-                "image",
-                self.resolve_framebuffer.texture_attachment(0).id(),
-                &self.samplers.nearest,
-                ShaderStage::Fragment,
-            )
-            .set_integer(
-                "tonemappingOperator",
-                self.tone_mapping.operator as i32,
-                ShaderStage::Fragment,
-            )
-            .set_float(
-                "exposure",
-                self.tone_mapping.exposure,
-                ShaderStage::Fragment,
-            )
-            .set_float(
-                "whiteThreshold",
-                self.tone_mapping.white_threshold,
-                ShaderStage::Fragment,
-            );
+        let tone_mapping_uniforms = ToneMappingPerFrameUniforms {
+            operator: self.tone_mapping.operator as i32,
+            white_threshold: self.tone_mapping.white_threshold,
+            exposure: self.tone_mapping.exposure,
+            _pad: 0.0,
+        };
+
+        self.tone_mapping_ubo.fill_mapped(0, &tone_mapping_uniforms);
+
+        self.tone_mapping.pipeline.set_texture_2d_with_id(
+            0,
+            self.resolve_framebuffer.texture_attachment(0).id(),
+            &self.samplers.nearest,
+        );
 
         StateManager::set_front_face(FrontFace::Clockwise);
         self.fullscreen_mesh.draw();
@@ -493,16 +589,7 @@ impl PbsScene {
 }
 
 impl Scene for PbsScene {
-    fn start(&mut self, _: Context) {
-        self.environment.skybox_program_pipeline.bind();
-        self.environment.skybox_program_pipeline.set_matrix4f(
-            "projection",
-            &self.projection_matrix,
-            ShaderStage::Vertex,
-        );
-
-        self.environment.skybox_program_pipeline.unbind();
-    }
+    fn start(&mut self, _: Context) {}
 
     fn stop(&mut self, _: Context) {}
 
@@ -620,7 +707,6 @@ impl Scene for PbsScene {
         } = context;
         self.geometry_pass();
         self.skybox_pass();
-        //self.bloom_pass();
         let size = window.inner_size();
         self.tonemap_pass(size.width, size.height);
         self.post_stack
@@ -629,12 +715,12 @@ impl Scene for PbsScene {
 
     fn gui(&mut self, ui: &Ui) {
         imgui::Window::new(im_str!("Inspector"))
-            .size([358.0, 1079.0], Condition::Appearing)
+            .size([358.0, 720.0], Condition::Appearing)
             .position([2.0, 0.0], Condition::Always)
             .mouse_inputs(true)
-            .resizable(false)
+            .resizable(true)
             .movable(false)
-            .always_auto_resize(true)
+            // .always_auto_resize(true)
             .build(ui, || {
                 ui.dummy([358.0, 0.0]);
 
@@ -651,7 +737,7 @@ impl Scene for PbsScene {
                     .build(ui)
                 {
                     ui.spacing();
-                    imgui::TreeNode::new(im_str!("Punctual"))
+                    imgui::TreeNode::new(im_str!("Analytical"))
                         .default_open(true)
                         .open_on_arrow(true)
                         .open_on_double_click(true)

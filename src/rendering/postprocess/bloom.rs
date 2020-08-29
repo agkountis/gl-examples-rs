@@ -4,7 +4,6 @@ use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
 use crate::rendering::postprocess::{AsAny, AsAnyMut, PostprocessingEffect};
 use crate::rendering::program_pipeline::ProgramPipeline;
 use crate::rendering::shader::{Shader, ShaderStage};
-use crate::rendering::texture::SizedTextureFormat;
 use std::any::Any;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
@@ -138,20 +137,19 @@ impl BloomBuilder {
         let (v_blur_program_pipeline, h_blur_program_pipeline) = {
             let blur_vs = Shader::new(
                 ShaderStage::Vertex,
-                self.assets_path.join("sdr/fullscreen.vert.spv"),
+                self.assets_path.join("sdr/fullscreen.vert"),
             )
             .unwrap();
 
             let v_blur_fs = Shader::new(
                 ShaderStage::Fragment,
-                self.assets_path.join("sdr/gaussian_blur_vertical.frag.spv"),
+                self.assets_path.join("sdr/gaussian_blur_vertical.frag"),
             )
             .unwrap();
 
             let h_blur_fs = Shader::new(
                 ShaderStage::Fragment,
-                self.assets_path
-                    .join("sdr/gaussian_blur_horizontal.frag.spv"),
+                self.assets_path.join("sdr/gaussian_blur_horizontal.frag"),
             )
             .unwrap();
 

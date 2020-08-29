@@ -1,7 +1,7 @@
 use crate::rendering::format::{BufferInternalFormat, DataFormat, DataType};
-use crate::slice_as_bytes;
 use gl::types::*;
 use gl_bindings as gl;
+use std::ffi::CString;
 use std::{mem, ptr};
 
 bitflags! {
@@ -13,21 +13,27 @@ bitflags! {
         const MAP_COHERENT = gl::MAP_COHERENT_BIT;
         const CLIENT_STORAGE = gl::CLIENT_STORAGE_BIT;
         const MAP_READ_WRITE = Self::MAP_READ.bits | Self::MAP_WRITE.bits;
-        const MAP_READ_WRITE_COHERENT = Self::MAP_READ.bits | Self::MAP_WRITE.bits | Self::MAP_COHERENT.bits;
+        const MAP_READ_WRITE_PERSISTENT_COHERENT = Self::MAP_READ.bits | Self::MAP_WRITE.bits | Self::MAP_PERSISTENT.bits | Self::MAP_COHERENT.bits;
         const MAP_WRITE_COHERENT = Self::MAP_WRITE.bits | Self::MAP_COHERENT.bits;
+        const MAP_WRITE_PERSISTENT_COHERENT = Self::MAP_WRITE.bits | Self::MAP_PERSISTENT.bits | Self::MAP_COHERENT.bits;
+    }
+}
+
+bitflags! {
+    pub struct MapModeFlags : u32 {
+        const MAP_READ = gl::MAP_READ_BIT;
+        const MAP_WRITE = gl::MAP_WRITE_BIT;
+        const MAP_PERSISTENT = gl::MAP_PERSISTENT_BIT;
+        const MAP_COHERENT = gl::MAP_COHERENT_BIT;
+        const MAP_READ_WRITE = Self::MAP_READ.bits | Self::MAP_WRITE.bits;
+        const MAP_READ_WRITE_PERSISTENT_COHERENT = Self::MAP_READ.bits | Self::MAP_WRITE.bits | Self::MAP_PERSISTENT.bits | Self::MAP_COHERENT.bits;
+        const MAP_WRITE_COHERENT = Self::MAP_WRITE.bits | Self::MAP_COHERENT.bits;
+        const MAP_WRITE_PERSISTENT_COHERENT = Self::MAP_WRITE.bits | Self::MAP_PERSISTENT.bits | Self::MAP_COHERENT.bits;
     }
 }
 
 #[repr(u32)]
-#[derive(Debug, Clone, Copy)]
-pub enum BufferAccess {
-    ReadOnly = gl::READ_ONLY,
-    WriteOnly = gl::WRITE_ONLY,
-    ReadWrite = gl::READ_WRITE,
-}
-
-#[repr(u32)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BufferTarget {
     None = 0,
     Array = gl::ARRAY_BUFFER,
@@ -55,6 +61,7 @@ pub struct BufferCopyInfo<'a> {
 }
 
 pub struct Buffer {
+    name: String,
     id: GLuint,
     size: isize,
     mapped_ptr: *mut GLvoid,
@@ -63,71 +70,155 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn new(size: isize, buffer_storage_flags: BufferStorageFlags) -> Buffer {
+    pub fn new(
+        name: &str,
+        size: isize,
+        buffer_target: BufferTarget,
+        buffer_storage_flags: BufferStorageFlags,
+    ) -> Self {
         let mut id: GLuint = 0;
-
         unsafe {
             gl::CreateBuffers(1, &mut id);
             gl::NamedBufferStorage(id, size, ptr::null(), buffer_storage_flags.bits());
+
+            let label = CString::new(name).unwrap();
+            gl::ObjectLabel(gl::BUFFER, id, name.len() as i32 + 1, label.as_ptr())
         }
 
-        Buffer {
+        Self {
+            name: name.to_string(),
             id,
             size,
             mapped_ptr: ptr::null_mut(),
             storage_flags: buffer_storage_flags,
-            current_bound_target: BufferTarget::None,
+            current_bound_target: buffer_target,
         }
     }
 
-    pub fn new_with_data<T>(data: &[T], buffer_storage_flags: BufferStorageFlags) -> Buffer {
+    pub fn new_with_data<T: Sized>(
+        name: &str,
+        data: &T,
+        buffer_target: BufferTarget,
+        buffer_storage_flags: BufferStorageFlags,
+    ) -> Self {
         let mut id: GLuint = 0;
-
+        let size = mem::size_of::<T>() as isize;
         unsafe {
             gl::CreateBuffers(1, &mut id);
             gl::NamedBufferStorage(
                 id,
-                (data.len() * mem::size_of::<T>()) as isize,
+                size,
+                data as *const T as *const GLvoid,
+                buffer_storage_flags.bits(),
+            );
+
+            let label = CString::new(name).unwrap();
+            gl::ObjectLabel(gl::BUFFER, id, name.len() as i32 + 1, label.as_ptr())
+        }
+
+        Self {
+            name: name.to_string(),
+            id,
+            size,
+            mapped_ptr: ptr::null_mut(),
+            storage_flags: buffer_storage_flags,
+            current_bound_target: buffer_target,
+        }
+    }
+
+    pub fn new_from_slice<T>(
+        name: &str,
+        data: &[T],
+        buffer_target: BufferTarget,
+        buffer_storage_flags: BufferStorageFlags,
+    ) -> Self {
+        let mut id: GLuint = 0;
+        let size = (data.len() * mem::size_of::<T>()) as isize;
+        unsafe {
+            gl::CreateBuffers(1, &mut id);
+            gl::NamedBufferStorage(
+                id,
+                size,
                 data.as_ptr() as *const GLvoid,
                 buffer_storage_flags.bits(),
             );
+
+            let label = CString::new(name).unwrap();
+            gl::ObjectLabel(gl::BUFFER, id, name.len() as i32 + 1, label.as_ptr())
         }
 
-        Buffer {
+        Self {
+            name: name.to_string(),
             id,
-            size: data.len() as isize,
+            size,
             mapped_ptr: ptr::null_mut(),
             storage_flags: buffer_storage_flags,
-            current_bound_target: BufferTarget::None,
+            current_bound_target: buffer_target,
         }
     }
 
-    pub fn map(&mut self, buffer_access: BufferAccess) {
-        self.map_range(0, self.size, buffer_access)
+    pub fn bind(&self, binding_index: u32) {
+        self.bind_range(binding_index, 0, self.size);
     }
 
-    pub fn map_range(&mut self, offset: isize, length: isize, buffer_access: BufferAccess) {
+    pub fn bind_range(&self, binding_index: u32, offset: isize, size: isize) {
+        assert!(
+            self.current_bound_target == BufferTarget::Uniform
+                || self.current_bound_target == BufferTarget::ShaderStorage
+                || self.current_bound_target == BufferTarget::AtomicCounter
+                || self.current_bound_target == BufferTarget::TransformFeedback,
+            "Cannot bind buffer range. Buffer target is not one of [ShaderStorage|AtomicCounter|Uniform|TransformFeedback]."
+        );
+        assert!(
+            offset + size <= self.size,
+            "Buffer bind operation out of buffer range. Buffer size: {}, Requested bind offset: {}, Requested bind size: {}",
+            self.size,
+            offset,
+            size
+        );
+        unsafe {
+            gl::BindBufferRange(
+                self.current_bound_target as u32,
+                binding_index,
+                self.id,
+                offset,
+                size,
+            )
+        }
+    }
+
+    pub fn map(&mut self, map_mode: MapModeFlags) {
+        self.map_range(0, self.size, map_mode)
+    }
+
+    pub fn map_range(&mut self, offset: isize, length: isize, map_mode: MapModeFlags) {
         assert!(self.storage_flags.intersects(BufferStorageFlags::MAP_READ_WRITE),
                 "Cannot map buffer.\n \
                 Reason: Buffer was storage does not support memory mapping.\n\
                 Hint: Create the buffer using BufferStorageFlags::MAP_READ, BufferStorageFlags::MAP_WRITE \
                 or BUFFER_STORAGE_FLAGS::MAP_READ_WRITE");
 
-        assert!(
-            self.storage_flags.intersects(match buffer_access {
-                BufferAccess::ReadOnly => BufferStorageFlags::MAP_READ,
-                BufferAccess::WriteOnly => BufferStorageFlags::MAP_WRITE,
-                BufferAccess::ReadWrite => BufferStorageFlags::MAP_READ_WRITE,
-            }),
-            "Cannot map buffer. \n\
-                Reason: buffer_access function parameter not contained \
-                in the buffer's storage flags.\n\
-                Hint: Create the buffer using BufferStorageFlags::MAP_<READ/WRITE/READ_WRITE> \
-                to match the buffer_access function parameter."
-        );
+        // assert!({
+        //     let flags = 0u32;
+        // }
+        //     self.storage_flags.intersects({
+        //
+        //         match map_mode {
+        //
+        //         }
+        //         MapModeFlags::MAP_READ
+        //     })
+        //         || self.storage_flags.intersects(MapModeFlags::MAP_WRITE)
+        //         || self.storage_flags.intersects(MapModeFlags::MAP_READ_WRITE),
+        //     "Cannot map buffer. \n\
+        //         Reason: buffer_access function parameter not contained \
+        //         in the buffer's storage flags.\n\
+        //         Hint: Create the buffer using BufferStorageFlags::MAP_<READ/WRITE/READ_WRITE> \
+        //         to match the buffer_access function parameter."
+        // );
 
         assert!(
-            (offset + length) < self.size,
+            (offset + length) <= self.size,
             "Cannot map buffer.\n\
                 Reason: Requested range exceeds buffer capacity (out of bounds).\n\
                 Hint: Offset + length must be smaller than the total buffer length(capacity)"
@@ -135,8 +226,7 @@ impl Buffer {
 
         if self.mapped_ptr == ptr::null_mut() {
             unsafe {
-                self.mapped_ptr =
-                    gl::MapNamedBufferRange(self.id, offset, length, buffer_access as u32)
+                self.mapped_ptr = gl::MapNamedBufferRange(self.id, offset, length, map_mode.bits())
             }
         } else {
             println!("WARNING: Buffer already mapped. This call has no effect.")
@@ -144,22 +234,14 @@ impl Buffer {
     }
 
     pub fn unmap(&mut self) {
+        // TODO: Validate what happens when you call unmap on a persistently mapped buffer?
         unsafe {
             gl::UnmapNamedBuffer(self.id);
         }
         self.mapped_ptr = ptr::null_mut();
     }
 
-    pub fn fill<T>(&self, offset: isize, data: &[T]) {
-        self.fill_bytes(offset, slice_as_bytes(data))
-    }
-
-    pub fn fill_mapped<T>(&self, data: &[T]) {
-        let bytes = slice_as_bytes(data);
-        self.fill_bytes_mapped(bytes)
-    }
-
-    pub fn fill_bytes(&self, offset: isize, data: &[u8]) {
+    pub fn fill<T>(&self, offset: isize, data: &T) {
         assert!(
             self.storage_flags.intersects(BufferStorageFlags::DYNAMIC),
             "Cannot fill non-mapped buffer. \n \
@@ -172,13 +254,13 @@ impl Buffer {
             gl::NamedBufferSubData(
                 self.id,
                 offset,
-                data.len() as isize,
-                data.as_ptr() as *const GLvoid,
+                std::mem::size_of::<T>() as isize,
+                data as *const T as *const GLvoid,
             )
         }
     }
 
-    pub fn fill_bytes_mapped(&self, data: &[u8]) {
+    pub fn fill_mapped<T: Sized>(&self, offset: isize, data: &T) {
         assert_ne!(
             self.mapped_ptr,
             ptr::null_mut(),
@@ -193,7 +275,12 @@ impl Buffer {
                 Hint: Create the buffer using BufferStorageFlags::MAP_WRITE"
         );
 
-        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), self.mapped_ptr as *mut u8, data.len()) }
+        assert_eq!(self.size, mem::size_of::<T>() as isize);
+        assert!(offset + std::mem::size_of::<T>() as isize <= self.size);
+
+        let mut source = unsafe { (data as *const T).offset(offset) };
+
+        unsafe { ptr::copy_nonoverlapping(source, self.mapped_ptr as *mut T, 1) }
     }
 
     pub fn get_id(&self) -> GLuint {
@@ -309,9 +396,9 @@ impl Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        unsafe {
-            // self.unbind();
-            gl::DeleteBuffers(1, &mut self.id)
+        if self.is_mapped() {
+            self.unmap()
         }
+        unsafe { gl::DeleteBuffers(1, &mut self.id) }
     }
 }

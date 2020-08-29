@@ -46,11 +46,38 @@ pub struct Shader {
 }
 
 impl Shader {
-    pub fn new<P: AsRef<Path>>(stage: ShaderStage, filename: P) -> Result<Shader, String> {
+    pub fn new<P: AsRef<Path> + Debug>(stage: ShaderStage, path: P) -> Result<Shader, String> {
+        assert!(
+            path.as_ref().is_file(),
+            "Path: {:?} is not a file!",
+            path.as_ref()
+        );
+
+        if cfg!(feature = "use-spirv") {
+            assert!(
+                path.as_ref().is_file(),
+                "Path: {:?} is not a file!",
+                path.as_ref()
+            );
+            let mut spv_path = path.as_ref().to_owned();
+            let mut file_name = spv_path.file_name().unwrap().to_owned();
+            file_name.push(".spv");
+            spv_path.pop();
+            spv_path.push(file_name);
+            Self::new_from_spirv(stage, spv_path)
+        } else {
+            Self::new_from_text(stage, path)
+        }
+    }
+
+    fn new_from_spirv<P: AsRef<Path> + Debug>(
+        stage: ShaderStage,
+        path: P,
+    ) -> Result<Shader, String> {
         let mut spir_v = Vec::new();
 
         {
-            let mut file = File::open(filename.as_ref()).unwrap();
+            let mut file = File::open(path.as_ref()).unwrap();
 
             let file_size_in_bytes = file.metadata().unwrap().len() as usize;
 
@@ -113,6 +140,66 @@ impl Shader {
         }
 
         Ok(Shader { id, stage })
+    }
+
+    fn new_from_text<P: AsRef<Path> + Debug>(
+        stage: ShaderStage,
+        path: P,
+    ) -> Result<Shader, String> {
+        let mut text_source = String::new();
+
+        {
+            let mut file = match File::open(path.as_ref()) {
+                Err(why) => panic!("couldn't open {:?}: {}", path, why),
+                Ok(file) => file,
+            };
+
+            let size = file.read_to_string(&mut text_source).unwrap();
+
+            assert_eq!(
+                size,
+                text_source.len(),
+                "Could not read the entirety of the file."
+            );
+        }
+
+        let id: GLuint;
+        let c_string_source = CString::new(text_source).unwrap();
+
+        unsafe {
+            id = gl::CreateShader(stage as u32);
+
+            gl::ShaderSource(id, 1, &c_string_source.as_ptr(), ptr::null());
+
+            gl::CompileShader(id);
+
+            let mut compilation_status: GLint = 0;
+
+            gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut compilation_status);
+
+            if compilation_status != gl::TRUE as i32 {
+                let mut message_size = 0;
+
+                gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut message_size);
+
+                let mut buffer = Vec::with_capacity(message_size as usize + 1); //+1 for nul termination
+
+                buffer.extend([b' '].iter().cycle().take(message_size as usize));
+
+                let message = CString::from_vec_unchecked(buffer);
+
+                gl::GetShaderInfoLog(
+                    id,
+                    message_size as i32,
+                    ptr::null_mut(),
+                    message.as_ptr() as *mut GLchar,
+                );
+
+                return Err(message.to_string_lossy().into_owned());
+            }
+
+            Ok(Shader { id, stage })
+        }
     }
 
     pub fn get_id(&self) -> GLuint {

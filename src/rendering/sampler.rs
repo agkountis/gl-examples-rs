@@ -29,6 +29,16 @@ pub enum WrappingMode {
     MirroredRepeat = gl::MIRRORED_REPEAT,
 }
 
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum Anisotropy {
+    None = 1,
+    X2 = 2,
+    X4 = 4,
+    X8 = 8,
+    X16 = 16,
+}
+
 #[derive(Debug)]
 pub struct Sampler {
     pub id: GLuint,
@@ -48,6 +58,7 @@ impl Sampler {
         wrap_t: WrappingMode,
         wrap_r: WrappingMode,
         border_color: Vec4,
+        anisotropy: Anisotropy,
     ) -> Sampler {
         let mut id: GLuint = 0;
 
@@ -64,7 +75,7 @@ impl Sampler {
                 gl::TEXTURE_BORDER_COLOR,
                 utilities::value_ptr(&border_color),
             );
-            gl::SamplerParameterf(id, gl::TEXTURE_MAX_ANISOTROPY, 16.0)
+            gl::SamplerParameterf(id, gl::TEXTURE_MAX_ANISOTROPY, anisotropy as u32 as f32)
         }
 
         Sampler {

@@ -182,12 +182,7 @@ impl Application {
             .with_double_buffer(Some(true))
             .with_gl_profile(GlProfile::Core)
             .with_srgb(true)
-            .with_multisampling(match settings.msaa {
-                Msaa::None => 0,
-                Msaa::X4 => 4,
-                Msaa::X8 => 8,
-                Msaa::X16 => 16,
-            })
+            .with_multisampling(0)
             .with_vsync(settings.vsync)
             .with_gl(GlRequest::Specific(
                 Api::OpenGl,

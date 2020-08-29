@@ -1,5 +1,7 @@
 use crate::core::asset::Asset;
+use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 use crate::rendering::texture::Texture2DLoadConfig;
+use crate::sampler::Anisotropy;
 use crate::{
     core::math::{Vec3, Vec4},
     imgui::{im_str, ColorFormat, Gui, Ui},
@@ -12,17 +14,16 @@ use crate::{
 };
 use std::{ops::RangeInclusive, path::Path, rc::Rc};
 
-const ALBEDO_MAP_UNIFORM_NAME: &str = "albedoMap";
+const MATERIAL_UBO_BINDING_INDEX: u32 = 4;
+const ALBEDO_MAP_BINDING_INDEX: u32 = 0;
+const NORMAL_MAP_BINDING_INDEX: u32 = 1;
 // [Metalness (R), Roughness (G), AO (B)]
-const M_R_AO_MAP_UNIFORM_NAME: &str = "m_r_aoMap";
-const NORMAL_MAP_UNIFORM_NAME: &str = "normalMap";
-const DISPLACEMENT_MAP_UNIFORM_NAME: &str = "displacementMap";
-const BRDF_LUT_MAP_UNIFORM_NAME: &str = "brdfLUT";
-const BASE_COLOR_UNIFORM_NAME: &str = "baseColor";
-const M_R_AO_SCALE_UNIFORM_NAME: &str = "m_r_aoScale";
-const M_R_AO_BIAS_UNIFORM_NAME: &str = "m_r_aoBias";
-const POM_PARAMETERS_UNIFORM_NAME: &str = "pomParameters";
-const PARALLAX_MAPPING_METHOD_UNIFORM_NAME: &str = "parallaxMappingMethod";
+const M_R_AO_MAP_BINDING_INDEX: u32 = 2;
+const BRDF_LUT_MAP_BINDING_INDEX: u32 = 3;
+
+// const DISPLACEMENT_MAP_BINDING_INDEX: i32 = 8;
+//const POM_PARAMETERS_UNIFORM_LOCATION: i32 = "pomParameters";
+// const PARALLAX_MAPPING_METHOD_UNIFORM_NAME: &str = "parallaxMappingMethod";
 
 pub trait Material: Gui {
     fn bind(&self);
@@ -33,7 +34,7 @@ pub trait Material: Gui {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct MaterialPropertyBlock {
-    base_color: Vec3,
+    base_color: Vec4,
     metallic_scale: f32,
     metallic_bias: f32,
     roughness_scale: f32,
@@ -55,6 +56,7 @@ pub struct PbsMetallicRoughnessMaterial {
     sampler: Sampler,
     property_block: MaterialPropertyBlock,
     program_pipeline: ProgramPipeline,
+    material_ubo: Buffer,
 }
 
 impl PbsMetallicRoughnessMaterial {
@@ -69,24 +71,24 @@ impl PbsMetallicRoughnessMaterial {
             Some(_) => (
                 Shader::new(
                     ShaderStage::Vertex,
-                    asset_path.as_ref().join("sdr/pbs_pom.vert.spv"),
+                    asset_path.as_ref().join("sdr/pbs_pom.vert"),
                 )
                 .unwrap(),
                 Shader::new(
                     ShaderStage::Fragment,
-                    asset_path.as_ref().join("sdr/pbs_pom.frag.spv"),
+                    asset_path.as_ref().join("sdr/pbs_pom.frag"),
                 )
                 .unwrap(),
             ),
             None => (
                 Shader::new(
                     ShaderStage::Vertex,
-                    asset_path.as_ref().join("sdr/pbs.vert.spv"),
+                    asset_path.as_ref().join("sdr/pbs.vert"),
                 )
                 .unwrap(),
                 Shader::new(
                     ShaderStage::Fragment,
-                    asset_path.as_ref().join("sdr/pbs.frag.spv"),
+                    asset_path.as_ref().join("sdr/pbs.frag"),
                 )
                 .unwrap(),
             ),
@@ -105,6 +107,7 @@ impl PbsMetallicRoughnessMaterial {
             WrappingMode::Repeat,
             WrappingMode::Repeat,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
+            Anisotropy::X16,
         );
 
         let ibl_brdf_lut = Texture2D::load(
@@ -116,6 +119,15 @@ impl PbsMetallicRoughnessMaterial {
         )
         .expect("Failed to load BRDF LUT texture");
 
+        let mut material_ubo = Buffer::new(
+            "MaterialPropertyBlock UBO",
+            std::mem::size_of::<MaterialPropertyBlock>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        material_ubo.bind(MATERIAL_UBO_BINDING_INDEX);
+        material_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
+
         Self {
             albedo,
             metallic_roughness_ao,
@@ -124,7 +136,7 @@ impl PbsMetallicRoughnessMaterial {
             ibl_brdf_lut,
             sampler,
             property_block: MaterialPropertyBlock {
-                base_color: Vec3::new(1.0, 1.0, 1.0),
+                base_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
                 metallic_scale: 1.0,
                 metallic_bias: 0.0,
                 roughness_scale: 1.0,
@@ -137,6 +149,7 @@ impl PbsMetallicRoughnessMaterial {
                 parallax_mapping_method: 4,
             },
             program_pipeline,
+            material_ubo,
         }
     }
 
@@ -149,78 +162,45 @@ impl Material for PbsMetallicRoughnessMaterial {
     fn bind(&self) {
         self.program_pipeline.bind();
 
+        self.material_ubo.fill_mapped(0, &self.property_block);
+
         self.program_pipeline
+            .set_texture_2d(ALBEDO_MAP_BINDING_INDEX, &self.albedo, &self.sampler)
             .set_texture_2d(
-                ALBEDO_MAP_UNIFORM_NAME,
-                &self.albedo,
-                &self.sampler,
-                ShaderStage::Fragment,
-            )
-            .set_texture_2d(
-                M_R_AO_MAP_UNIFORM_NAME,
+                M_R_AO_MAP_BINDING_INDEX,
                 &self.metallic_roughness_ao,
                 &self.sampler,
-                ShaderStage::Fragment,
             )
+            .set_texture_2d(NORMAL_MAP_BINDING_INDEX, &self.normals, &self.sampler)
             .set_texture_2d(
-                NORMAL_MAP_UNIFORM_NAME,
-                &self.normals,
-                &self.sampler,
-                ShaderStage::Fragment,
-            )
-            .set_texture_2d(
-                BRDF_LUT_MAP_UNIFORM_NAME,
+                BRDF_LUT_MAP_BINDING_INDEX,
                 &self.ibl_brdf_lut,
                 &self.sampler,
-                ShaderStage::Fragment,
-            )
-            .set_vector3f(
-                BASE_COLOR_UNIFORM_NAME,
-                &self.property_block.base_color,
-                ShaderStage::Fragment,
-            )
-            .set_vector3f(
-                M_R_AO_SCALE_UNIFORM_NAME,
-                &Vec3::new(
-                    self.property_block.metallic_scale,
-                    self.property_block.roughness_scale,
-                    self.property_block.ao_scale,
-                ),
-                ShaderStage::Fragment,
-            )
-            .set_vector3f(
-                M_R_AO_BIAS_UNIFORM_NAME,
-                &Vec3::new(
-                    self.property_block.metallic_bias,
-                    self.property_block.roughness_bias,
-                    self.property_block.ao_bias,
-                ),
-                ShaderStage::Fragment,
             );
 
-        if let Some(displacement) = &self.displacement {
-            self.program_pipeline
-                .set_texture_2d(
-                    DISPLACEMENT_MAP_UNIFORM_NAME,
-                    &displacement,
-                    &self.sampler,
-                    ShaderStage::Fragment,
-                )
-                .set_vector3f(
-                    POM_PARAMETERS_UNIFORM_NAME,
-                    &Vec3::new(
-                        self.property_block.min_pom_layers,
-                        self.property_block.max_pom_layers,
-                        self.property_block.displacement_scale,
-                    ),
-                    ShaderStage::Fragment,
-                )
-                .set_integer(
-                    PARALLAX_MAPPING_METHOD_UNIFORM_NAME,
-                    self.property_block.parallax_mapping_method as i32,
-                    ShaderStage::Fragment,
-                );
-        }
+        // if let Some(displacement) = &self.displacement {
+        //     self.program_pipeline
+        //         .set_texture_2d(
+        //             DISPLACEMENT_MAP_UNIFORM_NAME,
+        //             &displacement,
+        //             &self.sampler,
+        //             ShaderStage::Fragment,
+        //         )
+        //         .set_vector3f(
+        //             POM_PARAMETERS_UNIFORM_NAME,
+        //             &Vec3::new(
+        //                 self.property_block.min_pom_layers,
+        //                 self.property_block.max_pom_layers,
+        //                 self.property_block.displacement_scale,
+        //             ),
+        //             ShaderStage::Fragment,
+        //         )
+        //         .set_integer(
+        //             PARALLAX_MAPPING_METHOD_UNIFORM_NAME,
+        //             self.property_block.parallax_mapping_method as i32,
+        //             ShaderStage::Fragment,
+        //         );
+        // }
     }
 
     fn unbind(&self) {
@@ -248,7 +228,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .build(&ui);
                     ui.spacing();
 
-                    let mut albedo_color: [f32; 3] = self.property_block.base_color.into();
+                    let mut albedo_color: [f32; 4] = self.property_block.base_color.into();
                     if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
                         .format(ColorFormat::Float)
                         .alpha(true)

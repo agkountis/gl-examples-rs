@@ -1,13 +1,17 @@
 use gl::types::*;
 use gl_bindings as gl;
 
-use crate::core::asset::Asset;
-use crate::core::math::{Vec2, Vec3, Vec4};
-use crate::rendering::buffer::{Buffer, BufferStorageFlags};
-use crate::rendering::Draw;
-use std::mem;
-use std::path::Path;
-use std::ptr;
+use crate::{
+    core::{
+        asset::Asset,
+        math::{Vec2, Vec3, Vec4},
+    },
+    rendering::{
+        buffer::{Buffer, BufferStorageFlags, BufferTarget},
+        Draw,
+    },
+};
+use std::{mem, path::Path, ptr};
 
 #[derive(Debug)]
 #[repr(C)]
@@ -29,9 +33,25 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>) -> Mesh {
-        let vbo = Buffer::new_with_data(&vertices, BufferStorageFlags::DYNAMIC);
+        //TODO: Check if dynamic buffer storage is needed here.
+        println!(
+            "Creating mesh with {} vertices and {} indices.",
+            vertices.len(),
+            indices.len()
+        );
+        let vbo = Buffer::new_from_slice(
+            "Vertex Buffer",
+            &vertices,
+            BufferTarget::Array,
+            BufferStorageFlags::DYNAMIC,
+        );
 
-        let ibo = Buffer::new_with_data(&indices, BufferStorageFlags::DYNAMIC);
+        let ibo = Buffer::new_from_slice(
+            "Index Buffer",
+            &indices,
+            BufferTarget::ElementArray,
+            BufferStorageFlags::DYNAMIC,
+        );
 
         let mut vao: GLuint = 0;
         unsafe {

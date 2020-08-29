@@ -9,31 +9,40 @@ const float MAX_REFLECTION_LOD = 5.0;
 const float MIN_ROUGHNESS = 0.023;
 
 layout(location = 0) in VsOut {
-    vec3 wLightDirection;
     vec3 wViewDirection;
     vec3 wNormal;
     vec3 wTangent;
     vec2 texcoord;
 } fsIn;
 
-layout(location = 0, binding = 0) uniform sampler2D albedoMap;
-layout(location = 1, binding = 1) uniform sampler2D normalMap;
-layout(location = 2, binding = 2) uniform sampler2D m_r_aoMap;
-layout(location = 3, binding = 3) uniform sampler2D brdfLUT;
+layout(std140, binding = 2) uniform PerFrameBlock
+{
+    vec4 wLightDirection;
+    vec4 lightColor;
+    vec2 ssVarianceAndThreshold;
+    int specularAA;
+    int disneyGgxHotness;
+};
 
-layout(location = 4, binding = 4) uniform samplerCube irradianceMap;
-layout(location = 5, binding = 5) uniform samplerCube radianceMap;
+layout(std140, binding = 4) uniform MaterialBlock
+{
+    vec4 baseColor;
+    float metallicScale;
+    float metallicBias;
+    float roughnessScale;
+    float roughnessBias;
+    float aoScale;
+    float aoBias;
+};
 
-layout(location = 6) uniform vec3 wLightDirection;
-layout(location = 7) uniform vec3 lightColor;
+layout(binding = 0) uniform sampler2D albedoMap;
+layout(binding = 1) uniform sampler2D normalMap;
+layout(binding = 2) uniform sampler2D m_r_aoMap;
+layout(binding = 3) uniform sampler2D brdfLUT;
 
-layout(location = 8) uniform vec3 baseColor;
-layout(location = 9) uniform vec3 m_r_aoScale;
+layout(binding = 4) uniform samplerCube irradianceMap;
+layout(binding = 5) uniform samplerCube radianceMap;
 
-layout(location = 10) uniform vec3 m_r_aoBias;
-layout(location = 11) uniform int disneyGgxHotness;
-layout(location = 12) uniform int specularAA;
-layout(location = 13) uniform vec2 ssVarianceAndThreshold;
 
 layout(location = 0) out vec4 outColor;
 
@@ -220,7 +229,7 @@ void main()
     vec3 n = normalize(TBN * SampleNormalMap(normalMap, fsIn.texcoord, 1.0));
 
     vec3 v = normalize(fsIn.wViewDirection);
-    vec3 l = normalize(wLightDirection);
+    vec3 l = normalize(wLightDirection).xyz;
     vec3 h = normalize(l + v);
     vec3 r = reflect(-v, n);
 
@@ -229,12 +238,12 @@ void main()
     float NdotL = clamp(dot(n, l), 0.0, 1.0);
     float HdotV = clamp(dot(h, v), 0.0, 1.0);
 
-    vec4 albedo = texture(albedoMap, fsIn.texcoord) * vec4(baseColor, 1.0);
+    vec4 albedo = texture(albedoMap, fsIn.texcoord) * vec4(baseColor.rgb, 1.0);
 
     vec3 m_r_ao = texture(m_r_aoMap, fsIn.texcoord).rgb;
-    float metallic = clamp((m_r_ao.r + m_r_aoBias.r) * m_r_aoScale.x, 0.0, 1.0);
-    float perceptualRoughness = clamp((m_r_ao.g + m_r_aoBias.g) * m_r_aoScale.y, MIN_ROUGHNESS, 1.0) ;
-    float ao = clamp((m_r_ao.b + m_r_aoBias.b) * m_r_aoScale.z, 0.0, 1.0);
+    float metallic = clamp((m_r_ao.r + metallicBias) * metallicScale, 0.0, 1.0);
+    float perceptualRoughness = clamp((m_r_ao.g + roughnessBias) * roughnessScale, MIN_ROUGHNESS, 1.0) ;
+    float ao = clamp((m_r_ao.b + aoBias) * aoScale, 0.0, 1.0);
 
     vec3 irradiance = texture(irradianceMap, n).rgb;
 
@@ -246,7 +255,7 @@ void main()
 
     vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo.rgb, metallic);
 
-    vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor, F0, albedo.rgb, metallic, perceptualRoughness, transpose(TBN) * h)
+    vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor.rgb, F0, albedo.rgb, metallic, perceptualRoughness, transpose(TBN) * h)
     + IBL(NdotV, F0, albedo.rgb, metallic, perceptualRoughness, ao, lutSample, irradiance, radiance);
 
     outColor = vec4(finalColor, 1.0);

@@ -1,12 +1,13 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
-#define ACES_FITTED
-
-layout(location = 0, binding = 0) uniform sampler2D image;
-layout(location = 2) uniform float exposure;
-layout(location = 3) uniform int tonemappingOperator;
-layout(location = 4) uniform float whiteThreshold;
+layout(binding = 0) uniform sampler2D image;
+layout(std140, binding = 3) uniform ToneMappingBlock
+{
+    int tonemappingOperator;
+    float whiteThreshold;
+    float exposure;
+};
 
 layout(location = 0) in VsOut {
     vec2 texcoord;
@@ -138,5 +139,8 @@ void main()
         outColor = vec4(Uncharted2(color), 1.0);
     } else if (tonemappingOperator == 6) {
         outColor = vec4(RomBinDaHouse(color), 1.0);
+    } else {
+//        outColor = vec4(ACESFitted(color), 1.0);
+        outColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
 }
