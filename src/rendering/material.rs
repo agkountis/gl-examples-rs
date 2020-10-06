@@ -1,4 +1,5 @@
 use crate::core::asset::Asset;
+use crate::core::math::Vec2;
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 use crate::rendering::texture::Texture2DLoadConfig;
 use crate::sampler::Anisotropy;
@@ -20,10 +21,7 @@ const NORMAL_MAP_BINDING_INDEX: u32 = 1;
 // [Metalness (R), Roughness (G), AO (B)]
 const M_R_AO_MAP_BINDING_INDEX: u32 = 2;
 const BRDF_LUT_MAP_BINDING_INDEX: u32 = 3;
-
-// const DISPLACEMENT_MAP_BINDING_INDEX: i32 = 8;
-//const POM_PARAMETERS_UNIFORM_LOCATION: i32 = "pomParameters";
-// const PARALLAX_MAPPING_METHOD_UNIFORM_NAME: &str = "parallaxMappingMethod";
+const DISPLACEMENT_MAP_BINDING_INDEX: u32 = 6;
 
 pub trait Material: Gui {
     fn bind(&self);
@@ -44,7 +42,8 @@ struct MaterialPropertyBlock {
     min_pom_layers: f32,
     max_pom_layers: f32,
     displacement_scale: f32,
-    parallax_mapping_method: usize,
+    parallax_mapping_method: i32,
+    _pad: Vec2,
 }
 
 pub struct PbsMetallicRoughnessMaterial {
@@ -147,6 +146,7 @@ impl PbsMetallicRoughnessMaterial {
                 max_pom_layers: 32.0,
                 displacement_scale: 0.018,
                 parallax_mapping_method: 4,
+                _pad: Vec2::new(0.0, 0.0),
             },
             program_pipeline,
             material_ubo,
@@ -178,29 +178,13 @@ impl Material for PbsMetallicRoughnessMaterial {
                 &self.sampler,
             );
 
-        // if let Some(displacement) = &self.displacement {
-        //     self.program_pipeline
-        //         .set_texture_2d(
-        //             DISPLACEMENT_MAP_UNIFORM_NAME,
-        //             &displacement,
-        //             &self.sampler,
-        //             ShaderStage::Fragment,
-        //         )
-        //         .set_vector3f(
-        //             POM_PARAMETERS_UNIFORM_NAME,
-        //             &Vec3::new(
-        //                 self.property_block.min_pom_layers,
-        //                 self.property_block.max_pom_layers,
-        //                 self.property_block.displacement_scale,
-        //             ),
-        //             ShaderStage::Fragment,
-        //         )
-        //         .set_integer(
-        //             PARALLAX_MAPPING_METHOD_UNIFORM_NAME,
-        //             self.property_block.parallax_mapping_method as i32,
-        //             ShaderStage::Fragment,
-        //         );
-        // }
+        if let Some(displacement) = &self.displacement {
+            self.program_pipeline.set_texture_2d(
+                DISPLACEMENT_MAP_BINDING_INDEX,
+                &displacement,
+                &self.sampler,
+            );
+        }
     }
 
     fn unbind(&self) {
@@ -299,9 +283,10 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .build(ui, || {
                             ui.spacing();
                             ui.group(|| {
+                                let pom_method = &mut self.property_block.parallax_mapping_method;
                                 imgui::ComboBox::new(im_str!("Method")).build_simple_string(
                                     ui,
-                                    &mut self.property_block.parallax_mapping_method,
+                                    unsafe { &mut *(pom_method as *mut i32 as *mut usize) },
                                     &[
                                         im_str!("None"),
                                         im_str!("Parallax Mapping"),
