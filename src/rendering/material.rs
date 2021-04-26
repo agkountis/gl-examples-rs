@@ -106,7 +106,7 @@ impl PbsMetallicRoughnessMaterial {
             WrappingMode::Repeat,
             WrappingMode::Repeat,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
-            Anisotropy::X16,
+            Anisotropy::X4,
         );
 
         let ibl_brdf_lut = Texture2D::load(
@@ -216,7 +216,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
                         .format(ColorFormat::Float)
                         .alpha(true)
-                        .hdr(false)
+                        .hdr(true)
                         .picker(true)
                         .build(&ui)
                     {
@@ -233,24 +233,30 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     )
                     .build(&ui);
                     ui.spacing();
-                    imgui::Slider::new(im_str!("Metallic Scale"), RangeInclusive::new(0.0, 1.0))
+                    imgui::Slider::new(im_str!("Metallic Scale"))
+                        .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.metallic_scale);
-                    imgui::Slider::new(im_str!("Metallic Bias"), RangeInclusive::new(-1.0, 1.0))
+                    imgui::Slider::new(im_str!("Metallic Bias"))
+                        .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.metallic_bias);
                     ui.spacing();
-                    imgui::Slider::new(im_str!("Roughness Scale"), RangeInclusive::new(0.0, 1.0))
+                    imgui::Slider::new(im_str!("Roughness Scale"))
+                        .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.roughness_scale);
-                    imgui::Slider::new(im_str!("Roughness Bias"), RangeInclusive::new(-1.0, 1.0))
+                    imgui::Slider::new(im_str!("Roughness Bias"))
+                        .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.roughness_bias);
                     ui.spacing();
-                    imgui::Slider::new(im_str!("AO Scale"), RangeInclusive::new(0.0, 1.0))
+                    imgui::Slider::new(im_str!("AO Scale"))
+                        .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.ao_scale);
-                    imgui::Slider::new(im_str!("AO Bias"), RangeInclusive::new(-1.0, 1.0))
+                    imgui::Slider::new(im_str!("AO Bias"))
+                        .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.ao_bias);
 
@@ -296,15 +302,11 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                     ],
                                 );
 
-                                ui.drag_float(
-                                    im_str!("Displacement Scale"),
-                                    &mut self.property_block.displacement_scale,
-                                )
-                                .min(0.001)
-                                .max(1.0)
-                                .speed(0.001)
-                                .display_format(im_str!("%.3f"))
-                                .build();
+                                imgui::Drag::new(im_str!("Displacement Scale"))
+                                    .range(RangeInclusive::new(0.001, 1.0))
+                                    .speed(0.001)
+                                    .display_format(im_str!("%.3f"))
+                                    .build(&ui, &mut self.property_block.displacement_scale);
 
                                 if ui.is_item_hovered() {
                                     ui.tooltip_text(im_str!(
@@ -315,15 +317,23 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                 if self.property_block.parallax_mapping_method == 3
                                     || self.property_block.parallax_mapping_method == 4
                                 {
-                                    ui.drag_float_range2(
-                                        im_str!("Min/Max Layers"),
-                                        &mut self.property_block.min_pom_layers,
-                                        &mut self.property_block.max_pom_layers,
-                                    )
-                                    .min(1.0)
-                                    .max(256.0)
-                                    .display_format(im_str!("%.0f"))
-                                    .build();
+                                    imgui::DragRange::new(im_str!("Min/Max Layers"))
+                                        .range(RangeInclusive::new(1.0, 256.0))
+                                        .display_format(im_str!("%.0f"))
+                                        .build(
+                                            &ui,
+                                            &mut self.property_block.min_pom_layers,
+                                            &mut self.property_block.max_pom_layers,
+                                        );
+                                    // ui.drag_float_range2(
+                                    //     im_str!("Min/Max Layers"),
+                                    //     &mut self.property_block.min_pom_layers,
+                                    //     &mut self.property_block.max_pom_layers,
+                                    // )
+                                    // .min(1.0)
+                                    // .max(256.0)
+                                    // .display_format(im_str!("%.0f"))
+                                    // .build();
                                 }
                             });
                         });

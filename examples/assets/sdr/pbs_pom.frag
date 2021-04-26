@@ -98,7 +98,7 @@ float BiasedAxisAlignedGeometricSpecularAA(in vec3 tHalfVector, in float percept
 
     vec2 halfVector2D = tHalfVector.xy;
     vec2 deltaU = dFdx(halfVector2D);
-    vec2 deltaV = dFdx(halfVector2D);
+    vec2 deltaV = dFdy(halfVector2D);
 
     vec2 boundingRectangle = abs(deltaU) + abs(deltaV);
     vec2 variance = screenSpaceVariance * (boundingRectangle * boundingRectangle);

@@ -1,19 +1,19 @@
+use std::mem;
 use std::{ops::RangeInclusive, rc::Rc};
 
-use engine::core::math::{inverse, transpose};
-use engine::math::Vec2;
-use engine::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
-use engine::rendering::sampler::Anisotropy;
 use engine::{
     application::clear_default_framebuffer,
     camera::Camera,
     color::srgb_to_linear3f,
     imgui::*,
     math::{
+        inverse,
         matrix::{perspective, Mat4},
-        vector::{UVec2, Vec3, Vec4},
+        transpose,
+        vector::{UVec2, Vec2, Vec3, Vec4},
     },
     rendering::{
+        buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
         framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
         material::{Material, PbsMetallicRoughnessMaterial},
         mesh::{FullscreenMesh, Mesh, MeshUtilities},
@@ -22,7 +22,7 @@ use engine::{
             PostprocessingStack, PostprocessingStackBuilder,
         },
         program_pipeline::ProgramPipeline,
-        sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
+        sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
         state::{DepthFunction, FaceCulling, FrontFace, StateManager},
         texture::{SizedTextureFormat, TextureCube},
@@ -35,6 +35,7 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
+use std::borrow::Borrow;
 
 struct EnvironmentMaps {
     skybox: TextureCube,
@@ -63,6 +64,7 @@ struct Lighting {
     light_intensity: f32,
     disney_ggx_hotness: bool,
     geometric_specular_aa: bool,
+    specular_ao: bool,
     ss_variance_and_threshold: Vec2,
 }
 
@@ -113,7 +115,10 @@ struct FragmentPerFrameUniforms {
     light_color: Vec4,
     ss_variance_and_threshold: Vec2,
     geometric_specular_aa: i32,
+    specular_ao: i32,
     disney_ggx_hotness: i32,
+    render_mode: i32,
+    _pad: Vec2,
 }
 
 #[repr(C)]
@@ -142,6 +147,7 @@ pub struct PbsScene {
     post_stack: PostprocessingStack,
     controls: Controls,
     lighting: Lighting,
+    render_mode: usize,
     tone_mapping: ToneMapping,
     vertex_per_frame_ubo: Buffer,
     vertex_per_draw_ubo: Buffer,
@@ -337,9 +343,9 @@ impl PbsScene {
 
         let material = PbsMetallicRoughnessMaterial::new(
             asset_path,
-            albedo.clone(),
-            metallic_roughness_ao.clone(),
-            normals.clone(),
+            albedo,
+            metallic_roughness_ao,
+            normals,
             None,
         );
 
@@ -354,7 +360,7 @@ impl PbsScene {
 
         let mut vertex_per_draw_ubo = Buffer::new(
             "Vertex Per Draw UBO",
-            std::mem::size_of::<VertexPerDrawUniforms>() as isize,
+            mem::size_of::<VertexPerDrawUniforms>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -381,7 +387,7 @@ impl PbsScene {
 
         let mut skybox_per_frame_ubo = Buffer::new(
             "Skybox Matrices UBO",
-            std::mem::size_of::<SkyboxPerFrameUniforms>() as isize,
+            mem::size_of::<SkyboxPerFrameUniforms>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -421,8 +427,10 @@ impl PbsScene {
                 light_intensity: 5.0,
                 disney_ggx_hotness: true,
                 geometric_specular_aa: true,
+                specular_ao: true,
                 ss_variance_and_threshold: Vec2::new(0.25, 0.18),
             },
+            render_mode: 0,
             tone_mapping: ToneMapping {
                 pipeline: tonemapping_prog,
                 operator: 0,
@@ -442,14 +450,10 @@ impl PbsScene {
         self.framebuffer.bind();
         self.framebuffer.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
 
+        let camera_pos = self.camera.position();
         let vertex_per_frame_uniforms = VertexPerFrameUniforms {
-            view_projection_matrix: &self.projection_matrix * self.camera.transform(),
-            eye_position: Vec4::new(
-                self.camera.position().x,
-                self.camera.position().y,
-                self.camera.position().z,
-                1.0,
-            ),
+            view_projection_matrix: self.projection_matrix.borrow() * self.camera.transform(),
+            eye_position: Vec4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
         };
 
         let vertex_per_draw_uniforms = VertexPerDrawUniforms {
@@ -480,7 +484,10 @@ impl PbsScene {
             light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 0.0),
             ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned(),
             geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
+            specular_ao: self.lighting.specular_ao as i32,
             disney_ggx_hotness: self.lighting.disney_ggx_hotness as i32,
+            render_mode: self.render_mode as i32,
+            _pad: Vec2::new(0.0, 0.0),
         };
 
         self.fragment_per_frame_ubo
@@ -723,6 +730,10 @@ impl Scene for PbsScene {
             .build(ui, || {
                 ui.dummy([358.0, 0.0]);
 
+                imgui::ComboBox::new(im_str!("Render Mode")).build_simple_string(ui, &mut self.render_mode, &[im_str!("Lit"), im_str!("Albedo"), im_str!("Metallic"), im_str!("Roughness"), im_str!("Normals"), im_str!("Tangents"), im_str!("UV"), im_str!("NdotV"), im_str!("AO"), im_str!("Specular AO"), im_str!("Horizon Specular AO"), im_str!("Diffuse Ambient"), im_str!("Specular Ambient")]);
+
+                ui.spacing();
+
                 // Material
                 self.material.gui(ui);
 
@@ -748,16 +759,12 @@ impl Scene for PbsScene {
                                 .open_on_double_click(true)
                                 .framed(false)
                                 .build(ui, || {
-                                    imgui::DragFloat3::new(
-                                        ui,
-                                        im_str!("Light Direction"),
-                                        &mut self.lighting.light_direction,
-                                    )
-                                        .min(-1.0)
-                                        .max(1.0)
+                                    imgui::Drag::new(im_str!("Light Direction"))
+                                        .range(RangeInclusive::new(-1.0, 1.0))
                                         .display_format(im_str!("%.2f"))
                                         .speed(0.01)
-                                        .build();
+                                        .build_array(ui, &mut self.lighting.light_direction);
+
                                     imgui::ColorEdit::new(
                                         im_str!("Light Color"),
                                         &mut self.lighting.light_color,
@@ -768,9 +775,8 @@ impl Scene for PbsScene {
                                         .alpha(false)
                                         .build(&ui);
                                     imgui::Slider::new(
-                                        im_str!("Light Intensity"),
-                                        RangeInclusive::new(0.01, 300.0),
-                                    )
+                                        im_str!("Light Intensity"))
+                                        .range(RangeInclusive::new(0.01, 300.0))
                                         .display_format(im_str!("%.1f"))
                                         .build(&ui, &mut self.lighting.light_intensity);
                                 });
@@ -816,16 +822,13 @@ impl Scene for PbsScene {
                                         .framed(false)
                                         .build(ui, || {
                                             ui.indent();
-                                            imgui::Slider::new(
-                                                im_str!("Screen Space Variance"),
-                                                RangeInclusive::new(0.01, 1.0),
-                                            )
+                                            imgui::Slider::new(im_str!("Screen Space Variance"))
+                                                .range(RangeInclusive::new(0.01, 1.0))
                                                 .display_format(im_str!("%.2f"))
                                                 .build(&ui, &mut self.lighting.ss_variance_and_threshold.x);
                                             imgui::Slider::new(
-                                                im_str!("Threshold"),
-                                                RangeInclusive::new(0.01, 1.0),
-                                            )
+                                                im_str!("Threshold"))
+                                                .range(RangeInclusive::new(0.01, 1.0))
                                                 .display_format(im_str!("%.2f"))
                                                 .build(&ui, &mut self.lighting.ss_variance_and_threshold.y);
                                             ui.unindent()
@@ -839,6 +842,8 @@ impl Scene for PbsScene {
                         .open_on_double_click(true)
                         .framed(false)
                         .build(ui, || {
+                            ui.checkbox(im_str!("Specular AO"), &mut self.lighting.specular_ao);
+
                             imgui::ComboBox::new(im_str!("Environment")).build_simple_string(
                                 ui,
                                 &mut self.environment.active_environment,
@@ -878,9 +883,8 @@ impl Scene for PbsScene {
                             .build(ui, ||{
                                 let mut orbit_speed = self.camera.orbit_speed();
                                 if imgui::Slider::new(
-                                    im_str!("Orbit Speed"),
-                                    RangeInclusive::new(1.0, 10.0),
-                                )
+                                    im_str!("Orbit Speed"))
+                                    .range(RangeInclusive::new(1.0, 10.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut orbit_speed)
                                 {
@@ -889,9 +893,8 @@ impl Scene for PbsScene {
 
                                 let mut orbit_dampening = self.camera.orbit_dampening();
                                 if imgui::Slider::new(
-                                    im_str!("Orbit Dampening"),
-                                    RangeInclusive::new(1.0, 10.0),
-                                )
+                                    im_str!("Orbit Dampening"))
+                                    .range(RangeInclusive::new(1.0, 10.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut orbit_dampening)
                                 {
@@ -899,7 +902,8 @@ impl Scene for PbsScene {
                                 }
 
                                 let mut zoom_speed = self.camera.zoom_speed();
-                                if imgui::Slider::new(im_str!("Zoom Speed"), RangeInclusive::new(1.0, 40.0))
+                                if imgui::Slider::new(im_str!("Zoom Speed"))
+                                    .range(RangeInclusive::new(1.0, 40.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut zoom_speed)
                                 {
@@ -907,10 +911,8 @@ impl Scene for PbsScene {
                                 }
 
                                 let mut zoom_dampening = self.camera.zoom_dampening();
-                                if imgui::Slider::new(
-                                    im_str!("Zoom Dampening"),
-                                    RangeInclusive::new(0.1, 10.0),
-                                )
+                                if imgui::Slider::new(im_str!("Zoom Dampening"))
+                                    .range(RangeInclusive::new(0.1, 10.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut zoom_dampening)
                                 {
@@ -943,15 +945,14 @@ impl Scene for PbsScene {
                     );
 
                     if self.tone_mapping.operator == 4 {
-                        imgui::Slider::new(
-                            im_str!("White Threshold"),
-                            RangeInclusive::new(0.3, 30.0),
-                        )
+                        imgui::Slider::new(im_str!("White Threshold"))
+                            .range(RangeInclusive::new(0.3, 30.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.tone_mapping.white_threshold);
                     }
 
-                    imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.05, 30.0))
+                    imgui::Slider::new(im_str!("Exposure"))
+                        .range(RangeInclusive::new(0.05, 30.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.tone_mapping.exposure);
                     ui.new_line()

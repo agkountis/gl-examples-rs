@@ -8,6 +8,19 @@ const float ONE_OVER_PI = 0.318309886;
 const float MAX_REFLECTION_LOD = 5.0;
 const float MIN_ROUGHNESS = 0.023;
 
+const int RENDER_MODE_ALBEDO = 1;
+const int RENDER_MODE_METALLIC = 2;
+const int RENDER_MODE_ROUGHNESS = 3;
+const int RENDER_MODE_NORMALS = 4;
+const int RENDER_MODE_TANGENTS = 5;
+const int RENDER_MODE_UV = 6;
+const int RENDER_MODE_NDOTV = 7;
+const int RENDER_MODE_AO = 8;
+const int RENDER_MODE_SPECULAR_AO = 9;
+const int RENDER_MODE_HORIZON_SPECULAR_AO = 10;
+const int RENDER_MODE_DIFFUSE_AMBIENT = 11;
+const int RENDER_MODE_SPECULAR_AMBIENT = 12;
+
 layout(location = 0) in VsOut {
     vec3 wViewDirection;
     vec3 wNormal;
@@ -21,7 +34,9 @@ layout(std140, binding = 2) uniform PerFrameBlock
     vec4 lightColor;
     vec2 ssVarianceAndThreshold;
     int specularAA;
+    int specularAO;
     int disneyGgxHotness;
+    int renderMode;
 };
 
 layout(std140, binding = 4) uniform MaterialBlock
@@ -45,7 +60,10 @@ layout(binding = 5) uniform samplerCube radianceMap;
 
 layout(location = 0) out vec4 outColor;
 
-mat3 CreateTBN(in vec3 n, in vec3 t, in float tSign)
+float so;
+float horizonSo;
+
+mat3 CreateTangentToWorldMatrix(in vec3 n, in vec3 t, in float tSign)
 {
     t = normalize(t - dot(t, n) * n);
 
@@ -60,18 +78,33 @@ mat3 CreateTBN(in vec3 n, in vec3 t, in float tSign)
 // Analytical Lights---
 vec3 FresnelSchlick(in float cosTheta, in vec3 F0)
 {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+    vec3 F90 = vec3(1.0);
+
+    if (specularAO == 1) {
+        F90 = vec3(clamp(dot(F0, vec3(50.0 * 0.33)), 0.0, 1.0));
+    }
+
+    return F0 + (F90 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
 vec3 FresnelSchlickRoughness(in float NdotV, in vec3 F0, in float perceptualRoughness)
 {
-    return F0 + (max(vec3(1.0 - perceptualRoughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+    vec3 F90;
+
+    if (specularAO == 1) {
+        F90 = vec3(clamp(dot(max(vec3(1.0 - perceptualRoughness), F0), vec3(50.0 * 0.33)), 0.0, 1.0));
+    }
+    else {
+        F90 = max(vec3(1.0 - perceptualRoughness), F0);
+    }
+
+    return F0 + (F90 - F0) * pow(1.0 - NdotV, 5.0);
 }
 
 float DistributionGGX(in float NdotH, in float perceptualRoughness)
 {
-    float a      = perceptualRoughness * perceptualRoughness;
-    float a2     = a * a;
+    float a = perceptualRoughness * perceptualRoughness;
+    float a2 = a * a;
     float NdotH2 = NdotH * NdotH;
 
     float num   = a2;
@@ -92,7 +125,7 @@ float BiasedAxisAlignedGeometricSpecularAA(in vec3 tHalfVector, in float percept
 
     vec2 halfVector2D = tHalfVector.xy;
     vec2 deltaU = dFdx(halfVector2D);
-    vec2 deltaV = dFdx(halfVector2D);
+    vec2 deltaV = dFdy(halfVector2D);
 
     vec2 boundingRectangle = abs(deltaU) + abs(deltaV);
     vec2 variance = screenSpaceVariance * (boundingRectangle * boundingRectangle);
@@ -101,13 +134,23 @@ float BiasedAxisAlignedGeometricSpecularAA(in vec3 tHalfVector, in float percept
     return clamp(roughness + kernelRoughnessSquared, 0.0, 1.0).x;
 }
 
+float ComputeSpecularAO(float NoV, float ao, float roughness)
+{
+    return clamp(pow(NoV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
+float ComputeHorizonSpecularAO(vec3 r, vec3 n)
+{
+    return min(1.0 + dot(r, n), 1.0);
+}
+
 float DistributionGGXFiltered(in float NdotH, in float perceptualRoughness, in vec3 tHalfVector)
 {
-    float a      = BiasedAxisAlignedGeometricSpecularAA(tHalfVector, perceptualRoughness);
-    float a2     = a * a;
+    float a = BiasedAxisAlignedGeometricSpecularAA(tHalfVector, perceptualRoughness);
+    float a2 = a * a;
     float NdotH2 = NdotH * NdotH;
 
-    float num   = a2;
+    float num = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
     denom = PI * denom * denom;
 
@@ -180,7 +223,7 @@ vec3 EnvironmentBRDFApprox( vec3 F0, float roughness, float NoV )
     return F0 * AB.x + AB.y;
 }
 
-vec3 IBL(in float NdotV, in vec3 F0, in vec3 albedo, in float metallic, in float roughness, in float ao, in vec2 brdfLUT, in vec3 irradiance, in vec3 radiance)
+vec3 IBL(in float NdotV, in vec3 F0, in vec3 albedo, in float metallic, in float roughness, in float ao, in vec2 brdfLUT, in vec3 irradiance, in vec3 radiance, in vec3 r, in vec3 n)
 {
     vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
 
@@ -189,6 +232,14 @@ vec3 IBL(in float NdotV, in vec3 F0, in vec3 albedo, in float metallic, in float
 
     vec3 diffuse = irradiance * albedo;
     vec3 specular = radiance * (F0 * brdfLUT.x + brdfLUT.y);
+
+    if (specularAO == 1) {
+        so = ComputeSpecularAO(NdotV, ao, roughness);
+        horizonSo = ComputeHorizonSpecularAO(r, n);
+        specular *= so;
+        specular *= horizonSo;
+        return kD * diffuse * ao + specular * so;
+    }
 
     return (kD * diffuse + specular) * ao;
 }
@@ -222,9 +273,10 @@ vec3 SampleNormalMap(in sampler2D normalMap, in vec2 texcoords, in float strengt
 
 void main()
 {
-    mat3 TBN = CreateTBN(normalize(fsIn.wNormal), normalize(fsIn.wTangent.xyz), fsIn.wTangent.w);
+    vec3 t = normalize(fsIn.wTangent.xyz);
+    mat3 tangentToWorldMat = CreateTangentToWorldMatrix(normalize(fsIn.wNormal), t, fsIn.wTangent.w);
 
-    vec3 n = normalize(TBN * SampleNormalMap(normalMap, fsIn.texcoord, 1.0));
+    vec3 n = normalize(tangentToWorldMat * SampleNormalMap(normalMap, fsIn.texcoord, 1.0));
 
     vec3 v = normalize(fsIn.wViewDirection);
     vec3 l = normalize(wLightDirection).xyz;
@@ -253,8 +305,74 @@ void main()
 
     vec3 F0 = mix(vec3(F0_DIELECTRIC), albedo.rgb, metallic);
 
-    vec3 finalColor = BRDF(NdotH, NdotV, NdotL, HdotV, lightColor.rgb, F0, albedo.rgb, metallic, perceptualRoughness, transpose(TBN) * h)
-    + IBL(NdotV, F0, albedo.rgb, metallic, perceptualRoughness, ao, lutSample, irradiance, radiance);
+    mat3 worldToTangentMat = transpose(tangentToWorldMat);
+    vec3 tHalfVector = worldToTangentMat * h;
 
-    outColor = vec4(finalColor, 1.0);
+    vec3 analyticalLight = BRDF(
+        NdotH,
+        NdotV,
+        NdotL,
+        HdotV,
+        lightColor.rgb,
+        F0,
+        albedo.rgb,
+        metallic,
+        perceptualRoughness,
+        tHalfVector);
+
+    vec3 imageBasedLight = IBL(
+        NdotV,
+        F0,
+        albedo.rgb,
+        metallic,
+        perceptualRoughness,
+        ao,
+        lutSample,
+        irradiance,
+        radiance,
+        r,
+        n);
+
+    switch (renderMode) {
+        case RENDER_MODE_ALBEDO:
+            outColor = vec4(albedo.rgb, 1.0);
+            break;
+        case RENDER_MODE_METALLIC:
+            outColor = vec4(m_r_ao.rrr, 1.0);
+            break;
+        case RENDER_MODE_ROUGHNESS:
+            outColor = vec4(m_r_ao.ggg, 1.0);
+            break;
+        case RENDER_MODE_NORMALS:
+            outColor = vec4(n * 0.5 + 0.5, 1.0);
+            break;
+        case RENDER_MODE_TANGENTS:
+            outColor = vec4(t * 0.5 + 0.5, 1.0);
+            break;
+        case RENDER_MODE_UV:
+            outColor = vec4(fsIn.texcoord, 0.0, 1.0);
+            break;
+        case RENDER_MODE_NDOTV:
+            outColor = vec4(NdotV.xxx, 1.0);
+            break;
+        case RENDER_MODE_AO:
+            outColor = vec4(m_r_ao.bbb, 1.0);
+            break;
+        case RENDER_MODE_SPECULAR_AO:
+            outColor = vec4(so.xxx, 1.0);
+            break;
+        case RENDER_MODE_HORIZON_SPECULAR_AO:
+            outColor = vec4(horizonSo.xxx, 1.0);
+            break;
+        case RENDER_MODE_DIFFUSE_AMBIENT:
+            outColor = vec4(irradiance.rgb, 1.0);
+            break;
+        case RENDER_MODE_SPECULAR_AMBIENT:
+            outColor = vec4(radiance.rgb, 1.0);
+            break;
+        default:
+            vec3 finalColor = analyticalLight + imageBasedLight;
+            outColor = vec4(finalColor, 1.0);
+    }
+
 }

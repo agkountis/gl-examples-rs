@@ -754,16 +754,12 @@ impl Scene for PomScene {
                                 .open_on_double_click(true)
                                 .framed(false)
                                 .build(ui, || {
-                                    imgui::DragFloat3::new(
-                                        ui,
-                                        im_str!("Light Direction"),
-                                        &mut self.lighting.light_direction,
-                                    )
-                                        .min(-1.0)
-                                        .max(1.0)
+                                    imgui::Drag::new(im_str!("Light Direction"))
+                                        .range(RangeInclusive::new(-1.0, 1.0))
                                         .display_format(im_str!("%.2f"))
                                         .speed(0.01)
-                                        .build();
+                                        .build_array(ui, &mut self.lighting.light_direction);
+
                                     imgui::ColorEdit::new(
                                         im_str!("Light Color"),
                                         &mut self.lighting.light_color,
@@ -773,10 +769,9 @@ impl Scene for PomScene {
                                         .picker(true)
                                         .alpha(false)
                                         .build(&ui);
-                                    imgui::Slider::new(
-                                        im_str!("Light Intensity"),
-                                        RangeInclusive::new(0.01, 300.0),
-                                    )
+
+                                    imgui::Slider::new(im_str!("Light Intensity"))
+                                        .range(RangeInclusive::new(0.01, 300.0))
                                         .display_format(im_str!("%.1f"))
                                         .build(&ui, &mut self.lighting.light_intensity);
                                 });
@@ -822,16 +817,12 @@ impl Scene for PomScene {
                                         .framed(false)
                                         .build(ui, || {
                                             ui.indent();
-                                            imgui::Slider::new(
-                                                im_str!("Screen Space Variance"),
-                                                RangeInclusive::new(0.01, 1.0),
-                                            )
+                                            imgui::Slider::new(im_str!("Screen Space Variance"))
+                                                .range(RangeInclusive::new(0.01, 1.0))
                                                 .display_format(im_str!("%.2f"))
                                                 .build(&ui, &mut self.lighting.ss_variance_and_threshold.x);
-                                            imgui::Slider::new(
-                                                im_str!("Threshold"),
-                                                RangeInclusive::new(0.01, 1.0),
-                                            )
+                                            imgui::Slider::new(im_str!("Threshold"))
+                                                .range(RangeInclusive::new(0.01, 1.0))
                                                 .display_format(im_str!("%.2f"))
                                                 .build(&ui, &mut self.lighting.ss_variance_and_threshold.y);
                                             ui.unindent()
@@ -883,10 +874,8 @@ impl Scene for PomScene {
                             .framed(false)
                             .build(ui, ||{
                                 let mut orbit_speed = self.camera.orbit_speed();
-                                if imgui::Slider::new(
-                                    im_str!("Orbit Speed"),
-                                    RangeInclusive::new(1.0, 10.0),
-                                )
+                                if imgui::Slider::new(im_str!("Orbit Speed"))
+                                    .range(RangeInclusive::new(1.0, 10.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut orbit_speed)
                                 {
@@ -894,10 +883,8 @@ impl Scene for PomScene {
                                 }
 
                                 let mut orbit_dampening = self.camera.orbit_dampening();
-                                if imgui::Slider::new(
-                                    im_str!("Orbit Dampening"),
-                                    RangeInclusive::new(1.0, 10.0),
-                                )
+                                if imgui::Slider::new(im_str!("Orbit Dampening"))
+                                    .range(RangeInclusive::new(1.0, 10.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut orbit_dampening)
                                 {
@@ -905,7 +892,8 @@ impl Scene for PomScene {
                                 }
 
                                 let mut zoom_speed = self.camera.zoom_speed();
-                                if imgui::Slider::new(im_str!("Zoom Speed"), RangeInclusive::new(1.0, 40.0))
+                                if imgui::Slider::new(im_str!("Zoom Speed"))
+                                    .range(RangeInclusive::new(1.0, 40.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut zoom_speed)
                                 {
@@ -913,10 +901,8 @@ impl Scene for PomScene {
                                 }
 
                                 let mut zoom_dampening = self.camera.zoom_dampening();
-                                if imgui::Slider::new(
-                                    im_str!("Zoom Dampening"),
-                                    RangeInclusive::new(0.1, 10.0),
-                                )
+                                if imgui::Slider::new(im_str!("Zoom Dampening"))
+                                    .range(RangeInclusive::new(0.1, 10.0))
                                     .display_format(im_str!("%.2f"))
                                     .build(&ui, &mut zoom_dampening)
                                 {
@@ -949,15 +935,14 @@ impl Scene for PomScene {
                     );
 
                     if self.tone_mapping.operator == 4 {
-                        imgui::Slider::new(
-                            im_str!("White Threshold"),
-                            RangeInclusive::new(0.3, 30.0),
-                        )
+                        imgui::Slider::new(im_str!("White Threshold"))
+                            .range(RangeInclusive::new(0.3, 30.0))
                             .display_format(im_str!("%.2f"))
                             .build(&ui, &mut self.tone_mapping.white_threshold);
                     }
 
-                    imgui::Slider::new(im_str!("Exposure"), RangeInclusive::new(0.05, 30.0))
+                    imgui::Slider::new(im_str!("Exposure"))
+                        .range(RangeInclusive::new(0.05, 30.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.tone_mapping.exposure);
                     ui.new_line()

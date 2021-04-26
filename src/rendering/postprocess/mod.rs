@@ -13,7 +13,7 @@ pub trait PostprocessingEffect: Gui + AsAny + AsAnyMut {
 
     fn enabled(&self) -> bool;
 
-    fn apply(&self, input: &Framebuffer, framebuffer_chache: &mut TemporaryFramebufferPool);
+    fn apply(&mut self, input: &Framebuffer, framebuffer_pool: &mut TemporaryFramebufferPool);
 }
 
 pub struct PostprocessingStack {
@@ -30,11 +30,11 @@ impl PostprocessingStack {
         self
     }
 
-    pub fn apply(&self, input: &Framebuffer, framebuffer_cache: &mut TemporaryFramebufferPool) {
+    pub fn apply(&mut self, input: &Framebuffer, framebuffer_cache: &mut TemporaryFramebufferPool) {
         if self.enabled {
             self.post_effects
-                .iter()
-                .filter(|&effect| effect.enabled())
+                .iter_mut()
+                .filter(|effect| effect.enabled())
                 .for_each(|effect| effect.apply(&input, framebuffer_cache));
         }
     }

@@ -49,19 +49,19 @@ pub enum AttachmentType {
 
 #[derive(Debug, Clone, Copy)]
 enum AttachmentBindPoint {
-    ColorAttachment(GLenum, i32),
-    DepthAttachment(GLenum),
-    DepthStencilAttachment(GLenum),
-    StencilAttachment(GLenum),
+    Color(GLenum, i32),
+    Depth(GLenum),
+    DepthStencil(GLenum),
+    Stencil(GLenum),
 }
 
 impl AttachmentBindPoint {
     fn to_gl_enum(&self) -> GLenum {
         match *self {
-            AttachmentBindPoint::ColorAttachment(n, _) => n,
-            AttachmentBindPoint::DepthAttachment(n) => n,
-            AttachmentBindPoint::DepthStencilAttachment(n) => n,
-            AttachmentBindPoint::StencilAttachment(n) => n,
+            AttachmentBindPoint::Color(n, _) => n,
+            AttachmentBindPoint::Depth(n) => n,
+            AttachmentBindPoint::DepthStencil(n) => n,
+            AttachmentBindPoint::Stencil(n) => n,
         }
     }
 }
@@ -124,6 +124,15 @@ impl FramebufferAttachment {
 
     pub fn attachment_type(&self) -> AttachmentType {
         self.attachment_type
+    }
+
+    pub fn is_depth_stencil(&self) -> bool {
+        match self.attachment_bind_point {
+            AttachmentBindPoint::Depth(_)
+            | AttachmentBindPoint::DepthStencil(_)
+            | AttachmentBindPoint::Stencil(_) => true,
+            _ => false,
+        }
     }
 }
 
@@ -241,7 +250,7 @@ impl Framebuffer {
                             *id,
                             create_info.format(),
                             create_info.attachment_type(),
-                            AttachmentBindPoint::ColorAttachment(
+                            AttachmentBindPoint::Color(
                                 output_location,
                                 color_attachment_count as i32,
                             ),
@@ -330,7 +339,7 @@ impl Framebuffer {
                             *id,
                             create_info.format(),
                             create_info.attachment_type(),
-                            AttachmentBindPoint::ColorAttachment(
+                            AttachmentBindPoint::Color(
                                 output_location,
                                 color_attachment_count as i32,
                             ),
@@ -369,7 +378,7 @@ impl Framebuffer {
             .iter()
             .chain(self.renderbuffer_attachments.iter())
             .for_each(|attachment| match attachment.attachment_bind_point {
-                AttachmentBindPoint::ColorAttachment(_, i) => unsafe {
+                AttachmentBindPoint::Color(_, i) => unsafe {
                     gl::ClearNamedFramebufferfv(
                         self.id,
                         gl::COLOR,
@@ -377,11 +386,11 @@ impl Framebuffer {
                         math::utilities::value_ptr(clear_color),
                     )
                 },
-                AttachmentBindPoint::DepthAttachment(_) => unsafe {
+                AttachmentBindPoint::Depth(_) => unsafe {
                     let depth_clear_val: f32 = 1.0;
                     gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val)
                 },
-                AttachmentBindPoint::DepthStencilAttachment(_) => unsafe {
+                AttachmentBindPoint::DepthStencil(_) => unsafe {
                     let depth_clear_val: f32 = 1.0;
                     let stencil_clear_val: i32 = 0;
                     gl::ClearNamedFramebufferfi(
@@ -392,7 +401,7 @@ impl Framebuffer {
                         stencil_clear_val,
                     )
                 },
-                AttachmentBindPoint::StencilAttachment(_) => unsafe {
+                AttachmentBindPoint::Stencil(_) => unsafe {
                     let stencil_clear_val = 1;
                     gl::ClearNamedFramebufferiv(self.id, gl::STENCIL, 0, &stencil_clear_val)
                 },
@@ -421,10 +430,10 @@ impl Framebuffer {
                     .renderbuffer_attachments
                     .iter()
                     .map(|a| match a.attachment_bind_point {
-                        AttachmentBindPoint::ColorAttachment(n, _) => n,
-                        AttachmentBindPoint::DepthAttachment(n) => n,
-                        AttachmentBindPoint::DepthStencilAttachment(n) => n,
-                        AttachmentBindPoint::StencilAttachment(n) => n,
+                        AttachmentBindPoint::Color(n, _) => n,
+                        AttachmentBindPoint::Depth(n) => n,
+                        AttachmentBindPoint::DepthStencil(n) => n,
+                        AttachmentBindPoint::Stencil(n) => n,
                     })
                     .collect::<Vec<_>>();
 
@@ -466,15 +475,19 @@ impl Framebuffer {
     }
 
     pub fn blit(source: &Framebuffer, destination: &Framebuffer) {
-        let source_color_attachments = &source.texture_attachments;
-        let dest_color_attachments = &destination.texture_attachments;
+        let source_texture_attachments = &source.texture_attachments;
+        let dest_texture_attachments = &destination.texture_attachments;
 
-        assert_eq!(source_color_attachments.len(), dest_color_attachments.len());
+        assert_eq!(
+            source_texture_attachments.len(),
+            dest_texture_attachments.len()
+        );
 
-        source_color_attachments
+        source_texture_attachments
             .iter()
             .enumerate()
             .for_each(|(i, _)| unsafe {
+                //TODO: Check if this is correct for depth attachments or if it works by chance.
                 gl::NamedFramebufferReadBuffer(source.id(), gl::COLOR_ATTACHMENT0 + i as u32);
                 gl::NamedFramebufferDrawBuffer(destination.id(), gl::COLOR_ATTACHMENT0 + i as u32);
 
@@ -564,14 +577,14 @@ impl Framebuffer {
             | SizedTextureFormat::Depth24
             | SizedTextureFormat::Depth32
             | SizedTextureFormat::Depth32f => {
-                Some(AttachmentBindPoint::DepthAttachment(gl::DEPTH_ATTACHMENT))
+                Some(AttachmentBindPoint::Depth(gl::DEPTH_ATTACHMENT))
             }
             SizedTextureFormat::Depth24Stencil8 | SizedTextureFormat::Depth32fStencil8 => Some(
-                AttachmentBindPoint::DepthStencilAttachment(gl::DEPTH_STENCIL_ATTACHMENT),
+                AttachmentBindPoint::DepthStencil(gl::DEPTH_STENCIL_ATTACHMENT),
             ),
-            SizedTextureFormat::StencilIndex8 => Some(AttachmentBindPoint::StencilAttachment(
-                gl::STENCIL_ATTACHMENT,
-            )),
+            SizedTextureFormat::StencilIndex8 => {
+                Some(AttachmentBindPoint::Stencil(gl::STENCIL_ATTACHMENT))
+            }
             _ => None,
         }
     }
@@ -615,34 +628,14 @@ impl TemporaryFramebufferPool {
                 return Rc::clone(framebuffer);
             }
 
-            let framebuffer = Rc::new(
-                Framebuffer::new(
-                    size,
-                    Msaa::None,
-                    vec![FramebufferAttachmentCreateInfo {
-                        format,
-                        attachment_type: AttachmentType::Texture,
-                    }],
-                )
-                .expect("Failed to create framebuffer!"),
-            );
+            let framebuffer = Self::create_temporary_framebuffer(size, format, depth_format);
 
             framebuffers.push((self.current_frame, true, Rc::clone(&framebuffer)));
 
             return framebuffer;
         }
 
-        let framebuffer = Rc::new(
-            Framebuffer::new(
-                size,
-                Msaa::None,
-                vec![FramebufferAttachmentCreateInfo {
-                    format,
-                    attachment_type: AttachmentType::Texture,
-                }],
-            )
-            .expect("Failed to create framebuffer!"),
-        );
+        let framebuffer = Self::create_temporary_framebuffer(size, format, depth_format);
 
         self.free_framebuffers_map.insert(
             key,
@@ -680,5 +673,28 @@ impl TemporaryFramebufferPool {
         self.free_framebuffers_map.retain(|_, v| !v.is_empty());
 
         self.current_frame += 1
+    }
+
+    fn create_temporary_framebuffer(
+        size: UVec2,
+        format: SizedTextureFormat,
+        depth_format: Option<SizedTextureFormat>,
+    ) -> Rc<Framebuffer> {
+        let mut attachment_create_infos = vec![FramebufferAttachmentCreateInfo {
+            format,
+            attachment_type: AttachmentType::Texture,
+        }];
+
+        if let Some(depth_format) = depth_format {
+            attachment_create_infos.push(FramebufferAttachmentCreateInfo {
+                format: depth_format,
+                attachment_type: AttachmentType::Texture,
+            })
+        }
+
+        Rc::new(
+            Framebuffer::new(size, Msaa::None, attachment_create_infos)
+                .expect("Failed to create framebuffer!"),
+        )
     }
 }

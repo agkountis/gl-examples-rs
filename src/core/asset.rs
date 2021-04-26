@@ -17,6 +17,7 @@ pub trait Asset {
     ) -> Result<Self::Output, Self::Error>;
 }
 
+#[derive(Default)]
 pub struct AssetManager {
     textures: HashMap<String, Rc<Texture2D>>,
     cube_maps: HashMap<String, Rc<TextureCube>>,
@@ -25,15 +26,6 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn new() -> Self {
-        Self {
-            textures: Default::default(),
-            cube_maps: Default::default(),
-            meshes: Default::default(),
-            shaders: Default::default(),
-        }
-    }
-
     pub fn load_texture_2d<P: AsRef<Path>>(
         &mut self,
         path: P,
@@ -60,6 +52,24 @@ impl AssetManager {
         }
     }
 
+    pub fn load_texture_cube<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+    ) -> Result<Rc<TextureCube>, String> {
+        match path.as_ref().file_name() {
+            Some(fname) => {
+                let cubemap = Rc::new(TextureCube::new_from_file(path.as_ref())?);
+
+                self.cube_maps
+                    .entry(String::from(fname.to_string_lossy()))
+                    .or_insert_with(|| Rc::clone(&cubemap));
+
+                Ok(cubemap)
+            }
+            None => Err(String::from("Invalid file path.")),
+        }
+    }
+
     pub fn load_mesh<P: AsRef<Path>>(&mut self, path: P) -> Result<Rc<Mesh>, String> {
         match path.as_ref().file_name() {
             Some(fname) => {
@@ -67,7 +77,7 @@ impl AssetManager {
 
                 self.meshes
                     .entry(String::from(fname.to_string_lossy()))
-                    .or_insert(Rc::clone(&mesh));
+                    .or_insert_with(|| Rc::clone(&mesh));
 
                 Ok(mesh)
             }
@@ -86,7 +96,7 @@ impl AssetManager {
 
                 self.shaders
                     .entry(String::from(fname.to_string_lossy()))
-                    .or_insert(Rc::clone(&shader));
+                    .or_insert_with(|| Rc::clone(&shader));
 
                 Ok(shader)
             }
@@ -96,6 +106,14 @@ impl AssetManager {
 
     pub fn get_texture_2d(&self, name: &str) -> Option<Rc<Texture2D>> {
         if let Some(rc_tex) = self.textures.get(name) {
+            return Some(Rc::clone(rc_tex));
+        }
+
+        None
+    }
+
+    pub fn get_texture_cube(&self, name: &str) -> Option<Rc<TextureCube>> {
+        if let Some(rc_tex) = self.cube_maps.get(name) {
             return Some(Rc::clone(rc_tex));
         }
 

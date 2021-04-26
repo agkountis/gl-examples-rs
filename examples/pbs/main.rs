@@ -24,7 +24,7 @@ fn main() {
             },
             window_size: UVec2::new(1200, 720),
             fullscreen: false,
-            msaa: Msaa::X8,
+            msaa: Msaa::None,
             vsync: true,
             default_clear_color: Vec4::new(0.02, 0.02, 0.02, 1.0),
         },

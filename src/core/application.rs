@@ -27,7 +27,7 @@ impl Application {
         S: Scene + 'static,
         Cons: FnMut(Context) -> S,
     {
-        let mut asset_manager = AssetManager::new();
+        let mut asset_manager = AssetManager::default();
         let mut timer = Timer::new();
 
         let (event_loop, windowed_context) = Self::create_windowed_context(&settings).unwrap();
@@ -179,7 +179,7 @@ impl Application {
             .with_double_buffer(Some(true))
             .with_gl_profile(GlProfile::Core)
             .with_srgb(true)
-            .with_multisampling(0)
+            .with_multisampling(settings.msaa as u16)
             .with_vsync(settings.vsync)
             .with_gl(GlRequest::Specific(
                 Api::OpenGl,
