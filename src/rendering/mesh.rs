@@ -13,6 +13,10 @@ use crate::{
 };
 use std::{mem, path::Path, ptr};
 
+lazy_static! {
+    pub static ref FULLSCREEN_MESH: FullscreenMesh = FullscreenMesh::new();
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct Vertex {

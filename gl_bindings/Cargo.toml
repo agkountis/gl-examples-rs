@@ -10,4 +10,4 @@ name = "gl_bindings"
 path = "src/lib.rs"
 
 [build-dependencies]
-gl_generator = "^0.10.0"
+gl_generator = "^0.14.0"

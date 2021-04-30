@@ -1,8 +1,20 @@
 use crate::imgui::{im_str, Gui, Ui};
-use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
-use crate::{AsAny, AsAnyMut};
+use crate::rendering::framebuffer::Framebuffer;
+use crate::rendering::shader::{Shader, ShaderStage};
+use crate::{AsAny, AsAnyMut, Context};
 
 pub mod bloom;
+pub mod tone_mapper;
+
+lazy_static! {
+    pub static ref FULLSCREEN_VERTEX_SHADER: Shader = {
+        Shader::new(
+            ShaderStage::Vertex,
+            "src/rendering/postprocess/shaders/fullscreen.vert",
+        )
+        .unwrap()
+    };
+}
 
 pub trait PostprocessingEffect: Gui + AsAny + AsAnyMut {
     fn name(&self) -> &str;
@@ -13,7 +25,7 @@ pub trait PostprocessingEffect: Gui + AsAny + AsAnyMut {
 
     fn enabled(&self) -> bool;
 
-    fn apply(&mut self, input: &Framebuffer, framebuffer_pool: &mut TemporaryFramebufferPool);
+    fn apply(&mut self, input: &Framebuffer, context: Context);
 }
 
 pub struct PostprocessingStack {
@@ -30,12 +42,25 @@ impl PostprocessingStack {
         self
     }
 
-    pub fn apply(&mut self, input: &Framebuffer, framebuffer_cache: &mut TemporaryFramebufferPool) {
+    pub fn apply(&mut self, input: &Framebuffer, context: Context) {
+        let Context {
+            window,
+            asset_manager,
+            timer,
+            framebuffer_cache,
+            settings,
+        } = context;
+
         if self.enabled {
             self.post_effects
                 .iter_mut()
                 .filter(|effect| effect.enabled())
-                .for_each(|effect| effect.apply(&input, framebuffer_cache));
+                .for_each(|effect| {
+                    effect.apply(
+                        &input,
+                        Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                    )
+                });
         }
     }
 

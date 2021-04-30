@@ -18,8 +18,8 @@ use engine::{
         material::{Material, PbsMetallicRoughnessMaterial},
         mesh::{FullscreenMesh, Mesh, MeshUtilities},
         postprocess::{
-            bloom::{Bloom, BloomBuilder},
-            PostprocessingStack, PostprocessingStackBuilder,
+            bloom::BloomBuilder, tone_mapper::ToneMapper, PostprocessingStack,
+            PostprocessingStackBuilder,
         },
         program_pipeline::ProgramPipeline,
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
@@ -68,13 +68,6 @@ struct Lighting {
     ss_variance_and_threshold: Vec2,
 }
 
-struct ToneMapping {
-    pipeline: ProgramPipeline,
-    operator: usize,
-    white_threshold: f32,
-    exposure: f32,
-}
-
 struct Model {
     pub mesh: Rc<Mesh>,
     pub transform: Mat4,
@@ -90,11 +83,6 @@ struct Controls {
     prev_x: f32,
     prev_y: f32,
     cursor_over_ui: bool,
-}
-
-struct Samplers {
-    linear: Sampler,
-    nearest: Sampler,
 }
 
 #[repr(C)]
@@ -122,14 +110,6 @@ struct FragmentPerFrameUniforms {
 }
 
 #[repr(C)]
-struct ToneMappingPerFrameUniforms {
-    operator: i32,
-    white_threshold: f32,
-    exposure: f32,
-    _pad: f32,
-}
-
-#[repr(C)]
 struct SkyboxPerFrameUniforms {
     view_projection_matrix: Mat4,
 }
@@ -137,22 +117,19 @@ struct SkyboxPerFrameUniforms {
 pub struct PbsScene {
     camera: Camera,
     model: Model,
-    fullscreen_mesh: FullscreenMesh,
     material: PbsMetallicRoughnessMaterial,
     environment: Environment,
     framebuffer: Framebuffer,
     resolve_framebuffer: Framebuffer,
-    samplers: Samplers,
+    sampler_linear: Sampler,
     projection_matrix: Mat4,
     post_stack: PostprocessingStack,
     controls: Controls,
     lighting: Lighting,
     render_mode: usize,
-    tone_mapping: ToneMapping,
     vertex_per_frame_ubo: Buffer,
     vertex_per_draw_ubo: Buffer,
     fragment_per_frame_ubo: Buffer,
-    tone_mapping_ubo: Buffer,
     skybox_per_frame_ubo: Buffer,
     dt: f32,
 }
@@ -184,17 +161,6 @@ impl PbsScene {
             )
             .add_shader(
                 &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag")).unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        let fullscreen_shader =
-            Shader::new(ShaderStage::Vertex, asset_path.join("sdr/fullscreen.vert")).unwrap();
-
-        let tonemapping_prog = ProgramPipeline::new()
-            .add_shader(&fullscreen_shader)
-            .add_shader(
-                &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/tonemap.frag")).unwrap(),
             )
             .build()
             .unwrap();
@@ -311,9 +277,10 @@ impl PbsScene {
 
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(BloomBuilder::new(asset_path).build())
+            .with_effect(ToneMapper::new())
             .build();
 
-        let sampler = Sampler::new(
+        let sampler_linear = Sampler::new(
             MinificationFilter::LinearMipmapLinear,
             MagnificationFilter::Linear,
             WrappingMode::ClampToEdge,
@@ -321,16 +288,6 @@ impl PbsScene {
             WrappingMode::ClampToEdge,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
             Anisotropy::X16,
-        );
-
-        let sampler_nearest = Sampler::new(
-            MinificationFilter::Nearest,
-            MagnificationFilter::Nearest,
-            WrappingMode::ClampToEdge,
-            WrappingMode::ClampToEdge,
-            WrappingMode::ClampToEdge,
-            Vec4::new(0.0, 0.0, 0.0, 0.0),
-            Anisotropy::None,
         );
 
         let projection = perspective(
@@ -376,15 +333,6 @@ impl PbsScene {
         fragment_per_frame_ubo.bind(2);
         fragment_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
 
-        let mut tone_mapping_ubo = Buffer::new(
-            "Tonemapping Fragment UBO",
-            std::mem::size_of::<ToneMappingPerFrameUniforms>() as isize,
-            BufferTarget::Uniform,
-            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
-        );
-        tone_mapping_ubo.bind(3);
-        tone_mapping_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
-
         let mut skybox_per_frame_ubo = Buffer::new(
             "Skybox Matrices UBO",
             mem::size_of::<SkyboxPerFrameUniforms>() as isize,
@@ -400,7 +348,6 @@ impl PbsScene {
                 mesh,
                 transform: Mat4::identity(),
             },
-            fullscreen_mesh: FullscreenMesh::new(),
             material,
             environment: Environment {
                 maps: environments,
@@ -411,10 +358,7 @@ impl PbsScene {
             },
             framebuffer,
             resolve_framebuffer,
-            samplers: Samplers {
-                linear: sampler,
-                nearest: sampler_nearest,
-            },
+            sampler_linear,
             projection_matrix: projection,
             post_stack,
             controls: Controls {
@@ -431,16 +375,9 @@ impl PbsScene {
                 ss_variance_and_threshold: Vec2::new(0.25, 0.18),
             },
             render_mode: 0,
-            tone_mapping: ToneMapping {
-                pipeline: tonemapping_prog,
-                operator: 0,
-                white_threshold: 2.0,
-                exposure: 1.5,
-            },
             vertex_per_frame_ubo,
             vertex_per_draw_ubo,
             fragment_per_frame_ubo,
-            tone_mapping_ubo,
             skybox_per_frame_ubo,
             dt: 0.0,
         }
@@ -499,12 +436,12 @@ impl PbsScene {
             .set_texture_cube(
                 IRRADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].irradiance,
-                &self.samplers.linear,
+                &self.sampler_linear,
             )
             .set_texture_cube(
                 RADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].radiance,
-                &self.samplers.linear,
+                &self.sampler_linear,
             );
 
         self.model.mesh.draw();
@@ -552,7 +489,7 @@ impl PbsScene {
         self.environment.skybox_program_pipeline.set_texture_cube(
             0,
             &environment_map,
-            &self.samplers.linear,
+            &self.sampler_linear,
         );
 
         self.environment.skybox_mesh.draw();
@@ -562,35 +499,6 @@ impl PbsScene {
 
         StateManager::set_depth_function(DepthFunction::Less);
         StateManager::set_face_culling(FaceCulling::Back)
-    }
-
-    pub fn tonemap_pass(&self, width: u32, height: u32) {
-        clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
-
-        StateManager::set_viewport(0, 0, width as i32, height as i32);
-
-        self.tone_mapping.pipeline.bind();
-
-        let tone_mapping_uniforms = ToneMappingPerFrameUniforms {
-            operator: self.tone_mapping.operator as i32,
-            white_threshold: self.tone_mapping.white_threshold,
-            exposure: self.tone_mapping.exposure,
-            _pad: 0.0,
-        };
-
-        self.tone_mapping_ubo.fill_mapped(0, &tone_mapping_uniforms);
-
-        self.tone_mapping.pipeline.set_texture_2d_with_id(
-            0,
-            self.resolve_framebuffer.texture_attachment(0).id(),
-            &self.samplers.nearest,
-        );
-
-        StateManager::set_front_face(FrontFace::Clockwise);
-        self.fullscreen_mesh.draw();
-        StateManager::set_front_face(FrontFace::CounterClockwise);
-
-        self.tone_mapping.pipeline.unbind()
     }
 }
 
@@ -708,15 +616,22 @@ impl Scene for PbsScene {
     fn draw(&mut self, context: Context) {
         let Context {
             window,
+            asset_manager,
+            timer,
             framebuffer_cache,
-            ..
+            settings,
         } = context;
         self.geometry_pass();
         self.skybox_pass();
-        let size = window.inner_size();
-        self.tonemap_pass(size.width, size.height);
-        self.post_stack
-            .apply(&self.resolve_framebuffer, framebuffer_cache);
+
+        if let Some(tone_mapper) = self.post_stack.get_mut::<ToneMapper>() {
+            tone_mapper.set_exposure(self.camera.exposure())
+        }
+
+        self.post_stack.apply(
+            &self.resolve_framebuffer,
+            Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+        );
     }
 
     fn gui(&mut self, ui: &Ui) {
@@ -867,96 +782,7 @@ impl Scene for PbsScene {
                 }
 
                 // Camera
-                if imgui::CollapsingHeader::new(im_str!("Camera"))
-                    .default_open(true)
-                    .open_on_arrow(true)
-                    .open_on_double_click(true)
-                    .build(ui)
-                {
-                    ui.spacing();
-                    ui.group(|| {
-                        imgui::TreeNode::new(im_str!("Controls"))
-                            .default_open(true)
-                            .open_on_arrow(true)
-                            .open_on_double_click(true)
-                            .framed(false)
-                            .build(ui, ||{
-                                let mut orbit_speed = self.camera.orbit_speed();
-                                if imgui::Slider::new(
-                                    im_str!("Orbit Speed"))
-                                    .range(RangeInclusive::new(1.0, 10.0))
-                                    .display_format(im_str!("%.2f"))
-                                    .build(&ui, &mut orbit_speed)
-                                {
-                                    self.camera.set_orbit_speed(orbit_speed)
-                                }
-
-                                let mut orbit_dampening = self.camera.orbit_dampening();
-                                if imgui::Slider::new(
-                                    im_str!("Orbit Dampening"))
-                                    .range(RangeInclusive::new(1.0, 10.0))
-                                    .display_format(im_str!("%.2f"))
-                                    .build(&ui, &mut orbit_dampening)
-                                {
-                                    self.camera.set_orbit_dampening(orbit_dampening)
-                                }
-
-                                let mut zoom_speed = self.camera.zoom_speed();
-                                if imgui::Slider::new(im_str!("Zoom Speed"))
-                                    .range(RangeInclusive::new(1.0, 40.0))
-                                    .display_format(im_str!("%.2f"))
-                                    .build(&ui, &mut zoom_speed)
-                                {
-                                    self.camera.set_zoom_speed(zoom_speed)
-                                }
-
-                                let mut zoom_dampening = self.camera.zoom_dampening();
-                                if imgui::Slider::new(im_str!("Zoom Dampening"))
-                                    .range(RangeInclusive::new(0.1, 10.0))
-                                    .display_format(im_str!("%.2f"))
-                                    .build(&ui, &mut zoom_dampening)
-                                {
-                                    self.camera.set_zoom_dampening(zoom_dampening)
-                                }
-                            });
-                    });
-                }
-
-                // Tonemapping
-                if imgui::CollapsingHeader::new(im_str!("Tone Mapping"))
-                    .default_open(true)
-                    .open_on_arrow(true)
-                    .open_on_double_click(true)
-                    .build(ui)
-                {
-                    ui.spacing();
-                    imgui::ComboBox::new(im_str!("Operator")).build_simple_string(
-                        &ui,
-                        &mut self.tone_mapping.operator,
-                        &[
-                            im_str!("ACESFitted"),
-                            im_str!("ACESFilmic"),
-                            im_str!("Reinhard"),
-                            im_str!("Luma-Based Reinhard"),
-                            im_str!("White-Preserving Luma-Based Reinhard"),
-                            im_str!("Uncharted 2"),
-                            im_str!("RomBinDaHouse"),
-                        ],
-                    );
-
-                    if self.tone_mapping.operator == 4 {
-                        imgui::Slider::new(im_str!("White Threshold"))
-                            .range(RangeInclusive::new(0.3, 30.0))
-                        .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.tone_mapping.white_threshold);
-                    }
-
-                    imgui::Slider::new(im_str!("Exposure"))
-                        .range(RangeInclusive::new(0.05, 30.0))
-                        .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.tone_mapping.exposure);
-                    ui.new_line()
-                }
+                self.camera.gui(ui);
 
                 // Post processing
                 self.post_stack.gui(ui);

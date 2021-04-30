@@ -2,9 +2,12 @@ use crate::core::math::{UVec2, Vec3, Vec4};
 use crate::imgui::{im_str, Gui, Ui};
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
-use crate::rendering::postprocess::{AsAny, AsAnyMut, PostprocessingEffect};
+use crate::rendering::postprocess::{
+    AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER,
+};
 use crate::rendering::program_pipeline::ProgramPipeline;
 use crate::rendering::shader::{Shader, ShaderStage};
+use crate::Context;
 use std::any::Any;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
@@ -60,7 +63,10 @@ impl PostprocessingEffect for Bloom {
         self.enabled
     }
 
-    fn apply(&mut self, input: &Framebuffer, framebuffer_pool: &mut TemporaryFramebufferPool) {
+    fn apply(&mut self, input: &Framebuffer, context: Context) {
+        let Context {
+            framebuffer_cache, ..
+        } = context;
         //TODO: Implement me
 
         let attachment = input.texture_attachment(0);
@@ -85,7 +91,7 @@ impl PostprocessingEffect for Bloom {
         let mut size = UVec2::new(input.size().x / 2, input.size().y / 2);
         let format = attachment.format();
 
-        let mut current_destination = framebuffer_pool.get_temporary(size, format, None);
+        let mut current_destination = framebuffer_cache.get_temporary(size, format, None);
 
         let mut temporaries = Vec::with_capacity(self.iterations as usize);
 
@@ -103,7 +109,7 @@ impl PostprocessingEffect for Bloom {
                 break;
             }
 
-            current_destination = framebuffer_pool.get_temporary(size, format, None);
+            current_destination = framebuffer_cache.get_temporary(size, format, None);
             temporaries.push(Rc::clone(&current_destination));
 
             //TODO: Do a downsample blit here
@@ -201,12 +207,6 @@ impl BloomBuilder {
 
     pub fn build(self) -> Bloom {
         let (v_blur_program_pipeline, h_blur_program_pipeline) = {
-            let blur_vs = Shader::new(
-                ShaderStage::Vertex,
-                self.assets_path.join("sdr/fullscreen.vert"),
-            )
-            .unwrap();
-
             let v_blur_fs = Shader::new(
                 ShaderStage::Fragment,
                 self.assets_path.join("sdr/gaussian_blur_vertical.frag"),
@@ -220,13 +220,13 @@ impl BloomBuilder {
             .unwrap();
 
             let v_blur_pipeline = ProgramPipeline::new()
-                .add_shader(&blur_vs)
+                .add_shader(&FULLSCREEN_VERTEX_SHADER)
                 .add_shader(&v_blur_fs)
                 .build()
                 .unwrap();
 
             let h_blur_pipeline = ProgramPipeline::new()
-                .add_shader(&blur_vs)
+                .add_shader(&FULLSCREEN_VERTEX_SHADER)
                 .add_shader(&h_blur_fs)
                 .build()
                 .unwrap();

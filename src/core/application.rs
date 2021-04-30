@@ -211,7 +211,7 @@ impl Application {
             if cfg!(debug_assertions) {
                 gl::Enable(gl::DEBUG_OUTPUT);
                 gl::Enable(gl::DEBUG_OUTPUT_SYNCHRONOUS);
-                gl::DebugMessageCallback(Self::debug_callback, ptr::null());
+                gl::DebugMessageCallback(Some(Self::debug_callback), ptr::null());
             }
         }
 

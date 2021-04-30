@@ -10,6 +10,7 @@ use-spirv = []
 auto-compile-spirv = []
 
 [dependencies]
+lazy_static = "^1.4.0"
 nalgebra-glm = "^0.8.0"
 bitflags = "^1.0.0"
 image = "^0.22.0"

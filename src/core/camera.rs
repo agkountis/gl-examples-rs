@@ -1,12 +1,19 @@
 use crate::core::math::{clamp_scalar, rotate_vec3};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
+use crate::imgui::{im_str, Gui, Ui};
 use crate::math::quaternion;
+use imgui::SliderFlags;
 use nalgebra_glm::{normalize, quat_normalize};
+use std::ops::RangeInclusive;
 
 pub struct Camera {
     position: Vec3,
     orientation: Quat,
     transform: Mat4,
+    aperture: f32,
+    shutter_speed: f32,
+    sensitivity: f32,
+    exposure: f32,
     orbit_speed: f32,
     zoom_speed: f32,
     orbit_dampening: f32,
@@ -32,12 +39,16 @@ impl Camera {
     ) -> Self {
         let transform = math::look_at(&position, &target, &Axes::up());
 
-        let distance = (&position - &target).norm();
+        let distance = (position - target).norm();
 
         Camera {
             position,
             orientation: matrix::to_rotation_quat(&transform),
             transform,
+            aperture: 1.4,
+            shutter_speed: 0.55,
+            sensitivity: 500.0,
+            exposure: 1.0,
             orbit_speed,
             zoom_speed,
             min_distance,
@@ -138,5 +149,101 @@ impl Camera {
         self.position = Vec3::new(0.0, 0.0, 0.0) - direction * self.distance;
 
         self.look_at(self.position, Vec3::new(0.0, 0.0, 0.0), Axes::up());
+    }
+
+    pub fn exposure(&self) -> f32 {
+        let ev100 = f32::log2(
+            self.aperture * self.aperture / self.shutter_speed * 100.0 / self.sensitivity,
+        );
+
+        1.0 / 2.0f32.powf(ev100) * 1.2
+    }
+}
+
+impl Gui for Camera {
+    fn gui(&mut self, ui: &Ui) {
+        if imgui::CollapsingHeader::new(im_str!("Camera"))
+            .default_open(true)
+            .open_on_arrow(true)
+            .open_on_double_click(true)
+            .build(ui)
+        {
+            ui.spacing();
+            ui.group(|| {
+                imgui::TreeNode::new(im_str!("Controls"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .framed(false)
+                    .build(ui, || {
+                        let mut aperture = self.aperture;
+                        if imgui::Slider::new(im_str!("Aperture (f-stop)"))
+                            .range(RangeInclusive::new(32.0, 1.4))
+                            .display_format(im_str!("%.2f"))
+                            .build(ui, &mut aperture)
+                        {
+                            self.aperture = aperture;
+                        }
+
+                        let mut shutter_speed = self.shutter_speed;
+                        if imgui::Slider::new(im_str!("Shutter Speed (s)"))
+                            .range(RangeInclusive::new(0.00025, 30.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(ui, &mut shutter_speed)
+                        {
+                            self.shutter_speed = shutter_speed;
+                        }
+
+                        let mut sensitivity = self.sensitivity;
+                        if imgui::Slider::new(im_str!("Sensitivity (ISO)"))
+                            .range(RangeInclusive::new(200.0, 1600.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(ui, &mut sensitivity)
+                        {
+                            self.sensitivity = sensitivity;
+                        }
+
+                        ui.spacing();
+                        ui.separator();
+                        ui.spacing();
+
+                        let mut orbit_speed = self.orbit_speed;
+                        if imgui::Slider::new(im_str!("Orbit Speed"))
+                            .range(RangeInclusive::new(1.0, 10.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut orbit_speed)
+                        {
+                            self.set_orbit_speed(orbit_speed)
+                        }
+
+                        let mut orbit_dampening = self.orbit_dampening();
+                        if imgui::Slider::new(im_str!("Orbit Dampening"))
+                            .range(RangeInclusive::new(1.0, 10.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut orbit_dampening)
+                        {
+                            self.set_orbit_dampening(orbit_dampening)
+                        }
+
+                        let mut zoom_speed = self.zoom_speed();
+                        if imgui::Slider::new(im_str!("Zoom Speed"))
+                            .range(RangeInclusive::new(1.0, 40.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut zoom_speed)
+                        {
+                            self.set_zoom_speed(zoom_speed)
+                        }
+
+                        let mut zoom_dampening = self.zoom_dampening();
+                        if imgui::Slider::new(im_str!("Zoom Dampening"))
+                            .range(RangeInclusive::new(0.1, 10.0))
+                            .display_format(im_str!("%.2f"))
+                            .build(&ui, &mut zoom_dampening)
+                        {
+                            self.set_zoom_dampening(zoom_dampening)
+                        }
+                    });
+            });
+        }
     }
 }

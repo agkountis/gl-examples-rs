@@ -25,6 +25,9 @@ pub use crate::rendering::*;
 #[macro_use]
 extern crate bitflags;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod capabilities {
     use crate::shader;
 
