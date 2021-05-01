@@ -114,6 +114,14 @@ impl Application {
                         .prepare_frame(imgui.context.io_mut(), windowed_context.window())
                         .expect("Failed to prepare ImGui frame");
 
+                    scene_manager.pre_draw(Context::new(
+                        windowed_context.window(),
+                        &mut asset_manager,
+                        &mut timer,
+                        &mut framebuffer_cache,
+                        &settings,
+                    ));
+
                     windowed_context.window().request_redraw()
                 }
                 Event::RedrawRequested(_) => {
@@ -135,7 +143,17 @@ impl Application {
 
                     windowed_context.swap_buffers().unwrap()
                 }
-                Event::RedrawEventsCleared => framebuffer_cache.collect(),
+                Event::RedrawEventsCleared => {
+                    scene_manager.post_draw(Context::new(
+                        windowed_context.window(),
+                        &mut asset_manager,
+                        &mut timer,
+                        &mut framebuffer_cache,
+                        &settings,
+                    ));
+
+                    framebuffer_cache.collect()
+                }
                 Event::LoopDestroyed => scene_manager.stop(Context::new(
                     windowed_context.window(),
                     &mut asset_manager,
