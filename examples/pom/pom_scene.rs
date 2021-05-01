@@ -3,6 +3,7 @@ use std::{ops::RangeInclusive, rc::Rc};
 use engine::core::math::{inverse, transpose};
 use engine::math::Vec2;
 use engine::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
+use engine::rendering::postprocess::tone_mapper::ToneMapper;
 use engine::rendering::sampler::Anisotropy;
 use engine::{
     application::clear_default_framebuffer,
@@ -66,13 +67,6 @@ struct Lighting {
     ss_variance_and_threshold: Vec2,
 }
 
-struct ToneMapping {
-    pipeline: ProgramPipeline,
-    operator: usize,
-    white_threshold: f32,
-    exposure: f32,
-}
-
 struct Model {
     pub mesh: Rc<Mesh>,
     pub transform: Mat4,
@@ -88,11 +82,6 @@ struct Controls {
     prev_x: f32,
     prev_y: f32,
     cursor_over_ui: bool,
-}
-
-struct Samplers {
-    linear: Sampler,
-    nearest: Sampler,
 }
 
 #[repr(C)]
@@ -117,14 +106,6 @@ struct FragmentPerFrameUniforms {
 }
 
 #[repr(C)]
-struct ToneMappingPerFrameUniforms {
-    operator: i32,
-    white_threshold: f32,
-    exposure: f32,
-    _pad: f32,
-}
-
-#[repr(C)]
 struct SkyboxPerFrameUniforms {
     view_projection_matrix: Mat4,
 }
@@ -132,17 +113,15 @@ struct SkyboxPerFrameUniforms {
 pub struct PomScene {
     camera: Camera,
     model: Model,
-    fullscreen_mesh: FullscreenMesh,
     material: PbsMetallicRoughnessMaterial,
     environment: Environment,
     framebuffer: Framebuffer,
     resolve_framebuffer: Framebuffer,
-    samplers: Samplers,
+    sampler_linear: Sampler,
     projection_matrix: Mat4,
     post_stack: PostprocessingStack,
     controls: Controls,
     lighting: Lighting,
-    tone_mapping: ToneMapping,
     vertex_per_frame_ubo: Buffer,
     vertex_per_draw_ubo: Buffer,
     fragment_per_frame_ubo: Buffer,
@@ -178,17 +157,6 @@ impl PomScene {
             )
             .add_shader(
                 &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag")).unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        let fullscreen_shader =
-            Shader::new(ShaderStage::Vertex, asset_path.join("sdr/fullscreen.vert")).unwrap();
-
-        let tonemapping_prog = ProgramPipeline::new()
-            .add_shader(&fullscreen_shader)
-            .add_shader(
-                &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/tonemap.frag")).unwrap(),
             )
             .build()
             .unwrap();
@@ -311,9 +279,10 @@ impl PomScene {
 
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(BloomBuilder::new(asset_path).build())
+            .with_effect(ToneMapper::new())
             .build();
 
-        let sampler = Sampler::new(
+        let sampler_linear = Sampler::new(
             MinificationFilter::LinearMipmapLinear,
             MagnificationFilter::Linear,
             WrappingMode::ClampToEdge,
@@ -321,16 +290,6 @@ impl PomScene {
             WrappingMode::ClampToEdge,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
             Anisotropy::X4,
-        );
-
-        let sampler_nearest = Sampler::new(
-            MinificationFilter::Nearest,
-            MagnificationFilter::Nearest,
-            WrappingMode::ClampToEdge,
-            WrappingMode::ClampToEdge,
-            WrappingMode::ClampToEdge,
-            Vec4::new(0.0, 0.0, 0.0, 0.0),
-            Anisotropy::None,
         );
 
         let projection = perspective(
@@ -400,7 +359,6 @@ impl PomScene {
                 mesh,
                 transform: Mat4::identity(),
             },
-            fullscreen_mesh: FullscreenMesh::new(),
             material,
             environment: Environment {
                 maps: environments,
@@ -411,10 +369,7 @@ impl PomScene {
             },
             framebuffer,
             resolve_framebuffer,
-            samplers: Samplers {
-                linear: sampler,
-                nearest: sampler_nearest,
-            },
+            sampler_linear,
             projection_matrix: projection,
             post_stack,
             controls: Controls {
@@ -428,12 +383,6 @@ impl PomScene {
                 disney_ggx_hotness: true,
                 geometric_specular_aa: true,
                 ss_variance_and_threshold: Vec2::new(0.25, 0.18),
-            },
-            tone_mapping: ToneMapping {
-                pipeline: tonemapping_prog,
-                operator: 0,
-                white_threshold: 2.0,
-                exposure: 1.5,
             },
             vertex_per_frame_ubo,
             vertex_per_draw_ubo,
@@ -562,35 +511,6 @@ impl PomScene {
         StateManager::set_depth_function(DepthFunction::Less);
         StateManager::set_face_culling(FaceCulling::Back)
     }
-
-    pub fn tonemap_pass(&self, width: u32, height: u32) {
-        clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
-
-        StateManager::set_viewport(0, 0, width as i32, height as i32);
-
-        self.tone_mapping.pipeline.bind();
-
-        let tone_mapping_uniforms = ToneMappingPerFrameUniforms {
-            operator: self.tone_mapping.operator as i32,
-            white_threshold: self.tone_mapping.white_threshold,
-            exposure: self.tone_mapping.exposure,
-            _pad: 0.0,
-        };
-
-        self.tone_mapping_ubo.fill_mapped(0, &tone_mapping_uniforms);
-
-        self.tone_mapping.pipeline.set_texture_2d_with_id(
-            0,
-            self.resolve_framebuffer.texture_attachment(0).id(),
-            &self.samplers.nearest,
-        );
-
-        StateManager::set_front_face(FrontFace::Clockwise);
-        self.fullscreen_mesh.draw();
-        StateManager::set_front_face(FrontFace::CounterClockwise);
-
-        self.tone_mapping.pipeline.unbind()
-    }
 }
 
 impl Scene for PomScene {
@@ -713,7 +633,6 @@ impl Scene for PomScene {
         self.geometry_pass();
         self.skybox_pass();
         let size = window.inner_size();
-        self.tonemap_pass(size.width, size.height);
         self.post_stack
             .apply(&self.resolve_framebuffer, framebuffer_cache);
     }

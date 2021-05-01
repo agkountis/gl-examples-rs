@@ -18,7 +18,7 @@ fn main() {
         glob::glob(pattern)
             .unwrap()
             .into_iter()
-            .filter_map(|res| Result::ok(res))
+            .filter_map(Result::ok)
             .collect::<Vec<_>>()
     })
     .collect::<Vec<_>>();
@@ -59,7 +59,7 @@ fn main() {
         glob::glob(pattern)
             .unwrap()
             .into_iter()
-            .filter_map(|res| Result::ok(res))
+            .filter_map(Result::ok)
             .collect::<Vec<_>>()
     })
     .collect::<Vec<_>>();

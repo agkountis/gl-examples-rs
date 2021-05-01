@@ -31,8 +31,8 @@ pub struct Mesh {
     vao: GLuint,
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
-    vbo: Buffer,
-    ibo: Buffer,
+    _vbo: Buffer,
+    _ibo: Buffer,
 }
 
 impl Mesh {
@@ -133,8 +133,8 @@ impl Mesh {
             vao,
             vertices,
             indices,
-            vbo,
-            ibo,
+            _vbo: vbo,
+            _ibo: ibo,
         }
     }
 }
