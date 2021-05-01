@@ -1,8 +1,10 @@
-use std::mem;
-use std::{ops::RangeInclusive, rc::Rc};
+use std::{
+    borrow::Borrow,
+    mem,
+    {ops::RangeInclusive, rc::Rc},
+};
 
 use engine::{
-    application::clear_default_framebuffer,
     camera::Camera,
     color::srgb_to_linear3f,
     imgui::*,
@@ -35,7 +37,6 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
-use std::borrow::Borrow;
 
 struct EnvironmentMaps {
     skybox: TextureCube,
@@ -480,7 +481,7 @@ impl PbsScene {
         view.m44 = 1.0;
 
         let skybox_per_frame_uniforms = SkyboxPerFrameUniforms {
-            view_projection_matrix: &self.projection_matrix * &view,
+            view_projection_matrix: self.projection_matrix * &view,
         };
 
         self.skybox_per_frame_ubo
@@ -641,11 +642,28 @@ impl Scene for PbsScene {
             .mouse_inputs(true)
             .resizable(true)
             .movable(false)
-            // .always_auto_resize(true)
             .build(ui, || {
                 ui.dummy([358.0, 0.0]);
 
-                imgui::ComboBox::new(im_str!("Render Mode")).build_simple_string(ui, &mut self.render_mode, &[im_str!("Lit"), im_str!("Albedo"), im_str!("Metallic"), im_str!("Roughness"), im_str!("Normals"), im_str!("Tangents"), im_str!("UV"), im_str!("NdotV"), im_str!("AO"), im_str!("Specular AO"), im_str!("Horizon Specular AO"), im_str!("Diffuse Ambient"), im_str!("Specular Ambient")]);
+                imgui::ComboBox::new(im_str!("Render Mode"))
+                    .build_simple_string(
+                        ui,
+                        &mut self.render_mode,
+                        &[
+                            im_str!("Lit"),
+                            im_str!("Albedo"),
+                            im_str!("Metallic"),
+                            im_str!("Roughness"),
+                            im_str!("Normals"),
+                            im_str!("Tangents"),
+                            im_str!("UV"),
+                            im_str!("NdotV"),
+                            im_str!("AO"),
+                            im_str!("Specular AO"),
+                            im_str!("Horizon Specular AO"),
+                            im_str!("Diffuse Ambient"),
+                            im_str!("Specular Ambient")
+                        ]);
 
                 ui.spacing();
 
