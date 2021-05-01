@@ -2,7 +2,6 @@ use crate::core::math::{clamp_scalar, rotate_vec3};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
 use crate::imgui::{im_str, Gui, Ui};
 use crate::math::quaternion;
-use imgui::SliderFlags;
 use nalgebra_glm::{normalize, quat_normalize};
 use std::ops::RangeInclusive;
 
@@ -13,7 +12,6 @@ pub struct Camera {
     aperture: f32,
     shutter_speed: f32,
     sensitivity: f32,
-    exposure: f32,
     orbit_speed: f32,
     zoom_speed: f32,
     orbit_dampening: f32,
@@ -48,7 +46,6 @@ impl Camera {
             aperture: 1.4,
             shutter_speed: 0.55,
             sensitivity: 500.0,
-            exposure: 1.0,
             orbit_speed,
             zoom_speed,
             min_distance,

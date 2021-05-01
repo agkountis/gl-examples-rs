@@ -61,7 +61,7 @@ pub struct BufferCopyInfo<'a> {
 }
 
 pub struct Buffer {
-    name: String,
+    _name: String,
     id: GLuint,
     size: isize,
     mapped_ptr: *mut GLvoid,
@@ -86,7 +86,7 @@ impl Buffer {
         }
 
         Self {
-            name: name.to_string(),
+            _name: name.to_string(),
             id,
             size,
             mapped_ptr: ptr::null_mut(),
@@ -117,7 +117,7 @@ impl Buffer {
         }
 
         Self {
-            name: name.to_string(),
+            _name: name.to_string(),
             id,
             size,
             mapped_ptr: ptr::null_mut(),
@@ -148,7 +148,7 @@ impl Buffer {
         }
 
         Self {
-            name: name.to_string(),
+            _name: name.to_string(),
             id,
             size,
             mapped_ptr: ptr::null_mut(),
@@ -278,7 +278,7 @@ impl Buffer {
         assert_eq!(self.size, mem::size_of::<T>() as isize);
         assert!(offset + std::mem::size_of::<T>() as isize <= self.size);
 
-        let mut source = unsafe { (data as *const T).offset(offset) };
+        let source = unsafe { (data as *const T).offset(offset) };
 
         unsafe { ptr::copy_nonoverlapping(source, self.mapped_ptr as *mut T, 1) }
     }

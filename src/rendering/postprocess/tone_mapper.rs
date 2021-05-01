@@ -1,23 +1,22 @@
-use crate::framebuffer::{Framebuffer, TemporaryFramebufferPool};
-use crate::imgui::{im_str, Gui, Ui};
-use crate::math::Vec4;
-use crate::mesh::FULLSCREEN_MESH;
-use crate::rendering::postprocess::{
-    AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER,
+use crate::{
+    core::application::clear_default_framebuffer,
+    framebuffer::Framebuffer,
+    imgui::{im_str, Gui, Ui},
+    math::Vec4,
+    mesh::FULLSCREEN_MESH,
+    rendering::{
+        buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
+        postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
+        program_pipeline::ProgramPipeline,
+        sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
+        shader::{Shader, ShaderStage},
+        state::{FrontFace, StateManager},
+        Draw,
+    },
+    Context,
 };
-use crate::rendering::program_pipeline::ProgramPipeline;
-use crate::rendering::Draw;
 
-use crate::core::application::clear_default_framebuffer;
-use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
-use crate::rendering::sampler::{
-    Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode,
-};
-use crate::rendering::shader::{Shader, ShaderStage};
-use crate::rendering::state::{FrontFace, StateManager};
-use crate::Context;
-use std::any::Any;
-use std::ops::RangeInclusive;
+use std::{any::Any, ops::RangeInclusive};
 
 #[repr(C)]
 struct ToneMappingPerFrameUniforms {
@@ -134,6 +133,12 @@ impl PostprocessingEffect for ToneMapper {
         StateManager::set_front_face(FrontFace::CounterClockwise);
 
         self.pipeline.unbind()
+    }
+}
+
+impl Default for ToneMapper {
+    fn default() -> Self {
+        ToneMapper::new()
     }
 }
 
