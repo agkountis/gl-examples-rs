@@ -136,19 +136,22 @@ impl Application {
 
                     // Let the active scene draw UI
                     let ui = imgui.context.frame();
-                    scene_manager.gui(Context::new(
-                        windowed_context.window(),
-                        &mut asset_manager,
-                        &mut timer,
-                        &mut framebuffer_cache,
-                        &settings,
-                    ), &ui);
+                    scene_manager.gui(
+                        Context::new(
+                            windowed_context.window(),
+                            &mut asset_manager,
+                            &mut timer,
+                            &mut framebuffer_cache,
+                            &settings,
+                        ),
+                        &ui,
+                    );
                     imgui
                         .platform
                         .prepare_render(&ui, windowed_context.window());
                     imgui.renderer.render(ui);
 
-                   windowed_context.swap_buffers().unwrap()
+                    windowed_context.swap_buffers().unwrap()
                 }
                 Event::RedrawEventsCleared => {
                     scene_manager.post_draw(Context::new(
@@ -222,7 +225,7 @@ impl Application {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-            gl::Enable(gl::MULTISAMPLE);
+            // gl::Enable(gl::MULTISAMPLE);
             gl::Enable(gl::FRAMEBUFFER_SRGB);
             gl::Enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
 

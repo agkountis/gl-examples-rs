@@ -18,7 +18,7 @@ use engine::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
         framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
         material::{Material, PbsMetallicRoughnessMaterial},
-        mesh::{FullscreenMesh, Mesh, MeshUtilities},
+        mesh::{Mesh, MeshUtilities},
         postprocess::{
             bloom::BloomBuilder, tone_mapper::ToneMapper, PostprocessingStack,
             PostprocessingStackBuilder,
@@ -37,7 +37,6 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
-use engine::math::rotate;
 
 struct EnvironmentMaps {
     skybox: TextureCube,
@@ -105,6 +104,12 @@ struct FragmentPerFrameUniforms {
     _pad: Vec2,
 }
 
+// TODO: Use this to group framebuffers
+pub struct Framebuffers {
+    msaa_framebuffer: Framebuffer,
+    resolve_framebuffer: Framebuffer,
+}
+
 pub struct PbsScene {
     camera: Camera,
     model: Model,
@@ -113,7 +118,6 @@ pub struct PbsScene {
     framebuffer: Framebuffer,
     resolve_framebuffer: Framebuffer,
     sampler_linear: Sampler,
-    projection_matrix: Mat4,
     post_stack: PostprocessingStack,
     controls: Controls,
     lighting: Lighting,
@@ -235,7 +239,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth24,
+                    SizedTextureFormat::Depth24Stencil8,
                     AttachmentType::Renderbuffer,
                 ),
             ],
@@ -251,7 +255,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth24,
+                    SizedTextureFormat::Depth24Stencil8,
                     AttachmentType::Renderbuffer,
                 ),
             ],
@@ -259,11 +263,11 @@ impl PbsScene {
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let post_stack = PostprocessingStackBuilder::new()
-            .with_effect(BloomBuilder::new(asset_path).build())
+            //.with_effect(BloomBuilder::new(asset_path).build())
             .with_effect(ToneMapper::new())
             .build();
 
-        let sampler_linear = Sampler::new(
+        let sampler_mipmap_linear = Sampler::new(
             MinificationFilter::LinearMipmapLinear,
             MagnificationFilter::Linear,
             WrappingMode::ClampToEdge,
@@ -271,14 +275,6 @@ impl PbsScene {
             WrappingMode::ClampToEdge,
             Vec4::new(0.0, 0.0, 0.0, 0.0),
             Anisotropy::X16,
-        );
-
-        let projection = perspective(
-            window.inner_size().width,
-            window.inner_size().height,
-            60,
-            0.5,
-            500.0,
         );
 
         let material = PbsMetallicRoughnessMaterial::new(
@@ -323,8 +319,7 @@ impl PbsScene {
             },
             framebuffer,
             resolve_framebuffer,
-            sampler_linear,
-            projection_matrix: projection,
+            sampler_linear: sampler_mipmap_linear,
             post_stack,
             controls: Controls {
                 mouse_sensitivity: 2.0,
@@ -369,9 +364,8 @@ impl PbsScene {
 
         self.model.mesh.draw();
 
-        self.framebuffer.unbind(false);
-
         Framebuffer::blit(&self.framebuffer, &self.resolve_framebuffer);
+        self.framebuffer.unbind(true);
 
         self.material.unbind()
     }
@@ -545,7 +539,13 @@ impl Scene for PbsScene {
         self.controls.prev_x = self.controls.mouse_x;
         self.controls.prev_y = self.controls.mouse_y;
 
-        self.camera.update(window.inner_size(), dx, dy, self.controls.scroll, timer.delta_time());
+        self.camera.update(
+            window.inner_size(),
+            dx,
+            dy,
+            self.controls.scroll,
+            timer.delta_time(),
+        );
         //self.model.transform = rotate(&self.model.transform, 5.0 * timer.delta_time(), &Vec3::new(0.0, 1.0, 0.0));
 
         self.controls.scroll = 0.0;
@@ -554,7 +554,7 @@ impl Scene for PbsScene {
     }
 
     fn pre_draw(&mut self, _: Context) {
-       self.update_uniform_buffers()
+        self.update_uniform_buffers()
     }
 
     fn draw(&mut self, context: Context) {
@@ -580,10 +580,7 @@ impl Scene for PbsScene {
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
-        let Context {
-            window,
-            ..
-        } = context;
+        let Context { window, .. } = context;
 
         let window_height = window.inner_size().height as f32;
         imgui::Window::new(im_str!("Inspector"))

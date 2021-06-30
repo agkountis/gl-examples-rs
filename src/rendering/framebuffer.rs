@@ -127,9 +127,9 @@ impl FramebufferAttachment {
 
     pub fn is_depth_stencil(&self) -> bool {
         match self.attachment_bind_point {
-            AttachmentBindPoint::Depth(_) |
-            AttachmentBindPoint::DepthStencil(_) |
-            AttachmentBindPoint::Stencil(_) => true,
+            AttachmentBindPoint::Depth(_)
+            | AttachmentBindPoint::DepthStencil(_)
+            | AttachmentBindPoint::Stencil(_) => true,
             _ => false,
         }
     }
@@ -175,21 +175,17 @@ impl Framebuffer {
             let texture_attachment_ids: Vec<GLuint> =
                 vec![0; texture_attachment_create_infos.len()];
 
-            match msaa {
-                Msaa::None => unsafe {
-                    gl::CreateTextures(
-                        gl::TEXTURE_2D,
-                        texture_attachment_ids.len() as i32,
-                        texture_attachment_ids.as_ptr() as *mut GLuint,
-                    )
-                },
-                _ => unsafe {
-                    gl::CreateTextures(
-                        gl::TEXTURE_2D_MULTISAMPLE,
-                        texture_attachment_ids.len() as i32,
-                        texture_attachment_ids.as_ptr() as *mut GLuint,
-                    )
-                },
+            let tex_type = match msaa {
+                Msaa::None => gl::TEXTURE_2D,
+                _ => gl::TEXTURE_2D_MULTISAMPLE,
+            };
+
+            unsafe {
+                gl::CreateTextures(
+                    tex_type,
+                    texture_attachment_ids.len() as i32,
+                    texture_attachment_ids.as_ptr() as *mut GLuint,
+                )
             }
 
             texture_attachment_create_infos
@@ -262,9 +258,8 @@ impl Framebuffer {
 
         let renderbuffer_attachment_create_infos = attachment_create_infos
             .iter()
-            .filter(|&create_info| match create_info.attachment_type() {
-                AttachmentType::Renderbuffer => true,
-                _ => false,
+            .filter(|&create_info| {
+                matches!(create_info.attachment_type(), AttachmentType::Renderbuffer)
             })
             .collect::<Vec<_>>();
 
@@ -378,17 +373,12 @@ impl Framebuffer {
             .chain(self.renderbuffer_attachments.iter())
             .for_each(|attachment| match attachment.attachment_bind_point {
                 AttachmentBindPoint::Color(_, i) => unsafe {
-                    gl::ClearNamedFramebufferfv(
-                        self.id,
-                        gl::COLOR,
-                        i,
-                        clear_color.as_ptr(),
-                    )
+                    gl::ClearNamedFramebufferfv(self.id, gl::COLOR, i, clear_color.as_ptr())
                 },
                 AttachmentBindPoint::Depth(_) => {
                     let depth_clear_val = 1.0f32;
                     unsafe { gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val) }
-                },
+                }
                 AttachmentBindPoint::DepthStencil(_) => unsafe {
                     let depth_clear_val: f32 = 1.0;
                     let stencil_clear_val: i32 = 0;
@@ -507,6 +497,7 @@ impl Framebuffer {
             });
 
         unsafe {
+            // TODO: This assumes all renderbuffers are depth textures, which is wrong.
             gl::BlitNamedFramebuffer(
                 source.id(),
                 destination.id(),
