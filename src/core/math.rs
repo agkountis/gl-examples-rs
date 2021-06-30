@@ -135,19 +135,6 @@ pub mod matrix {
     }
 }
 
-pub mod utilities {
-    use nalgebra_glm as glm;
-
-    pub fn value_ptr<N: glm::Scalar, R: glm::Dimension, C: glm::Dimension>(
-        value: &glm::TMat<N, R, C>,
-    ) -> *const N
-    where
-        glm::DefaultAllocator: glm::Alloc<N, R, C>,
-    {
-        glm::value_ptr(value).as_ptr()
-    }
-}
-
 use nalgebra_glm as glm;
 
 pub fn clamp_scalar(x: f32, min: f32, max: f32) -> f32 {

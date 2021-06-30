@@ -47,14 +47,14 @@ impl Mesh {
             "Vertex Buffer",
             &vertices,
             BufferTarget::Array,
-            BufferStorageFlags::DYNAMIC,
+            BufferStorageFlags::NONE,
         );
 
         let ibo = Buffer::new_from_slice(
             "Index Buffer",
             &indices,
             BufferTarget::ElementArray,
-            BufferStorageFlags::DYNAMIC,
+            BufferStorageFlags::NONE,
         );
 
         let mut vao: GLuint = 0;

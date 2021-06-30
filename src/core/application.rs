@@ -101,6 +101,7 @@ impl Application {
                     &settings,
                 )),
                 Event::MainEventsCleared => {
+                    timer.tick();
                     scene_manager.update(Context::new(
                         windowed_context.window(),
                         &mut asset_manager,
@@ -135,13 +136,19 @@ impl Application {
 
                     // Let the active scene draw UI
                     let ui = imgui.context.frame();
-                    scene_manager.gui(&ui);
+                    scene_manager.gui(Context::new(
+                        windowed_context.window(),
+                        &mut asset_manager,
+                        &mut timer,
+                        &mut framebuffer_cache,
+                        &settings,
+                    ), &ui);
                     imgui
                         .platform
                         .prepare_render(&ui, windowed_context.window());
                     imgui.renderer.render(ui);
 
-                    windowed_context.swap_buffers().unwrap()
+                   windowed_context.swap_buffers().unwrap()
                 }
                 Event::RedrawEventsCleared => {
                     scene_manager.post_draw(Context::new(

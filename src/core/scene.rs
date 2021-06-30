@@ -23,7 +23,7 @@ pub trait Scene {
     }
     fn pre_draw(&mut self, context: Context) {}
     fn draw(&mut self, context: Context) {}
-    fn gui(&mut self, ui: &Ui) {}
+    fn gui(&mut self, context: Context, ui: &Ui) {}
     fn post_draw(&mut self, context: Context) {}
 }
 
@@ -142,10 +142,24 @@ impl SceneManager {
         }
     }
 
-    pub(crate) fn gui(&mut self, ui: &Ui) {
+    pub(crate) fn gui(&mut self, context: Context, ui: &Ui) {
         if self.is_running {
+            let Context {
+                window,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            } = context;
+
             if let Some(scene) = self.scenes.last_mut() {
-                scene.gui(ui)
+                scene.gui(Context::new(
+                    window,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ), ui)
             }
         }
     }

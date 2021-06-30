@@ -2,7 +2,6 @@ use gl::types::*;
 use gl_bindings as gl;
 use std::fmt;
 
-use crate::core::math;
 use crate::core::math::{UVec2, Vec4};
 use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
@@ -128,9 +127,9 @@ impl FramebufferAttachment {
 
     pub fn is_depth_stencil(&self) -> bool {
         match self.attachment_bind_point {
-            AttachmentBindPoint::Depth(_)
-            | AttachmentBindPoint::DepthStencil(_)
-            | AttachmentBindPoint::Stencil(_) => true,
+            AttachmentBindPoint::Depth(_) |
+            AttachmentBindPoint::DepthStencil(_) |
+            AttachmentBindPoint::Stencil(_) => true,
             _ => false,
         }
     }
@@ -383,12 +382,12 @@ impl Framebuffer {
                         self.id,
                         gl::COLOR,
                         i,
-                        math::utilities::value_ptr(clear_color),
+                        clear_color.as_ptr(),
                     )
                 },
-                AttachmentBindPoint::Depth(_) => unsafe {
-                    let depth_clear_val: f32 = 1.0;
-                    gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val)
+                AttachmentBindPoint::Depth(_) => {
+                    let depth_clear_val = 1.0f32;
+                    unsafe { gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val) }
                 },
                 AttachmentBindPoint::DepthStencil(_) => unsafe {
                     let depth_clear_val: f32 = 1.0;

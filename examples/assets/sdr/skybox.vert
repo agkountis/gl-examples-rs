@@ -3,9 +3,10 @@
 
 layout(location = 0) in vec3 inPosition;
 
-layout(std140, binding = 5) uniform MatricesBlock
+layout(std140, binding = 0) uniform CameraMatrices
 {
-    mat4 view_projection;
+    mat4 view;
+    mat4 projection;
 };
 
 out gl_PerVertex {
@@ -20,7 +21,8 @@ void main()
 {
     // Trick the depth buffer on thinking that the positions are infinitelly far away
     // by set z = w = 1 = max depth value
-    gl_Position = (view_projection * vec4(inPosition, 1.0)).xyww;
+    mat4 v = mat4(mat3(view));
+    gl_Position = (projection * v * vec4(inPosition, 1.0)).xyww;
 
     // The cube drawn is centered at the origin so
     // each position is a direction from the origin

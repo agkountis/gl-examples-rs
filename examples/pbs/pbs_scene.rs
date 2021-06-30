@@ -37,6 +37,7 @@ use engine::{
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
+use engine::math::rotate;
 
 struct EnvironmentMaps {
     skybox: TextureCube,
@@ -87,12 +88,6 @@ struct Controls {
 }
 
 #[repr(C)]
-struct VertexPerFrameUniforms {
-    view_projection_matrix: Mat4,
-    eye_position: Vec4,
-}
-
-#[repr(C)]
 struct VertexPerDrawUniforms {
     model_matrix: Mat4,
     normal_matrix: Mat4,
@@ -110,11 +105,6 @@ struct FragmentPerFrameUniforms {
     _pad: Vec2,
 }
 
-#[repr(C)]
-struct SkyboxPerFrameUniforms {
-    view_projection_matrix: Mat4,
-}
-
 pub struct PbsScene {
     camera: Camera,
     model: Model,
@@ -128,11 +118,8 @@ pub struct PbsScene {
     controls: Controls,
     lighting: Lighting,
     render_mode: usize,
-    vertex_per_frame_ubo: Buffer,
     vertex_per_draw_ubo: Buffer,
     fragment_per_frame_ubo: Buffer,
-    skybox_per_frame_ubo: Buffer,
-    dt: f32,
 }
 
 impl PbsScene {
@@ -148,6 +135,9 @@ impl PbsScene {
         let camera = Camera::new(
             Vec3::new(0.0, 0.0, -60.0),
             Vec3::new(0.0, 0.0, 0.0),
+            60,
+            0.5,
+            500.0,
             10.0,
             30.0,
             10.0,
@@ -245,11 +235,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Rgba16f,
-                    AttachmentType::Texture,
-                ),
-                FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth16,
+                    SizedTextureFormat::Depth24,
                     AttachmentType::Renderbuffer,
                 ),
             ],
@@ -265,11 +251,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Rgba16f,
-                    AttachmentType::Texture,
-                ),
-                FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth16,
+                    SizedTextureFormat::Depth24,
                     AttachmentType::Renderbuffer,
                 ),
             ],
@@ -307,15 +289,6 @@ impl PbsScene {
             None,
         );
 
-        let mut vertex_per_frame_ubo = Buffer::new(
-            "Vertex Per Frame UBO",
-            std::mem::size_of::<VertexPerFrameUniforms>() as isize,
-            BufferTarget::Uniform,
-            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
-        );
-        vertex_per_frame_ubo.bind(0);
-        vertex_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
-
         let mut vertex_per_draw_ubo = Buffer::new(
             "Vertex Per Draw UBO",
             mem::size_of::<VertexPerDrawUniforms>() as isize,
@@ -333,15 +306,6 @@ impl PbsScene {
         );
         fragment_per_frame_ubo.bind(2);
         fragment_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
-
-        let mut skybox_per_frame_ubo = Buffer::new(
-            "Skybox Matrices UBO",
-            mem::size_of::<SkyboxPerFrameUniforms>() as isize,
-            BufferTarget::Uniform,
-            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
-        );
-        skybox_per_frame_ubo.bind(5);
-        skybox_per_frame_ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
 
         PbsScene {
             camera,
@@ -376,11 +340,8 @@ impl PbsScene {
                 ss_variance_and_threshold: Vec2::new(0.25, 0.18),
             },
             render_mode: 0,
-            vertex_per_frame_ubo,
             vertex_per_draw_ubo,
             fragment_per_frame_ubo,
-            skybox_per_frame_ubo,
-            dt: 0.0,
         }
     }
 
@@ -388,48 +349,9 @@ impl PbsScene {
         self.framebuffer.bind();
         self.framebuffer.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
 
-        let camera_pos = self.camera.position();
-        let vertex_per_frame_uniforms = VertexPerFrameUniforms {
-            view_projection_matrix: self.projection_matrix.borrow() * self.camera.transform(),
-            eye_position: Vec4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
-        };
-
-        let vertex_per_draw_uniforms = VertexPerDrawUniforms {
-            model_matrix: self.model.transform.clone_owned(),
-            normal_matrix: transpose(&inverse(&self.model.transform)),
-        };
-
-        self.vertex_per_frame_ubo
-            .fill_mapped(0, &vertex_per_frame_uniforms);
-
-        self.vertex_per_draw_ubo
-            .fill_mapped(0, &vertex_per_draw_uniforms);
-
         self.material.bind();
 
         let program_pipeline = self.material.program_pipeline();
-
-        let mut light_color: Vec3 = srgb_to_linear3f(&self.lighting.light_color.into());
-        light_color *= self.lighting.light_intensity;
-
-        let fragment_per_frame_uniforms = FragmentPerFrameUniforms {
-            light_direction: Vec4::new(
-                self.lighting.light_direction[0],
-                self.lighting.light_direction[1],
-                self.lighting.light_direction[2],
-                1.0,
-            ),
-            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 0.0),
-            ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned(),
-            geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
-            specular_ao: self.lighting.specular_ao as i32,
-            disney_ggx_hotness: self.lighting.disney_ggx_hotness as i32,
-            render_mode: self.render_mode as i32,
-            _pad: Vec2::new(0.0, 0.0),
-        };
-
-        self.fragment_per_frame_ubo
-            .fill_mapped(0, &fragment_per_frame_uniforms);
 
         const IRRADIANCE_MAP_BINDING_INDEX: u32 = 4;
         const RADIANCE_MAP_BINDING_INDEX: u32 = 5;
@@ -474,19 +396,6 @@ impl PbsScene {
             }
         };
 
-        let mut view = self.camera.transform().clone_owned();
-        view.m14 = 0.0;
-        view.m24 = 0.0;
-        view.m34 = 0.0;
-        view.m44 = 1.0;
-
-        let skybox_per_frame_uniforms = SkyboxPerFrameUniforms {
-            view_projection_matrix: self.projection_matrix * &view,
-        };
-
-        self.skybox_per_frame_ubo
-            .fill_mapped(0, &skybox_per_frame_uniforms);
-
         self.environment.skybox_program_pipeline.set_texture_cube(
             0,
             &environment_map,
@@ -500,6 +409,38 @@ impl PbsScene {
 
         StateManager::set_depth_function(DepthFunction::Less);
         StateManager::set_face_culling(FaceCulling::Back)
+    }
+
+    fn update_uniform_buffers(&self) {
+        let vertex_per_draw_uniforms = VertexPerDrawUniforms {
+            model_matrix: self.model.transform,
+            normal_matrix: transpose(&inverse(&self.model.transform)),
+        };
+
+        self.vertex_per_draw_ubo
+            .fill_mapped(0, &vertex_per_draw_uniforms);
+
+        let mut light_color: Vec3 = srgb_to_linear3f(&self.lighting.light_color.into());
+        light_color *= self.lighting.light_intensity;
+
+        let fragment_per_frame_uniforms = FragmentPerFrameUniforms {
+            light_direction: Vec4::new(
+                self.lighting.light_direction[0],
+                self.lighting.light_direction[1],
+                self.lighting.light_direction[2],
+                1.0,
+            ),
+            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 0.0),
+            ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned(),
+            geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
+            specular_ao: self.lighting.specular_ao as i32,
+            disney_ggx_hotness: self.lighting.disney_ggx_hotness as i32,
+            render_mode: self.render_mode as i32,
+            _pad: Vec2::new(0.0, 0.0),
+        };
+
+        self.fragment_per_frame_ubo
+            .fill_mapped(0, &fragment_per_frame_uniforms);
     }
 }
 
@@ -580,8 +521,9 @@ impl Scene for PbsScene {
             WindowEvent::Resized(size) => {
                 let x = size.width;
                 let y = size.height;
+
                 //TODO: Get this from the camera
-                self.projection_matrix = perspective(x, y, 60, 0.5, 500.0);
+                //self.projection_matrix = perspective(x, y, 60, 0.5, 500.0);
                 StateManager::set_viewport(0, 0, x as i32, y as i32)
             }
             _ => {}
@@ -590,9 +532,7 @@ impl Scene for PbsScene {
     }
 
     fn update(&mut self, context: Context) -> Transition {
-        let Context { timer, .. } = context;
-
-        self.dt = timer.get_delta();
+        let Context { timer, window, .. } = context;
 
         let mut dx = 0.0;
         let mut dy = 0.0;
@@ -605,14 +545,17 @@ impl Scene for PbsScene {
         self.controls.prev_x = self.controls.mouse_x;
         self.controls.prev_y = self.controls.mouse_y;
 
-        self.camera.update(dx, dy, self.controls.scroll, self.dt);
+        self.camera.update(window.inner_size(), dx, dy, self.controls.scroll, timer.delta_time());
+        //self.model.transform = rotate(&self.model.transform, 5.0 * timer.delta_time(), &Vec3::new(0.0, 1.0, 0.0));
 
         self.controls.scroll = 0.0;
 
         Transition::None
     }
 
-    fn pre_draw(&mut self, _: Context) {}
+    fn pre_draw(&mut self, _: Context) {
+       self.update_uniform_buffers()
+    }
 
     fn draw(&mut self, context: Context) {
         let Context {
@@ -622,6 +565,7 @@ impl Scene for PbsScene {
             framebuffer_cache,
             settings,
         } = context;
+
         self.geometry_pass();
         self.skybox_pass();
 
@@ -635,9 +579,15 @@ impl Scene for PbsScene {
         );
     }
 
-    fn gui(&mut self, ui: &Ui) {
+    fn gui(&mut self, context: Context, ui: &Ui) {
+        let Context {
+            window,
+            ..
+        } = context;
+
+        let window_height = window.inner_size().height as f32;
         imgui::Window::new(im_str!("Inspector"))
-            .size([358.0, 720.0], Condition::Appearing)
+            .size([358.0, window_height], Condition::Appearing)
             .position([2.0, 0.0], Condition::Always)
             .mouse_inputs(true)
             .resizable(true)
@@ -662,7 +612,12 @@ impl Scene for PbsScene {
                             im_str!("Specular AO"),
                             im_str!("Horizon Specular AO"),
                             im_str!("Diffuse Ambient"),
-                            im_str!("Specular Ambient")
+                            im_str!("Specular Ambient"),
+                            im_str!("Fresnel"),
+                            im_str!("Fresnel /w Roughness"),
+                            im_str!("Fresnel * Radiance"),
+                            im_str!("Analytical Lights Only"),
+                            im_str!("IBL only"),
                         ]);
 
                 ui.spacing();

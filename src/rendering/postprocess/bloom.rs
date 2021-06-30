@@ -13,7 +13,7 @@ use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-const UBO_BINDING_INDEX: u32 = 0;
+const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
 const MIN_ITERATIONS: u32 = 1;
 const MAX_ITERATIONS: u32 = 16;
@@ -100,7 +100,6 @@ impl PostprocessingEffect for Bloom {
         // TODO: Do a Box downsample blit here and filter brights
 
         let mut current_source = Rc::clone(&current_destination);
-
         for _ in 1..self.iterations {
             size.x /= 2;
             size.y /= 2;

@@ -20,6 +20,11 @@ const int RENDER_MODE_SPECULAR_AO = 9;
 const int RENDER_MODE_HORIZON_SPECULAR_AO = 10;
 const int RENDER_MODE_DIFFUSE_AMBIENT = 11;
 const int RENDER_MODE_SPECULAR_AMBIENT = 12;
+const int RENDER_MODE_FRESNEL = 13;
+const int RENDER_MODE_FRESNEL_ROUGHNESS = 14;
+const int RENDER_MODE_FRESNEL_RADIANCE = 15;
+const int RENDER_MODE_ANALYTICAL_LIGHTS_ONLY = 16;
+const int RENDER_MODE_IBL_ONLY = 17;
 
 layout(location = 0) in VsOut {
     vec3 wViewDirection;
@@ -226,6 +231,7 @@ vec3 EnvironmentBRDFApprox( vec3 F0, float roughness, float NoV )
 vec3 IBL(in float NdotV, in vec3 F0, in vec3 albedo, in float metallic, in float roughness, in float ao, in vec2 brdfLUT, in vec3 irradiance, in vec3 radiance, in vec3 r, in vec3 n)
 {
     vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+//    vec3 F = FresnelSchlick(NdotV, F0);
 
     vec3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
@@ -370,9 +376,23 @@ void main()
         case RENDER_MODE_SPECULAR_AMBIENT:
             outColor = vec4(radiance.rgb, 1.0);
             break;
+        case RENDER_MODE_FRESNEL:
+            outColor = vec4(FresnelSchlick(NdotV, F0), 1.0);
+            break;
+        case RENDER_MODE_FRESNEL_ROUGHNESS:
+            outColor = vec4(FresnelSchlickRoughness(NdotV, F0, perceptualRoughness), 1.0);
+            break;
+        case RENDER_MODE_FRESNEL_RADIANCE:
+            outColor = vec4(radiance * (F0 * lutSample.x + lutSample.y), 1.0);
+            break;
+        case RENDER_MODE_ANALYTICAL_LIGHTS_ONLY:
+            outColor = vec4(analyticalLight, 1.0);
+            break;
+        case RENDER_MODE_IBL_ONLY:
+            outColor = vec4(imageBasedLight, 1.0);
+            break;
         default:
             vec3 finalColor = analyticalLight + imageBasedLight;
             outColor = vec4(finalColor, 1.0);
     }
-
 }

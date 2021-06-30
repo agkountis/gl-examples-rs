@@ -591,7 +591,7 @@ impl Scene for PomScene {
     fn update(&mut self, context: Context) -> Transition {
         let Context { timer, .. } = context;
 
-        self.dt = timer.get_delta();
+        self.dt = timer.delta_time();
 
         let mut dx = 0.0;
         let mut dy = 0.0;

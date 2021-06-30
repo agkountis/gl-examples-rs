@@ -10,6 +10,8 @@ layout(location = 4) in vec3 inColor;
 
 layout(std140, binding = 0) uniform PerFrameBlock
 {
+    mat4 view;
+    mat4 projection;
     mat4 view_projection;
     vec4 eyePosition;
 };
@@ -41,7 +43,7 @@ void main()
     //Transform vertex to clipspace.
     vec4 lVertexPosition = vec4(inPosition, 1.0);
     vec4 wVertexPosition = model * lVertexPosition;
-    gl_Position = view_projection * wVertexPosition;
+    gl_Position = projection * view * wVertexPosition;
 
     mat3 normalMat = mat3(normalMatrix);
     //Calculate the normal. Bring it to world space

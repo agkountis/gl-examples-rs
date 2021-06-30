@@ -29,7 +29,7 @@ fn main() {
         let output = Command::new("glslangValidator")
             .current_dir("examples/assets/sdr")
             .args(&[
-                "-G450",
+                "-G",
                 "-e main",
                 "-Os",
                 "-o",
@@ -70,7 +70,7 @@ fn main() {
         let output = Command::new("glslangValidator")
             .current_dir("src/rendering/postprocess/shaders")
             .args(&[
-                "-G450",
+                "-G",
                 "-e main",
                 "-Os",
                 "-o",

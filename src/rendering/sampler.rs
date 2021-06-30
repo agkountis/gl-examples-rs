@@ -1,4 +1,3 @@
-use crate::core::math::utilities;
 use crate::core::math::Vec4;
 use gl_bindings as gl;
 
@@ -73,7 +72,7 @@ impl Sampler {
             gl::SamplerParameterfv(
                 id,
                 gl::TEXTURE_BORDER_COLOR,
-                utilities::value_ptr(&border_color),
+                border_color.as_ptr(),
             );
             gl::SamplerParameterf(id, gl::TEXTURE_MAX_ANISOTROPY, anisotropy as u32 as f32)
         }
