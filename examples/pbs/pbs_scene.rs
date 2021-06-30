@@ -115,7 +115,7 @@ pub struct PbsScene {
     model: Model,
     material: PbsMetallicRoughnessMaterial,
     environment: Environment,
-    framebuffer: Framebuffer,
+    msaa_framebuffers: [Framebuffer; 5],
     resolve_framebuffer: Framebuffer,
     sampler_linear: Sampler,
     post_stack: PostprocessingStack,
@@ -124,6 +124,7 @@ pub struct PbsScene {
     render_mode: usize,
     vertex_per_draw_ubo: Buffer,
     fragment_per_frame_ubo: Buffer,
+    msaa_framebuffer_index: usize,
 }
 
 impl PbsScene {
@@ -230,13 +231,85 @@ impl PbsScene {
             },
         ];
 
+        let msaa_framebuffers = [
+            Framebuffer::new(
+                UVec2::new(window.inner_size().width, window.inner_size().height),
+                Msaa::None,
+                vec![
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Rgba16f,
+                        AttachmentType::Renderbuffer,
+                    ),
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Depth24Stencil8,
+                        AttachmentType::Renderbuffer,
+                    ),
+                ],
+            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            Framebuffer::new(
+                UVec2::new(window.inner_size().width, window.inner_size().height),
+                Msaa::X2,
+                vec![
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Rgba16f,
+                        AttachmentType::Renderbuffer,
+                    ),
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Depth24Stencil8,
+                        AttachmentType::Renderbuffer,
+                    ),
+                ],
+            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            Framebuffer::new(
+                UVec2::new(window.inner_size().width, window.inner_size().height),
+                Msaa::X4,
+                vec![
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Rgba16f,
+                        AttachmentType::Renderbuffer,
+                    ),
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Depth24Stencil8,
+                        AttachmentType::Renderbuffer,
+                    ),
+                ],
+            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            Framebuffer::new(
+                UVec2::new(window.inner_size().width, window.inner_size().height),
+                Msaa::X8,
+                vec![
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Rgba16f,
+                        AttachmentType::Renderbuffer,
+                    ),
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Depth24Stencil8,
+                        AttachmentType::Renderbuffer,
+                    ),
+                ],
+            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            Framebuffer::new(
+                UVec2::new(window.inner_size().width, window.inner_size().height),
+                Msaa::X16,
+                vec![
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Rgba16f,
+                        AttachmentType::Renderbuffer,
+                    ),
+                    FramebufferAttachmentCreateInfo::new(
+                        SizedTextureFormat::Depth24Stencil8,
+                        AttachmentType::Renderbuffer,
+                    ),
+                ],
+            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error))
+        ];
         let framebuffer = Framebuffer::new(
             UVec2::new(window.inner_size().width, window.inner_size().height),
-            Msaa::X4,
+            Msaa::None,
             vec![
                 FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Rgba16f,
-                    AttachmentType::Texture,
+                    AttachmentType::Renderbuffer,
                 ),
                 FramebufferAttachmentCreateInfo::new(
                     SizedTextureFormat::Depth24Stencil8,
@@ -317,7 +390,7 @@ impl PbsScene {
                 active_environment: 1,
                 skybox_type: SkyboxType::Radiance,
             },
-            framebuffer,
+            msaa_framebuffers,
             resolve_framebuffer,
             sampler_linear: sampler_mipmap_linear,
             post_stack,
@@ -337,12 +410,14 @@ impl PbsScene {
             render_mode: 0,
             vertex_per_draw_ubo,
             fragment_per_frame_ubo,
+            msaa_framebuffer_index: 2,
         }
     }
 
     fn geometry_pass(&self) {
-        self.framebuffer.bind();
-        self.framebuffer.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
+        let framebuffer = &self.msaa_framebuffers[self.msaa_framebuffer_index];
+        framebuffer.bind();
+        framebuffer.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0));
 
         self.material.bind();
 
@@ -364,8 +439,8 @@ impl PbsScene {
 
         self.model.mesh.draw();
 
-        Framebuffer::blit(&self.framebuffer, &self.resolve_framebuffer);
-        self.framebuffer.unbind(true);
+
+        framebuffer.unbind(false);
 
         self.material.unbind()
     }
@@ -374,7 +449,9 @@ impl PbsScene {
         StateManager::set_depth_function(DepthFunction::LessOrEqual);
         StateManager::set_face_culling(FaceCulling::Front);
 
-        self.resolve_framebuffer.bind();
+        let framebuffer = &self.msaa_framebuffers[self.msaa_framebuffer_index];
+
+        framebuffer.bind();
 
         self.environment.skybox_program_pipeline.bind();
 
@@ -398,7 +475,9 @@ impl PbsScene {
 
         self.environment.skybox_mesh.draw();
 
-        self.resolve_framebuffer.unbind(false);
+        Framebuffer::blit(framebuffer, &self.resolve_framebuffer);
+        framebuffer.unbind(true);
+
         self.environment.skybox_program_pipeline.unbind();
 
         StateManager::set_depth_function(DepthFunction::Less);
@@ -577,6 +656,8 @@ impl Scene for PbsScene {
             &self.resolve_framebuffer,
             Context::new(window, asset_manager, timer, framebuffer_cache, settings),
         );
+
+        self.resolve_framebuffer.unbind(true)
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
@@ -751,8 +832,31 @@ impl Scene for PbsScene {
                         });
                 }
 
+                if imgui::CollapsingHeader::new(im_str!("Anti-Aliasing"))
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .build(ui)
+                {
+                    imgui::ComboBox::new(im_str!("MSAA")).build_simple_string(
+                        ui,
+                        &mut self.msaa_framebuffer_index,
+                        &[
+                            im_str!("X1"),
+                            im_str!("X2"),
+                            im_str!("X4"),
+                            im_str!("X8"),
+                            im_str!("X16"),
+                        ],
+                    );
+                }
+
+                ui.spacing();
+
                 // Camera
                 self.camera.gui(ui);
+
+                ui.spacing();
 
                 // Post processing
                 self.post_stack.gui(ui);

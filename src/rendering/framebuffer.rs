@@ -464,15 +464,26 @@ impl Framebuffer {
     }
 
     pub fn blit(source: &Framebuffer, destination: &Framebuffer) {
-        let source_texture_attachments = &source.texture_attachments;
-        let dest_texture_attachments = &destination.texture_attachments;
+
+        let source_color_attachments = source.texture_attachments
+            .iter()
+            .chain(source.renderbuffer_attachments.iter())
+            .filter(|&attachment| {
+                !attachment.is_depth_stencil()
+            }).collect::<Vec<_>>();
+
+        let dest_color_attachments = destination.texture_attachments
+            .iter()
+            .chain(destination.renderbuffer_attachments.iter())
+            .filter(|&attachment| !attachment.is_depth_stencil())
+            .collect::<Vec<_>>();
 
         assert_eq!(
-            source_texture_attachments.len(),
-            dest_texture_attachments.len()
+            source_color_attachments.len(),
+            dest_color_attachments.len()
         );
 
-        source_texture_attachments
+        source_color_attachments
             .iter()
             .enumerate()
             .for_each(|(i, _)| unsafe {

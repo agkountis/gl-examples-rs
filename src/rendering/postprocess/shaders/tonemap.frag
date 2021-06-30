@@ -143,4 +143,5 @@ void main()
 //        outColor = vec4(ACESFitted(color), 1.0);
         outColor = vec4(1.0, 0.0, 0.0, 1.0);
     }
+//    outColor = vec4(color, 1.0);
 }
