@@ -67,6 +67,7 @@ struct Lighting {
     geometric_specular_aa: bool,
     specular_ao: bool,
     ss_variance_and_threshold: Vec2,
+    max_reflection_lod: i32,
 }
 
 struct Model {
@@ -101,7 +102,8 @@ struct FragmentPerFrameUniforms {
     specular_ao: i32,
     disney_ggx_hotness: i32,
     render_mode: i32,
-    _pad: Vec2,
+    max_reflection_lod: f32,
+    _pad: f32,
 }
 
 // TODO: Use this to group framebuffers
@@ -406,6 +408,7 @@ impl PbsScene {
                 geometric_specular_aa: true,
                 specular_ao: true,
                 ss_variance_and_threshold: Vec2::new(0.25, 0.18),
+                max_reflection_lod: 5,
             },
             render_mode: 0,
             vertex_per_draw_ubo,
@@ -475,13 +478,17 @@ impl PbsScene {
 
         self.environment.skybox_mesh.draw();
 
-        Framebuffer::blit(framebuffer, &self.resolve_framebuffer);
-        framebuffer.unbind(true);
-
         self.environment.skybox_program_pipeline.unbind();
 
         StateManager::set_depth_function(DepthFunction::Less);
         StateManager::set_face_culling(FaceCulling::Back)
+    }
+
+    fn msaa_resolve(&self) {
+        let framebuffer = &self.msaa_framebuffers[self.msaa_framebuffer_index];
+        self.resolve_framebuffer.clear(&Vec4::new(0.0, 1.0, 0.0, 1.0));
+        Framebuffer::blit(framebuffer, &self.resolve_framebuffer);
+        framebuffer.unbind(true);
     }
 
     fn update_uniform_buffers(&self) {
@@ -509,7 +516,8 @@ impl PbsScene {
             specular_ao: self.lighting.specular_ao as i32,
             disney_ggx_hotness: self.lighting.disney_ggx_hotness as i32,
             render_mode: self.render_mode as i32,
-            _pad: Vec2::new(0.0, 0.0),
+            max_reflection_lod: self.lighting.max_reflection_lod as f32,
+            _pad: 0.0,
         };
 
         self.fragment_per_frame_ubo
@@ -647,6 +655,7 @@ impl Scene for PbsScene {
 
         self.geometry_pass();
         self.skybox_pass();
+        self.msaa_resolve();
 
         if let Some(tone_mapper) = self.post_stack.get_mut::<ToneMapper>() {
             tone_mapper.set_exposure(self.camera.exposure())
@@ -657,7 +666,7 @@ impl Scene for PbsScene {
             Context::new(window, asset_manager, timer, framebuffer_cache, settings),
         );
 
-        self.resolve_framebuffer.unbind(true)
+        self.resolve_framebuffer.unbind(true);
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
@@ -829,6 +838,10 @@ impl Scene for PbsScene {
                                     im_str!("Irradiance"),
                                 ],
                             );
+
+                            imgui::Slider::new(im_str!("Max reflection LOD"))
+                                .range(RangeInclusive::new(1, 9))
+                                .build(&ui, &mut self.lighting.max_reflection_lod);
                         });
                 }
 

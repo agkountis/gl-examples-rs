@@ -5,7 +5,6 @@ const float EPSILON = 0.001;
 const float F0_DIELECTRIC = 0.04;
 const float PI = 3.14159265359;
 const float ONE_OVER_PI = 0.318309886;
-const float MAX_REFLECTION_LOD = 5.0;
 const float MIN_ROUGHNESS = 0.023;
 
 const int RENDER_MODE_ALBEDO = 1;
@@ -42,6 +41,7 @@ layout(std140, binding = 2) uniform PerFrameBlock
     int specularAO;
     int disneyGgxHotness;
     int renderMode;
+    float maxReflectionLod;
 };
 
 layout(std140, binding = 4) uniform MaterialBlock
@@ -81,7 +81,7 @@ mat3 CreateTangentToWorldMatrix(in vec3 n, in vec3 t, in float tSign)
 // PBS FUNCTIONS --------------------------------------------------
 
 // Analytical Lights---
-vec3 FresnelSchlick(in float cosTheta, in vec3 F0)
+vec3 FresnelSchlick(in float NdotV, in vec3 F0)
 {
     vec3 F90 = vec3(1.0);
 
@@ -89,7 +89,7 @@ vec3 FresnelSchlick(in float cosTheta, in vec3 F0)
         F90 = vec3(clamp(dot(F0, vec3(50.0 * 0.33)), 0.0, 1.0));
     }
 
-    return F0 + (F90 - F0) * pow(1.0 - cosTheta, 5.0);
+    return F0 + (F90 - F0) * pow(1.0 - NdotV, 5.0);
 }
 
 vec3 FresnelSchlickRoughness(in float NdotV, in vec3 F0, in float perceptualRoughness)
@@ -146,7 +146,8 @@ float ComputeSpecularAO(float NoV, float ao, float roughness)
 
 float ComputeHorizonSpecularAO(vec3 r, vec3 n)
 {
-    return min(1.0 + dot(r, n), 1.0);
+    float horizon = min(1.0 + dot(r, n), 1.0);
+    return horizon * horizon;
 }
 
 float DistributionGGXFiltered(in float NdotH, in float perceptualRoughness, in vec3 tHalfVector)
@@ -236,18 +237,18 @@ vec3 IBL(in float NdotV, in vec3 F0, in vec3 albedo, in float metallic, in float
     vec3 kD = 1.0 - F;
     kD *= 1.0 - metallic;
 
-    vec3 diffuse = irradiance * albedo;
-    vec3 specular = radiance * (F0 * brdfLUT.x + brdfLUT.y);
+    vec3 indirectDiffuse = irradiance * albedo;
+    vec3 indirectSpecular = radiance * (F0 * brdfLUT.x + brdfLUT.y);
 
     if (specularAO == 1) {
         so = ComputeSpecularAO(NdotV, ao, roughness);
         horizonSo = ComputeHorizonSpecularAO(r, n);
-        specular *= so;
-        specular *= horizonSo;
-        return kD * diffuse * ao + specular * so;
+        indirectSpecular *= so;
+        indirectSpecular *= horizonSo;
+        return kD * indirectDiffuse * ao + indirectSpecular;
     }
 
-    return (kD * diffuse + specular) * ao;
+    return (kD * indirectDiffuse + indirectSpecular) * ao;
 }
 
 // reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
@@ -259,7 +260,7 @@ vec3 GetSpecularDominantDirection(const vec3 n, const vec3 r, in float perceptua
 // reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
 float PerceptualRoughnessToLod(in float perceptualRoughness)
 {
-    return MAX_REFLECTION_LOD * perceptualRoughness * (2.0 - perceptualRoughness);
+    return maxReflectionLod * perceptualRoughness * (2.0 - perceptualRoughness);
 }
 // --------------------
 

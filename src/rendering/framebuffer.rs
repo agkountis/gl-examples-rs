@@ -208,7 +208,7 @@ impl Framebuffer {
                                 create_info.format() as u32,
                                 size.x as i32,
                                 size.y as i32,
-                                gl::TRUE,
+                                gl::FALSE,
                             ),
                         }
                     }
@@ -277,7 +277,7 @@ impl Framebuffer {
             renderbuffer_attachment_create_infos
                 .iter()
                 .zip(renderbuffer_attachment_ids.iter())
-                .for_each(|(create_info, id)| {
+                .for_each(|(&create_info, id)| {
                     unsafe {
                         match msaa {
                             Msaa::None => gl::NamedRenderbufferStorage(

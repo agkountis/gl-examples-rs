@@ -15,8 +15,7 @@ use glutin::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window, WindowBuilder},
-    Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent,
-};
+    Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent, Robustness};
 use std::{error::Error, ffi::CStr, ptr};
 
 pub struct Application;
@@ -195,7 +194,8 @@ impl Application {
                 settings.window_size.x,
                 settings.window_size.y,
             ))
-            .with_resizable(false);
+            .with_resizable(false)
+            .with_transparent(false);
 
         if settings.fullscreen {
             let monitor = (&event_loop).available_monitors().next().unwrap();
@@ -206,8 +206,8 @@ impl Application {
         let windowed_context = ContextBuilder::new()
             .with_double_buffer(Some(true))
             .with_gl_profile(GlProfile::Core)
-            .with_srgb(true)
-            .with_multisampling(settings.msaa as u16)
+            .with_gl_robustness(Robustness::RobustNoResetNotification)
+            .with_multisampling(0)
             .with_vsync(settings.vsync)
             .with_gl(GlRequest::Specific(
                 Api::OpenGl,
@@ -225,7 +225,7 @@ impl Application {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-            // gl::Enable(gl::MULTISAMPLE);
+            gl::Enable(gl::MULTISAMPLE);
             gl::Enable(gl::FRAMEBUFFER_SRGB);
             gl::Enable(gl::TEXTURE_CUBE_MAP_SEAMLESS);
 
