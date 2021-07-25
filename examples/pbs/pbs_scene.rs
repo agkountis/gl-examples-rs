@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     mem,
     {ops::RangeInclusive, rc::Rc},
 };
@@ -63,9 +62,10 @@ struct Lighting {
     light_direction: [f32; 3],
     light_color: [f32; 3],
     light_intensity: f32,
-    disney_ggx_hotness: bool,
     geometric_specular_aa: bool,
     specular_ao: bool,
+    brdf_type: usize,
+    multi_scattering: bool,
     ss_variance_and_threshold: Vec2,
     max_reflection_lod: i32,
 }
@@ -100,10 +100,10 @@ struct FragmentPerFrameUniforms {
     ss_variance_and_threshold: Vec2,
     geometric_specular_aa: i32,
     specular_ao: i32,
-    disney_ggx_hotness: i32,
     render_mode: i32,
+    brdf_type: i32,
+    multi_scattering: i32,
     max_reflection_lod: f32,
-    _pad: f32,
 }
 
 // TODO: Use this to group framebuffers
@@ -117,7 +117,7 @@ pub struct PbsScene {
     model: Model,
     material: PbsMetallicRoughnessMaterial,
     environment: Environment,
-    msaa_framebuffers: [Framebuffer; 5],
+    msaa_framebuffers: [Framebuffer; 4],
     resolve_framebuffer: Framebuffer,
     sampler_linear: Sampler,
     post_stack: PostprocessingStack,
@@ -247,7 +247,8 @@ impl PbsScene {
                         AttachmentType::Renderbuffer,
                     ),
                 ],
-            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            )
+            .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X2,
@@ -261,7 +262,8 @@ impl PbsScene {
                         AttachmentType::Renderbuffer,
                     ),
                 ],
-            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            )
+            .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X4,
@@ -275,7 +277,8 @@ impl PbsScene {
                         AttachmentType::Renderbuffer,
                     ),
                 ],
-            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
+            )
+            .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X8,
@@ -289,37 +292,9 @@ impl PbsScene {
                         AttachmentType::Renderbuffer,
                     ),
                 ],
-            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
-            Framebuffer::new(
-                UVec2::new(window.inner_size().width, window.inner_size().height),
-                Msaa::X16,
-                vec![
-                    FramebufferAttachmentCreateInfo::new(
-                        SizedTextureFormat::Rgba16f,
-                        AttachmentType::Renderbuffer,
-                    ),
-                    FramebufferAttachmentCreateInfo::new(
-                        SizedTextureFormat::Depth24Stencil8,
-                        AttachmentType::Renderbuffer,
-                    ),
-                ],
-            ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error))
+            )
+            .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
         ];
-        let framebuffer = Framebuffer::new(
-            UVec2::new(window.inner_size().width, window.inner_size().height),
-            Msaa::None,
-            vec![
-                FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Rgba16f,
-                    AttachmentType::Renderbuffer,
-                ),
-                FramebufferAttachmentCreateInfo::new(
-                    SizedTextureFormat::Depth24Stencil8,
-                    AttachmentType::Renderbuffer,
-                ),
-            ],
-        )
-        .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let resolve_framebuffer = Framebuffer::new(
             UVec2::new(window.inner_size().width, window.inner_size().height),
@@ -404,9 +379,10 @@ impl PbsScene {
                 light_direction: [0.4, 0.0, -1.0],
                 light_color: [1.0, 1.0, 1.0],
                 light_intensity: 5.0,
-                disney_ggx_hotness: true,
                 geometric_specular_aa: true,
                 specular_ao: true,
+                brdf_type: 0,
+                multi_scattering: true,
                 ss_variance_and_threshold: Vec2::new(0.25, 0.18),
                 max_reflection_lod: 5,
             },
@@ -441,7 +417,6 @@ impl PbsScene {
             );
 
         self.model.mesh.draw();
-
 
         framebuffer.unbind(false);
 
@@ -486,7 +461,8 @@ impl PbsScene {
 
     fn msaa_resolve(&self) {
         let framebuffer = &self.msaa_framebuffers[self.msaa_framebuffer_index];
-        self.resolve_framebuffer.clear(&Vec4::new(0.0, 1.0, 0.0, 1.0));
+        self.resolve_framebuffer
+            .clear(&Vec4::new(0.0, 1.0, 0.0, 1.0));
         Framebuffer::blit(framebuffer, &self.resolve_framebuffer);
         framebuffer.unbind(true);
     }
@@ -514,10 +490,10 @@ impl PbsScene {
             ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned(),
             geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
             specular_ao: self.lighting.specular_ao as i32,
-            disney_ggx_hotness: self.lighting.disney_ggx_hotness as i32,
             render_mode: self.render_mode as i32,
+            brdf_type: self.lighting.brdf_type as i32,
+            multi_scattering: self.lighting.multi_scattering as i32,
             max_reflection_lod: self.lighting.max_reflection_lod as f32,
-            _pad: 0.0,
         };
 
         self.fragment_per_frame_ubo
@@ -633,7 +609,6 @@ impl Scene for PbsScene {
             self.controls.scroll,
             timer.delta_time(),
         );
-        //self.model.transform = rotate(&self.model.transform, 5.0 * timer.delta_time(), &Vec3::new(0.0, 1.0, 0.0));
 
         self.controls.scroll = 0.0;
 
@@ -670,42 +645,38 @@ impl Scene for PbsScene {
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
-        let Context { window, .. } = context;
-
-        let window_height = window.inner_size().height as f32;
         imgui::Window::new(im_str!("Inspector"))
-            .size([358.0, window_height], Condition::Appearing)
-            .position([2.0, 0.0], Condition::Always)
+            .size([358.0, 500.0], Condition::Appearing)
+            .position([2.0, 0.0], Condition::Appearing)
             .mouse_inputs(true)
             .resizable(true)
             .movable(false)
             .build(ui, || {
                 ui.dummy([358.0, 0.0]);
 
-                imgui::ComboBox::new(im_str!("Render Mode"))
-                    .build_simple_string(
-                        ui,
-                        &mut self.render_mode,
-                        &[
-                            im_str!("Lit"),
-                            im_str!("Albedo"),
-                            im_str!("Metallic"),
-                            im_str!("Roughness"),
-                            im_str!("Normals"),
-                            im_str!("Tangents"),
-                            im_str!("UV"),
-                            im_str!("NdotV"),
-                            im_str!("AO"),
-                            im_str!("Specular AO"),
-                            im_str!("Horizon Specular AO"),
-                            im_str!("Diffuse Ambient"),
-                            im_str!("Specular Ambient"),
-                            im_str!("Fresnel"),
-                            im_str!("Fresnel /w Roughness"),
-                            im_str!("Fresnel * Radiance"),
-                            im_str!("Analytical Lights Only"),
-                            im_str!("IBL only"),
-                        ]);
+                imgui::ComboBox::new(im_str!("Render Mode")).build_simple_string(
+                    ui,
+                    &mut self.render_mode,
+                    &[
+                        im_str!("Lit"),
+                        im_str!("Albedo"),
+                        im_str!("Metallic"),
+                        im_str!("Roughness"),
+                        im_str!("Normals"),
+                        im_str!("Tangents"),
+                        im_str!("UV"),
+                        im_str!("NdotV"),
+                        im_str!("AO"),
+                        im_str!("Specular AO"),
+                        im_str!("Horizon Specular AO"),
+                        im_str!("Diffuse Ambient"),
+                        im_str!("Specular Ambient"),
+                        im_str!("Fresnel"),
+                        im_str!("Fresnel * Radiance"),
+                        im_str!("Analytical Lights Only"),
+                        im_str!("IBL only"),
+                    ],
+                );
 
                 ui.spacing();
 
@@ -744,13 +715,12 @@ impl Scene for PbsScene {
                                         im_str!("Light Color"),
                                         &mut self.lighting.light_color,
                                     )
-                                        .format(ColorFormat::Float)
-                                        .options(true)
-                                        .picker(true)
-                                        .alpha(false)
-                                        .build(&ui);
-                                    imgui::Slider::new(
-                                        im_str!("Light Intensity"))
+                                    .format(ColorFormat::Float)
+                                    .options(true)
+                                    .picker(true)
+                                    .alpha(false)
+                                    .build(&ui);
+                                    imgui::Slider::new(im_str!("Light Intensity"))
                                         .range(RangeInclusive::new(0.01, 300.0))
                                         .display_format(im_str!("%.1f"))
                                         .build(&ui, &mut self.lighting.light_intensity);
@@ -762,33 +732,23 @@ impl Scene for PbsScene {
                                 .open_on_double_click(true)
                                 .framed(false)
                                 .build(ui, || {
-                                    ui.checkbox(im_str!("Disney's roughness remapping (GGX)"), &mut self.lighting.disney_ggx_hotness);
+                                    imgui::ComboBox::new(im_str!("BRDF Type")).build_simple_string(
+                                        ui,
+                                        &mut self.lighting.brdf_type,
+                                        &[im_str!("Fillament"), im_str!("Unreal Engine 4")],
+                                    );
 
-                                    if ui.is_item_hovered() {
-                                        ui.tooltip(|| {
-                                            ui.text(im_str!("Details"));
-                                            ui.separator();
-                                            let stack_token = ui.push_text_wrap_pos(800.0);
-                                            ui.text(im_str!("In his talk named \"Real Shading in Unreal Engine 4\" Brian Karis mentions that they used Disney's remapping to perceptual roughness \
-                    to reduce \"hotness\" in the geometry term of the BRDF. However, in a later blog \
-                    post he mentions completely removing this remapping."));
-                                            stack_token.pop(ui);
-
-                                            ui.spacing();
-                                            ui.text(im_str!("Formulas"));
-                                            ui.separator();
-                                            ui.bullet_text(im_str!("Default geometry term (GGX) 'k' value: roughness^2 / 2"));
-                                            ui.bullet_text(im_str!("Disney's hotness modification: ((roughness + 1) / 2)^2 / 2"));
-                                            ui.spacing();
-
-                                            ui.text(im_str!("References"));
-                                            ui.separator();
-                                            ui.bullet_text(im_str!("Original Paper: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf"));
-                                            ui.bullet_text(im_str!("Blog post: https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile"))
-                                        });
+                                    if self.lighting.brdf_type == 0 {
+                                        ui.checkbox(
+                                            im_str!("Multi-Scattering"),
+                                            &mut self.lighting.multi_scattering,
+                                        );
                                     }
 
-                                    ui.checkbox(im_str!("##geomspecaa"), &mut self.lighting.geometric_specular_aa);
+                                    ui.checkbox(
+                                        im_str!("##geomspecaa"),
+                                        &mut self.lighting.geometric_specular_aa,
+                                    );
                                     ui.same_line(72.0);
                                     imgui::TreeNode::new(im_str!("Geometric Specular AA"))
                                         .default_open(true)
@@ -800,12 +760,17 @@ impl Scene for PbsScene {
                                             imgui::Slider::new(im_str!("Screen Space Variance"))
                                                 .range(RangeInclusive::new(0.01, 1.0))
                                                 .display_format(im_str!("%.2f"))
-                                                .build(&ui, &mut self.lighting.ss_variance_and_threshold.x);
-                                            imgui::Slider::new(
-                                                im_str!("Threshold"))
+                                                .build(
+                                                    &ui,
+                                                    &mut self.lighting.ss_variance_and_threshold.x,
+                                                );
+                                            imgui::Slider::new(im_str!("Threshold"))
                                                 .range(RangeInclusive::new(0.01, 1.0))
                                                 .display_format(im_str!("%.2f"))
-                                                .build(&ui, &mut self.lighting.ss_variance_and_threshold.y);
+                                                .build(
+                                                    &ui,
+                                                    &mut self.lighting.ss_variance_and_threshold.y,
+                                                );
                                             ui.unindent()
                                         });
                                 });
@@ -854,13 +819,7 @@ impl Scene for PbsScene {
                     imgui::ComboBox::new(im_str!("MSAA")).build_simple_string(
                         ui,
                         &mut self.msaa_framebuffer_index,
-                        &[
-                            im_str!("X1"),
-                            im_str!("X2"),
-                            im_str!("X4"),
-                            im_str!("X8"),
-                            im_str!("X16"),
-                        ],
+                        &[im_str!("X1"), im_str!("X2"), im_str!("X4"), im_str!("X8")],
                     );
                 }
 

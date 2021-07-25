@@ -1,21 +1,26 @@
 use gl::types::*;
 use gl_bindings as gl;
 
-use crate::core::{
-    asset::AssetManager,
-    math::Vec4,
-    scene::{Scene, SceneManager},
-    timer::Timer,
-    Context, Settings,
+use crate::{
+    core::{
+        asset::AssetManager,
+        math::Vec4,
+        scene::{Scene, SceneManager},
+        timer::Timer,
+        Context, Settings,
+    },
+    imgui::ImGui,
+    rendering::framebuffer::TemporaryFramebufferPool,
 };
-use crate::imgui::ImGui;
-use crate::rendering::framebuffer::TemporaryFramebufferPool;
+
 use glutin::{
-    dpi::LogicalSize,
+    dpi::PhysicalSize,
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window, WindowBuilder},
-    Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent, Robustness};
+    Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent, Robustness,
+};
+
 use std::{error::Error, ffi::CStr, ptr};
 
 pub struct Application;
@@ -190,7 +195,7 @@ impl Application {
         let event_loop = EventLoop::new();
         let mut window_builder = WindowBuilder::new()
             .with_title(&settings.name)
-            .with_inner_size(LogicalSize::new(
+            .with_inner_size(PhysicalSize::new(
                 settings.window_size.x,
                 settings.window_size.y,
             ))
@@ -206,7 +211,7 @@ impl Application {
         let windowed_context = ContextBuilder::new()
             .with_double_buffer(Some(true))
             .with_gl_profile(GlProfile::Core)
-            .with_gl_robustness(Robustness::RobustNoResetNotification)
+            //.with_gl_robustness(Robustness::RobustNoResetNotification)
             .with_multisampling(0)
             .with_vsync(settings.vsync)
             .with_gl(GlRequest::Specific(

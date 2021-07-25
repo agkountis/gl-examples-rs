@@ -39,11 +39,12 @@ struct MaterialPropertyBlock {
     roughness_bias: f32,
     ao_scale: f32,
     ao_bias: f32,
+    reflectance: f32,
     min_pom_layers: f32,
     max_pom_layers: f32,
     displacement_scale: f32,
     parallax_mapping_method: i32,
-    _pad: Vec2,
+    _pad: f32,
 }
 
 pub struct PbsMetallicRoughnessMaterial {
@@ -142,11 +143,12 @@ impl PbsMetallicRoughnessMaterial {
                 roughness_bias: 0.0,
                 ao_scale: 1.0,
                 ao_bias: 0.0,
+                reflectance: 0.5,
                 min_pom_layers: 8.0,
                 max_pom_layers: 32.0,
                 displacement_scale: 0.018,
                 parallax_mapping_method: 4,
-                _pad: Vec2::new(0.0, 0.0),
+                _pad: 0.0,
             },
             program_pipeline,
             material_ubo,
@@ -259,6 +261,10 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
                         .build(&ui, &mut self.property_block.ao_bias);
+                    imgui::Slider::new(im_str!("Reflectance"))
+                        .range(RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.1f"))
+                        .build(&ui, &mut self.property_block.reflectance);
 
                     ui.spacing();
                     ui.spacing();
@@ -325,15 +331,6 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                             &mut self.property_block.min_pom_layers,
                                             &mut self.property_block.max_pom_layers,
                                         );
-                                    // ui.drag_float_range2(
-                                    //     im_str!("Min/Max Layers"),
-                                    //     &mut self.property_block.min_pom_layers,
-                                    //     &mut self.property_block.max_pom_layers,
-                                    // )
-                                    // .min(1.0)
-                                    // .max(256.0)
-                                    // .display_format(im_str!("%.0f"))
-                                    // .build();
                                 }
                             });
                         });

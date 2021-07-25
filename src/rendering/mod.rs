@@ -6,6 +6,7 @@ macro_rules! offset_of {
 }
 
 pub mod buffer;
+pub mod color;
 pub mod format;
 pub mod framebuffer;
 pub mod light;
