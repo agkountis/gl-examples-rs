@@ -1,5 +1,14 @@
+use std::{error::Error, ffi::CStr, ptr};
+
 use gl::types::*;
 use gl_bindings as gl;
+use glutin::{
+    dpi::PhysicalSize,
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::{Fullscreen, Window, WindowBuilder},
+    Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent,
+};
 
 use crate::{
     core::{
@@ -12,16 +21,6 @@ use crate::{
     imgui::ImGui,
     rendering::framebuffer::TemporaryFramebufferPool,
 };
-
-use glutin::{
-    dpi::PhysicalSize,
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Fullscreen, Window, WindowBuilder},
-    Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent, Robustness,
-};
-
-use std::{error::Error, ffi::CStr, ptr};
 
 pub struct Application;
 

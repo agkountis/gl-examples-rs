@@ -1,17 +1,18 @@
-use crate::core::math::{UVec2, Vec3, Vec4};
-use crate::imgui::{im_str, Gui, Ui};
-use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
-use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
-use crate::rendering::postprocess::{
-    AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER,
-};
-use crate::rendering::program_pipeline::ProgramPipeline;
-use crate::rendering::shader::{Shader, ShaderStage};
-use crate::Context;
 use std::any::Any;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+
+use crate::core::math::{UVec2, Vec3, Vec4};
+use crate::imgui::{im_str, Gui, Ui};
+use crate::rendering::{
+    buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
+    framebuffer::{Framebuffer, TemporaryFramebufferPool},
+    postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
+    program_pipeline::ProgramPipeline,
+    shader::{Shader, ShaderStage},
+};
+use crate::Context;
 
 const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
@@ -37,8 +38,8 @@ pub struct Bloom {
     threshold: f32,
     smooth_fade: f32,
     intensity: f32,
-    v_blur_program_pipeline: ProgramPipeline,
-    h_blur_program_pipeline: ProgramPipeline,
+    downsample_program_pipeline: ProgramPipeline,
+    upsample_program_pipeline: ProgramPipeline,
     ubo_data: BloomUboData,
     ubo: Buffer,
     enabled: bool,
@@ -205,32 +206,34 @@ impl BloomBuilder {
     }
 
     pub fn build(self) -> Bloom {
-        let (v_blur_program_pipeline, h_blur_program_pipeline) = {
-            let v_blur_fs = Shader::new(
+        let (downsample_program_pipeline, upsample_program_pipeline) = {
+            let downsample_fs = Shader::new(
                 ShaderStage::Fragment,
-                self.assets_path.join("sdr/gaussian_blur_vertical.frag"),
+                self.assets_path
+                    .join("sdr/bloom_dual_filtering_blur_downsample.frag"),
             )
             .unwrap();
 
-            let h_blur_fs = Shader::new(
+            let upsample_blur_fs = Shader::new(
                 ShaderStage::Fragment,
-                self.assets_path.join("sdr/gaussian_blur_horizontal.frag"),
+                self.assets_path
+                    .join("sdr/bloom_dual_filtering_blur_upsample.frag"),
             )
             .unwrap();
 
-            let v_blur_pipeline = ProgramPipeline::new()
+            let downsample_pipeline = ProgramPipeline::new()
                 .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&v_blur_fs)
+                .add_shader(&downsample_fs)
                 .build()
                 .unwrap();
 
-            let h_blur_pipeline = ProgramPipeline::new()
+            let upsample_pipeline = ProgramPipeline::new()
                 .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&h_blur_fs)
+                .add_shader(&upsample_blur_fs)
                 .build()
                 .unwrap();
 
-            (v_blur_pipeline, h_blur_pipeline)
+            (downsample_pipeline, upsample_pipeline)
         };
 
         let mut ubo = Buffer::new(
@@ -247,8 +250,8 @@ impl BloomBuilder {
             threshold: self.threshold,
             smooth_fade: self.smooth_fade,
             intensity: self.intensity,
-            v_blur_program_pipeline,
-            h_blur_program_pipeline,
+            downsample_program_pipeline,
+            upsample_program_pipeline,
             ubo_data: Default::default(),
             ubo,
             enabled: self.enabled,

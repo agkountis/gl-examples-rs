@@ -3,6 +3,11 @@ use std::{
     {ops::RangeInclusive, rc::Rc},
 };
 
+use glutin::event::{
+    ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
+};
+
+use engine::core::camera::CameraBuilder;
 use engine::{
     camera::Camera,
     color::srgb_to_linear3f,
@@ -32,9 +37,6 @@ use engine::{
     scene::Scene,
     scene::Transition,
     Context, Msaa,
-};
-use glutin::event::{
-    ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
 struct EnvironmentMaps {
@@ -139,19 +141,19 @@ impl PbsScene {
         } = context;
 
         let asset_path = settings.asset_path.as_path();
-        let camera = Camera::new(
-            Vec3::new(0.0, 0.0, -60.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            60,
-            0.5,
-            500.0,
-            10.0,
-            30.0,
-            10.0,
-            200.0,
-            3.0,
-            4.0,
-        );
+        let camera = CameraBuilder::new()
+            .position(Vec3::new(0.0, 0.0, -60.0))
+            .target(Vec3::new(0.0, 0.0, 0.0))
+            .fov(60)
+            .near_plane(0.5)
+            .far_plane(500.0)
+            .orbit_speed(10.0)
+            .orbit_dampening(3.0)
+            .zoom_speed(30.0)
+            .zoom_dampening(4.0)
+            .min_distance(10.0)
+            .max_distance(200.0)
+            .build();
 
         let skybox_prog = ProgramPipeline::new()
             .add_shader(
@@ -313,7 +315,7 @@ impl PbsScene {
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let post_stack = PostprocessingStackBuilder::new()
-            //.with_effect(BloomBuilder::new(asset_path).build())
+            .with_effect(BloomBuilder::new(asset_path).build())
             .with_effect(ToneMapper::new())
             .build();
 

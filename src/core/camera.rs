@@ -1,12 +1,14 @@
+use std::borrow::Borrow;
+use std::ops::RangeInclusive;
+
+use glutin::dpi::PhysicalSize;
+use nalgebra_glm::{normalize, quat_normalize};
+
 use crate::core::math::{clamp_scalar, rotate_vec3, Vec4};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
 use crate::imgui::{im_str, Gui, Ui};
-use crate::math::{quaternion, perspective};
-use nalgebra_glm::{normalize, quat_normalize};
-use std::ops::RangeInclusive;
-use glutin::dpi::PhysicalSize;
-use crate::rendering::buffer::{Buffer, BufferTarget, BufferStorageFlags, MapModeFlags};
-use std::borrow::Borrow;
+use crate::math::{perspective, quaternion};
+use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 
 #[repr(C)]
 struct CameraUniformBlock {
@@ -40,56 +42,6 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(
-        position: Vec3,
-        target: Vec3,
-        fov_deg: u32,
-        near_plane: f32,
-        far_plane: f32,
-        orbit_speed: f32,
-        zoom_speed: f32,
-        min_distance: f32,
-        max_distance: f32,
-        orbit_dampening: f32,
-        zoom_dampening: f32,
-    ) -> Self {
-        let transform = math::look_at(&position, &target, &Axes::up());
-
-        let distance = (position - target).norm();
-
-        let mut uniform_buffer = Buffer::new(
-            "Camera UBO",
-            std::mem::size_of::<CameraUniformBlock>() as isize,
-            BufferTarget::Uniform,
-            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
-        );
-        uniform_buffer.bind(0);
-        uniform_buffer.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
-
-        Camera {
-            position,
-            orientation: matrix::to_rotation_quat(&transform),
-            transform,
-            fov_deg,
-            near_plane,
-            far_plane,
-            aperture: 1.4,
-            shutter_speed: 0.55,
-            sensitivity: 500.0,
-            orbit_speed,
-            zoom_speed,
-            min_distance,
-            max_distance,
-            orbit_dampening,
-            zoom_dampening,
-            yaw: 0.0,
-            pitch: 0.0,
-            distance,
-            prev_distance: distance,
-            uniform_buffer,
-        }
-    }
-
     pub fn position(&self) -> &Vec3 {
         &self.position
     }
@@ -143,27 +95,34 @@ impl Camera {
         self.zoom_dampening = zoom_dampening
     }
 
-    pub fn update(&mut self, window_size: PhysicalSize<u32>, mouse_dx: f32, mouse_dy: f32, mouse_scroll: f32, dt: f32) {
+    pub fn update(
+        &mut self,
+        window_size: PhysicalSize<u32>,
+        mouse_dx: f32,
+        mouse_dy: f32,
+        mouse_scroll: f32,
+        dt: f32,
+    ) {
         const EPSILON: f32 = 0.00001;
 
         // if mouse_dx < -EPSILON || mouse_dx > EPSILON || mouse_dy < -EPSILON || mouse_dy > EPSILON {
-            self.pitch += mouse_dy * self.orbit_speed * dt;
+        self.pitch += mouse_dy * self.orbit_speed * dt;
 
-            self.yaw += mouse_dx * self.orbit_speed * dt;
+        self.yaw += mouse_dx * self.orbit_speed * dt;
 
-            if self.yaw < 0.0 {
-                self.yaw += 360.0;
-            } else if self.yaw >= 360.0 {
-                self.yaw -= 360.0;
-            }
+        if self.yaw < 0.0 {
+            self.yaw += 360.0;
+        } else if self.yaw >= 360.0 {
+            self.yaw -= 360.0;
+        }
 
-            self.pitch = clamp_scalar(self.pitch, -89.99, 89.99);
+        self.pitch = clamp_scalar(self.pitch, -89.99, 89.99);
         // }
 
         // if mouse_scroll != 0.0 {
-            let mut scroll_amount = mouse_scroll * self.zoom_speed;
-            scroll_amount *= self.distance * 0.3;
-            self.distance -= scroll_amount * dt;
+        let mut scroll_amount = mouse_scroll * self.zoom_speed;
+        scroll_amount *= self.distance * 0.3;
+        self.distance -= scroll_amount * dt;
         // }
 
         self.distance =
@@ -202,6 +161,158 @@ impl Camera {
         );
 
         1.0 / 2.0f32.powf(ev100) * 1.2
+    }
+}
+
+pub struct CameraBuilder {
+    position: Vec3,
+    target: Vec3,
+    fov_deg: u32,
+    near_plane: f32,
+    far_plane: f32,
+    aperture: f32,
+    shutter_speed: f32,
+    sensitivity: f32,
+    orbit_speed: f32,
+    zoom_speed: f32,
+    orbit_dampening: f32,
+    zoom_dampening: f32,
+    min_distance: f32,
+    max_distance: f32,
+}
+
+impl Default for CameraBuilder {
+    fn default() -> Self {
+        Self {
+            position: Vec3::new(0.0, 0.0, 1.0),
+            target: Default::default(),
+            fov_deg: 60,
+            near_plane: 0.1,
+            far_plane: 500.0,
+            aperture: 1.4,
+            shutter_speed: 0.55,
+            sensitivity: 500.0,
+            orbit_speed: 1.0,
+            zoom_speed: 1.0,
+            orbit_dampening: 0.0,
+            zoom_dampening: 0.0,
+            min_distance: 0.0,
+            max_distance: 1.0,
+        }
+    }
+}
+
+impl CameraBuilder {
+    pub fn new() -> Self {
+        CameraBuilder::default()
+    }
+
+    pub fn position(mut self, position: Vec3) -> Self {
+        self.position = position;
+        self
+    }
+
+    pub fn target(mut self, target: Vec3) -> Self {
+        self.target = target;
+        self
+    }
+
+    pub fn fov(mut self, degrees: u32) -> Self {
+        self.fov_deg = degrees;
+        self
+    }
+
+    pub fn near_plane(mut self, near_plane: f32) -> Self {
+        self.near_plane = near_plane;
+        self
+    }
+
+    pub fn far_plane(mut self, far_plane: f32) -> Self {
+        self.far_plane = far_plane;
+        self
+    }
+
+    pub fn aperture(mut self, aperture: f32) -> Self {
+        self.aperture = aperture;
+        self
+    }
+
+    pub fn shutter_speed(mut self, shutter_speed: f32) -> Self {
+        self.shutter_speed = shutter_speed;
+        self
+    }
+
+    pub fn sensitivity(mut self, sensitivity: f32) -> Self {
+        self.sensitivity = sensitivity;
+        self
+    }
+
+    pub fn orbit_speed(mut self, orbit_speed: f32) -> Self {
+        self.orbit_speed = orbit_speed;
+        self
+    }
+
+    pub fn zoom_speed(mut self, zoom_speed: f32) -> Self {
+        self.zoom_speed = zoom_speed;
+        self
+    }
+
+    pub fn orbit_dampening(mut self, orbit_dampening: f32) -> Self {
+        self.orbit_dampening = orbit_dampening;
+        self
+    }
+
+    pub fn zoom_dampening(mut self, zoom_dampening: f32) -> Self {
+        self.zoom_dampening = zoom_dampening;
+        self
+    }
+
+    pub fn min_distance(mut self, min_distance: f32) -> Self {
+        self.min_distance = min_distance;
+        self
+    }
+
+    pub fn max_distance(mut self, max_distance: f32) -> Self {
+        self.max_distance = max_distance;
+        self
+    }
+
+    pub fn build(self) -> Camera {
+        let transform = math::look_at(&self.position, &self.target, &Axes::up());
+
+        let distance = (self.position - self.target).norm();
+
+        let mut uniform_buffer = Buffer::new(
+            "Camera UBO",
+            std::mem::size_of::<CameraUniformBlock>() as isize,
+            BufferTarget::Uniform,
+            BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
+        );
+        uniform_buffer.bind(0);
+        uniform_buffer.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
+
+        Camera {
+            position: self.position,
+            orientation: matrix::to_rotation_quat(&transform),
+            transform,
+            fov_deg: self.fov_deg,
+            near_plane: self.near_plane,
+            far_plane: self.far_plane,
+            aperture: self.aperture,
+            shutter_speed: self.shutter_speed,
+            sensitivity: self.sensitivity,
+            orbit_speed: self.orbit_speed,
+            zoom_speed: self.zoom_speed,
+            min_distance: self.min_distance,
+            max_distance: self.max_distance,
+            orbit_dampening: self.orbit_dampening,
+            zoom_dampening: self.zoom_dampening,
+            yaw: 0.0,
+            pitch: 0.0,
+            distance,
+            prev_distance: distance,
+            uniform_buffer,
+        }
     }
 }
 
