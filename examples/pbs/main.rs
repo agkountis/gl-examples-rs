@@ -22,7 +22,7 @@ fn main() {
                 minor: 5,
                 patch: 0,
             },
-            window_size: UVec2::new(1200, 720),
+            window_size: UVec2::new(1600, 900),
             fullscreen: false,
             msaa: Msaa::None,
             vsync: true,

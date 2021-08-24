@@ -464,24 +464,21 @@ impl Framebuffer {
     }
 
     pub fn blit(source: &Framebuffer, destination: &Framebuffer) {
-
-        let source_color_attachments = source.texture_attachments
+        let source_color_attachments = source
+            .texture_attachments
             .iter()
             .chain(source.renderbuffer_attachments.iter())
-            .filter(|&attachment| {
-                !attachment.is_depth_stencil()
-            }).collect::<Vec<_>>();
+            .filter(|&attachment| !attachment.is_depth_stencil())
+            .collect::<Vec<_>>();
 
-        let dest_color_attachments = destination.texture_attachments
+        let dest_color_attachments = destination
+            .texture_attachments
             .iter()
             .chain(destination.renderbuffer_attachments.iter())
             .filter(|&attachment| !attachment.is_depth_stencil())
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            source_color_attachments.len(),
-            dest_color_attachments.len()
-        );
+        assert_eq!(source_color_attachments.len(), dest_color_attachments.len());
 
         source_color_attachments
             .iter()
@@ -644,6 +641,22 @@ impl TemporaryFramebufferPool {
         );
 
         framebuffer
+    }
+
+    pub(crate) fn release_temporary(&mut self, temporary: Rc<Framebuffer>) {
+        let key = temporary
+            .texture_attachments
+            .iter()
+            .fold(0u32, |acc, attachment| acc + attachment.format as u32);
+
+        if let Some(framebuffers) = self.free_framebuffers_map.get_mut(&key) {
+            if let Some((_, in_use, _)) = framebuffers
+                .iter_mut()
+                .find(|(_, _, framebuffer)| framebuffer.id() == temporary.id())
+            {
+                *in_use = false
+            }
+        }
     }
 
     pub(crate) fn collect(&mut self) {

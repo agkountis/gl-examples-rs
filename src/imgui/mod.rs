@@ -16,6 +16,7 @@ impl ImGui {
     {
         let mut context = imgui::Context::create();
         context.set_ini_filename(None);
+
         let mut platform = WinitPlatform::init(&mut context);
         platform.attach_window(context.io_mut(), window, HiDpiMode::Default);
 

@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::ops::RangeInclusive;
 
 use glutin::dpi::PhysicalSize;

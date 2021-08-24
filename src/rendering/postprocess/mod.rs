@@ -113,12 +113,18 @@ pub struct PostprocessingStackBuilder {
     enabled: bool,
 }
 
-impl PostprocessingStackBuilder {
-    pub fn new() -> Self {
+impl Default for PostprocessingStackBuilder {
+    fn default() -> Self {
         Self {
             post_effects: vec![],
             enabled: true,
         }
+    }
+}
+
+impl PostprocessingStackBuilder {
+    pub fn new() -> Self {
+        Default::default()
     }
 
     pub fn with_effect<T>(mut self, effect: T) -> Self

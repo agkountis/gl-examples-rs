@@ -315,7 +315,7 @@ impl PbsScene {
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let post_stack = PostprocessingStackBuilder::new()
-            .with_effect(BloomBuilder::new(asset_path).build())
+            .with_effect(BloomBuilder::new().build())
             .with_effect(ToneMapper::new())
             .build();
 

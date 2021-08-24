@@ -51,6 +51,14 @@ impl StateManager {
         unsafe { gl::Viewport(x, y, width, height) }
     }
 
+    pub fn enable_blending() {
+        unsafe { gl::Enable(gl::BLEND) }
+    }
+
+    pub fn disable_blending() {
+        unsafe { gl::Disable(gl::BLEND) }
+    }
+
     pub fn set_blend_function(source_factor: BlendFactor, destination_factor: BlendFactor) {
         unsafe { gl::BlendFunc(source_factor as u32, destination_factor as u32) }
     }
