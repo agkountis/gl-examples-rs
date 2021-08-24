@@ -1,6 +1,5 @@
 use std::any::Any;
 use std::ops::RangeInclusive;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::core::math::{UVec2, Vec3, Vec4};
@@ -18,6 +17,7 @@ use crate::rendering::{
 use crate::sampler::MagnificationFilter;
 use crate::{Context, Draw};
 use imgui::TextureId;
+use crate::color::srgb_to_linear;
 
 const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
@@ -25,9 +25,9 @@ const MIN_ITERATIONS: u32 = 1;
 const MAX_ITERATIONS: u32 = 16;
 const MIN_THRESHOLD: f32 = 0.1;
 const MAX_THRESHOLD: f32 = 10.0;
-const MIN_SMOOTH_FADE: f32 = 0.1;
+const MIN_SMOOTH_FADE: f32 = 0.01;
 const MAX_SMOOTH_FADE: f32 = 1.0;
-const MIN_INTENSITY: f32 = 0.1;
+const MIN_INTENSITY: f32 = 0.01;
 const MAX_INTENSITY: f32 = 10.0;
 
 #[repr(C)]
@@ -44,7 +44,9 @@ pub struct Bloom {
     smooth_fade: f32,
     intensity: f32,
     downsample_program_pipeline: ProgramPipeline,
+    downsample_prefilter_program_pipeline: ProgramPipeline,
     upsample_program_pipeline: ProgramPipeline,
+    bloom_upsample_apply_program_pipeline: ProgramPipeline,
     ubo_data: BloomUboData,
     ubo: Buffer,
     linear_sampler: Sampler,
@@ -85,13 +87,15 @@ impl PostprocessingEffect for Bloom {
             "Bloom effect do not support depth texture attachments."
         );
 
-        let knee = self.threshold * self.smooth_fade;
+        let threshold = srgb_to_linear(self.threshold);
+        let knee = threshold * self.smooth_fade;
         self.ubo_data.filter = Vec4::new(
-            self.threshold,
-            self.threshold - knee,
+            threshold,
+            threshold - knee,
             2.0 * knee,
             0.25 / (knee + EPSILON),
         );
+        self.ubo_data.intensity = self.intensity;
 
         self.ubo.fill_mapped(0, &self.ubo_data);
 
@@ -115,8 +119,8 @@ impl PostprocessingEffect for Bloom {
         current_destination.bind();
         current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-        self.downsample_program_pipeline.bind();
-        self.downsample_program_pipeline.set_texture_2d_with_id(
+        self.downsample_prefilter_program_pipeline.bind();
+        self.downsample_prefilter_program_pipeline.set_texture_2d_with_id(
             0,
             input.texture_attachments()[0].id(),
             &self.linear_sampler,
@@ -127,6 +131,7 @@ impl PostprocessingEffect for Bloom {
         StateManager::set_front_face(FrontFace::CounterClockwise);
 
         current_destination.unbind(false);
+        self.downsample_prefilter_program_pipeline.unbind();
 
         let mut current_source = Rc::clone(&current_destination);
 
@@ -173,7 +178,6 @@ impl PostprocessingEffect for Bloom {
                 current_destination = Rc::clone(temporary);
                 //TODO: Do an upsampling blit here
                 current_destination.bind();
-                //current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
                 self.upsample_program_pipeline.bind();
                 self.upsample_program_pipeline.set_texture_2d_with_id(
@@ -198,6 +202,26 @@ impl PostprocessingEffect for Bloom {
             });
 
         //TODO: blit to add bloom tex to input render target
+
+        self.bloom_upsample_apply_program_pipeline.bind();
+        self.bloom_upsample_apply_program_pipeline.set_texture_2d_with_id(
+            0,
+            current_source.texture_attachments()[0].id(),
+            &self.linear_sampler,
+        );
+        self.bloom_upsample_apply_program_pipeline.set_texture_2d_with_id(
+            1,
+            input.texture_attachments()[0].id(),
+            &self.linear_sampler,
+        );
+        input.bind();
+
+        StateManager::set_front_face(FrontFace::Clockwise);
+        FULLSCREEN_MESH.draw();
+        StateManager::set_front_face(FrontFace::CounterClockwise);
+
+        input.unbind(false);
+        self.bloom_upsample_apply_program_pipeline.unbind();
     }
 }
 
@@ -286,10 +310,10 @@ pub struct BloomBuilder {
 impl Default for BloomBuilder {
     fn default() -> Self {
         Self {
-            iterations: 5,
+            iterations: 8,
             threshold: 1.0,
-            smooth_fade: 0.5,
-            intensity: 1.0,
+            smooth_fade: 0.54,
+            intensity: 0.1,
             enabled: true,
         }
     }
@@ -326,22 +350,39 @@ impl BloomBuilder {
     }
 
     pub fn build(self) -> Bloom {
-        let (downsample_program_pipeline, upsample_program_pipeline) = {
+        let (downsample_program_pipeline,
+            downsample_prefilter_program_pipeline,
+            upsample_program_pipeline,
+            bloom_upsample_apply_program_pipeline) = {
             let downsample_fs = Shader::new(
                 ShaderStage::Fragment,
                 "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag",
-            )
-            .unwrap();
+            ).unwrap();
+
+            let downsample_prefilter_fs = Shader::new(
+                ShaderStage::Fragment,
+                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag",
+            ).unwrap();
 
             let upsample_blur_fs = Shader::new(
                 ShaderStage::Fragment,
                 "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
-            )
-            .unwrap();
+            ).unwrap();
+
+            let bloom_apply_fs = Shader::new(
+                ShaderStage::Fragment,
+                "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
+            ).unwrap();
 
             let downsample_pipeline = ProgramPipeline::new()
                 .add_shader(&FULLSCREEN_VERTEX_SHADER)
                 .add_shader(&downsample_fs)
+                .build()
+                .unwrap();
+
+            let downsample_prefilter_pipeline = ProgramPipeline::new()
+                .add_shader(&FULLSCREEN_VERTEX_SHADER)
+                .add_shader(&downsample_prefilter_fs)
                 .build()
                 .unwrap();
 
@@ -351,7 +392,13 @@ impl BloomBuilder {
                 .build()
                 .unwrap();
 
-            (downsample_pipeline, upsample_pipeline)
+            let bloom_apply_pipeline = ProgramPipeline::new()
+                .add_shader(&FULLSCREEN_VERTEX_SHADER)
+                .add_shader(&bloom_apply_fs)
+                .build()
+                .unwrap();
+
+            (downsample_pipeline, downsample_prefilter_pipeline, upsample_pipeline, bloom_apply_pipeline)
         };
 
         let mut ubo = Buffer::new(
@@ -379,7 +426,9 @@ impl BloomBuilder {
             smooth_fade: self.smooth_fade,
             intensity: self.intensity,
             downsample_program_pipeline,
+            downsample_prefilter_program_pipeline,
             upsample_program_pipeline,
+            bloom_upsample_apply_program_pipeline,
             ubo_data: Default::default(),
             ubo,
             linear_sampler,

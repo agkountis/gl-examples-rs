@@ -2,6 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 layout(binding = 0) uniform sampler2D image;
+
 layout(std140, binding = 3) uniform ToneMappingBlock
 {
     int tonemappingOperator;
