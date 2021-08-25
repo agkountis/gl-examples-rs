@@ -53,6 +53,8 @@ pub struct Bloom {
     blit_framebuffers: Vec<Rc<Framebuffer>>,
     enabled: bool,
     show_debug_window: bool,
+    anamorphic_stretch: f32,
+    anamorphic_orientation: u32,
 }
 
 impl_as_any!(Bloom);
@@ -101,6 +103,10 @@ impl PostprocessingEffect for Bloom {
 
         // Blit to half resolution and filter bright pixels.
         let mut size = UVec2::new(input.size().x / 2, input.size().y / 2);
+
+        //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
+        size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
+
         let format = attachment.format();
 
         self.blit_framebuffers
@@ -135,6 +141,9 @@ impl PostprocessingEffect for Bloom {
         for _ in 1..self.iterations {
             size.x /= 2;
             size.y /= 2;
+
+            //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
+            size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
 
             if size.y < 2 {
                 break;
@@ -288,6 +297,11 @@ impl Gui for Bloom {
                         .display_format(im_str!("%.2f"))
                         .build(ui, &mut self.intensity);
 
+                    imgui::Slider::new(im_str!("Anamorphic Stretch"))
+                        .range(RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(ui, &mut self.anamorphic_stretch);
+
                     ui.unindent()
                 });
         });
@@ -440,6 +454,8 @@ impl BloomBuilder {
             blit_framebuffers: Vec::with_capacity(self.iterations as usize),
             enabled: self.enabled,
             show_debug_window: false,
+            anamorphic_stretch: 0.0,
+            anamorphic_orientation: 0,
         }
     }
 }
