@@ -12,10 +12,11 @@ fn main() {
 
     Registry::new(
         Api::Gl,
-        (4, 5),
+        (4, 6),
         Profile::Core,
         Fallbacks::All,
         [
+            "GL_ARB_framebuffer_object",
             "GL_ARB_draw_buffers_blend",
             "GL_ARB_program_interface_query",
             "GL_ARB_multitexture",

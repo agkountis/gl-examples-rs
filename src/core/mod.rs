@@ -8,6 +8,7 @@ pub mod timer;
 
 use self::math::{UVec2, Vec4};
 use crate::asset::AssetManager;
+use crate::rendering::device::Device;
 use crate::rendering::framebuffer::TemporaryFramebufferPool;
 use crate::timer::Timer;
 use glutin::window::Window;
@@ -65,6 +66,7 @@ impl Rectangle {
 
 pub struct Context<'a> {
     pub window: &'a Window,
+    pub device: &'a Device,
     pub asset_manager: &'a mut AssetManager,
     pub timer: &'a mut Timer,
     pub framebuffer_cache: &'a mut TemporaryFramebufferPool,
@@ -74,6 +76,7 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     pub fn new(
         window: &'a Window,
+        device: &'a Device,
         asset_manager: &'a mut AssetManager,
         timer: &'a mut Timer,
         framebuffer_cache: &'a mut TemporaryFramebufferPool,
@@ -81,6 +84,7 @@ impl<'a> Context<'a> {
     ) -> Self {
         Self {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,

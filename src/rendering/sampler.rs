@@ -69,11 +69,7 @@ impl Sampler {
             gl::SamplerParameteri(id, gl::TEXTURE_WRAP_S, wrap_s as i32);
             gl::SamplerParameteri(id, gl::TEXTURE_WRAP_T, wrap_t as i32);
             gl::SamplerParameteri(id, gl::TEXTURE_WRAP_R, wrap_r as i32);
-            gl::SamplerParameterfv(
-                id,
-                gl::TEXTURE_BORDER_COLOR,
-                border_color.as_ptr(),
-            );
+            gl::SamplerParameterfv(id, gl::TEXTURE_BORDER_COLOR, border_color.as_ptr());
             gl::SamplerParameterf(id, gl::TEXTURE_MAX_ANISOTROPY, anisotropy as u32 as f32)
         }
 

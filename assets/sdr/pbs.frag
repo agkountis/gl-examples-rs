@@ -1,31 +1,31 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
-const float EPSILON = 1e-5;
-const float F0_DIELECTRIC = 0.04;
-const float PI = 3.14159265359;
-const float ONE_OVER_PI = 0.318309886;
-const float MIN_ROUGHNESS = 0.045;
+#define EPSILON                             1e-5
+#define F0_DIELECTRIC                       0.04
+#define PI                                  3.14159265359
+#define ONE_OVER_PI                         0.318309886
+#define MIN_ROUGHNESS                       0.045
 
-const int RENDER_MODE_ALBEDO = 1;
-const int RENDER_MODE_METALLIC = 2;
-const int RENDER_MODE_ROUGHNESS = 3;
-const int RENDER_MODE_NORMALS = 4;
-const int RENDER_MODE_TANGENTS = 5;
-const int RENDER_MODE_UV = 6;
-const int RENDER_MODE_NDOTV = 7;
-const int RENDER_MODE_AO = 8;
-const int RENDER_MODE_SPECULAR_AO = 9;
-const int RENDER_MODE_HORIZON_SPECULAR_AO = 10;
-const int RENDER_MODE_DIFFUSE_AMBIENT = 11;
-const int RENDER_MODE_SPECULAR_AMBIENT = 12;
-const int RENDER_MODE_FRESNEL = 13;
-const int RENDER_MODE_FRESNEL_RADIANCE = 14;
-const int RENDER_MODE_ANALYTICAL_LIGHTS_ONLY = 15;
-const int RENDER_MODE_IBL_ONLY = 16;
+#define RENDER_MODE_ALBEDO                  1
+#define RENDER_MODE_METALLIC                2
+#define RENDER_MODE_ROUGHNESS               3
+#define RENDER_MODE_NORMALS                 4
+#define RENDER_MODE_TANGENTS                5
+#define RENDER_MODE_UV                      6
+#define RENDER_MODE_NDOTV                   7
+#define RENDER_MODE_AO                      8
+#define RENDER_MODE_SPECULAR_AO             9
+#define RENDER_MODE_HORIZON_SPECULAR_AO     10
+#define RENDER_MODE_DIFFUSE_AMBIENT         11
+#define RENDER_MODE_SPECULAR_AMBIENT        12
+#define RENDER_MODE_FRESNEL                 13
+#define RENDER_MODE_FRESNEL_RADIANCE        14
+#define RENDER_MODE_ANALYTICAL_LIGHTS_ONLY  15
+#define RENDER_MODE_IBL_ONLY                16
 
-const int BRDF_FILLAMENT = 0;
-const int BRDF_UE4 = 1;
+#define BRDF_FILLAMENT                      0
+#define BRDF_UE4                            1
 
 layout(location = 0) in VsOut {
     vec3 wViewDirection;

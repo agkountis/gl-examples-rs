@@ -18,6 +18,7 @@ pub mod sampler;
 pub mod shader;
 pub mod state;
 pub mod texture;
+pub mod device;
 
 pub trait Draw {
     fn draw(&self);

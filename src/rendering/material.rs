@@ -1,5 +1,4 @@
 use crate::core::asset::Asset;
-use crate::core::math::Vec2;
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 use crate::rendering::texture::Texture2DLoadConfig;
 use crate::sampler::Anisotropy;

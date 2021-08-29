@@ -14,7 +14,7 @@ use engine::{
     imgui::*,
     math::{
         inverse,
-        matrix::{perspective, Mat4},
+        matrix::Mat4,
         transpose,
         vector::{UVec2, Vec2, Vec3, Vec4},
     },
@@ -135,9 +135,11 @@ impl PbsScene {
     pub fn new(context: Context) -> Self {
         let Context {
             window,
-            settings,
+            device,
             asset_manager,
-            ..
+            timer,
+            framebuffer_cache,
+            settings,
         } = context;
 
         let asset_path = settings.asset_path.as_path();
@@ -314,8 +316,17 @@ impl PbsScene {
         )
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
+        let bloom = BloomBuilder::new().build(Context::new(
+            window,
+            device,
+            asset_manager,
+            timer,
+            framebuffer_cache,
+            settings,
+        ));
+
         let post_stack = PostprocessingStackBuilder::new()
-            .with_effect(BloomBuilder::new().build())
+            .with_effect(bloom)
             .with_effect(ToneMapper::new())
             .build();
 
@@ -426,8 +437,8 @@ impl PbsScene {
     }
 
     fn skybox_pass(&self) {
-        StateManager::set_depth_function(DepthFunction::LessOrEqual);
-        StateManager::set_face_culling(FaceCulling::Front);
+        StateManager::depth_function(DepthFunction::LessOrEqual);
+        StateManager::face_culling(FaceCulling::Front);
 
         let framebuffer = &self.msaa_framebuffers[self.msaa_framebuffer_index];
 
@@ -457,8 +468,8 @@ impl PbsScene {
 
         self.environment.skybox_program_pipeline.unbind();
 
-        StateManager::set_depth_function(DepthFunction::Less);
-        StateManager::set_face_culling(FaceCulling::Back)
+        StateManager::depth_function(DepthFunction::Less);
+        StateManager::face_culling(FaceCulling::Back)
     }
 
     fn msaa_resolve(&self) {
@@ -583,7 +594,7 @@ impl Scene for PbsScene {
 
                 //TODO: Get this from the camera
                 //self.projection_matrix = perspective(x, y, 60, 0.5, 500.0);
-                StateManager::set_viewport(0, 0, x as i32, y as i32)
+                StateManager::viewport(0, 0, x as i32, y as i32)
             }
             _ => {}
         }
@@ -624,6 +635,7 @@ impl Scene for PbsScene {
     fn draw(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -640,7 +652,14 @@ impl Scene for PbsScene {
 
         self.post_stack.apply(
             &self.resolve_framebuffer,
-            Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+            Context::new(
+                window,
+                device,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            ),
         );
 
         self.resolve_framebuffer.unbind(true);

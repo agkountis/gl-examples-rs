@@ -36,13 +36,13 @@ pub enum SizedTextureFormat {
 impl SizedTextureFormat {
     pub fn is_floating_point(&self) -> bool {
         match self {
-            Self::Rg16f |
-            Self::Rgb16f |
-            Self::Rgba16f |
-            Self::Rgb32f |
-            Self::Rgba32f |
-            Self::Depth32f |
-            Self::Depth32fStencil8 => true,
+            Self::Rg16f
+            | Self::Rgb16f
+            | Self::Rgba16f
+            | Self::Rgb32f
+            | Self::Rgba32f
+            | Self::Depth32f
+            | Self::Depth32fStencil8 => true,
             _ => false,
         }
     }

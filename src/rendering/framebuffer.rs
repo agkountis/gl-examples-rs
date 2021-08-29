@@ -400,7 +400,7 @@ impl Framebuffer {
     pub fn bind(&self) {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.id);
-            StateManager::set_viewport(0, 0, self.size.x as i32, self.size.y as i32);
+            StateManager::viewport(0, 0, self.size.x as i32, self.size.y as i32);
         }
     }
 

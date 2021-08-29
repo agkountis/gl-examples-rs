@@ -10,6 +10,7 @@ use glutin::{
     Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent,
 };
 
+use crate::rendering::device::Device;
 use crate::{
     core::{
         asset::AssetManager,
@@ -30,6 +31,7 @@ impl Application {
         S: Scene + 'static,
         Cons: FnMut(Context) -> S,
     {
+        let device = Device::new();
         let mut asset_manager = AssetManager::default();
         let mut timer = Timer::new();
 
@@ -39,6 +41,7 @@ impl Application {
 
         let initial_scene = scene_constructor(Context::new(
             windowed_context.window(),
+            &device,
             &mut asset_manager,
             &mut timer,
             &mut framebuffer_cache,
@@ -48,6 +51,7 @@ impl Application {
         let mut scene_manager = SceneManager::new(initial_scene);
         scene_manager.initialize(Context::new(
             windowed_context.window(),
+            &device,
             &mut asset_manager,
             &mut timer,
             &mut framebuffer_cache,
@@ -75,6 +79,7 @@ impl Application {
                     scene_manager.handle_event(
                         Context::new(
                             windowed_context.window(),
+                            &device,
                             &mut asset_manager,
                             &mut timer,
                             &mut framebuffer_cache,
@@ -91,6 +96,7 @@ impl Application {
                 Event::UserEvent(_) => {}
                 Event::Suspended => scene_manager.pause(Context::new(
                     windowed_context.window(),
+                    &device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -98,6 +104,7 @@ impl Application {
                 )),
                 Event::Resumed => scene_manager.resume(Context::new(
                     windowed_context.window(),
+                    &device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -107,6 +114,7 @@ impl Application {
                     timer.tick();
                     scene_manager.update(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -120,6 +128,7 @@ impl Application {
 
                     scene_manager.pre_draw(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -131,6 +140,7 @@ impl Application {
                 Event::RedrawRequested(_) => {
                     scene_manager.draw(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -142,6 +152,7 @@ impl Application {
                     scene_manager.gui(
                         Context::new(
                             windowed_context.window(),
+                            &device,
                             &mut asset_manager,
                             &mut timer,
                             &mut framebuffer_cache,
@@ -159,6 +170,7 @@ impl Application {
                 Event::RedrawEventsCleared => {
                     scene_manager.post_draw(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -169,6 +181,7 @@ impl Application {
                 }
                 Event::LoopDestroyed => scene_manager.stop(Context::new(
                     windowed_context.window(),
+                    &device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,

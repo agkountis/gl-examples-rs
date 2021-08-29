@@ -7,6 +7,7 @@ use crate::core::math::{UVec2, Vec3, Vec4};
 use crate::imgui::{im_str, Condition, Gui, Ui};
 use crate::rendering::sampler::{Anisotropy, MinificationFilter, Sampler, WrappingMode};
 use crate::rendering::state::{BlendFactor, FrontFace, StateManager};
+use crate::rendering::texture::Texture2D;
 use crate::rendering::{
     buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
     framebuffer::Framebuffer,
@@ -29,12 +30,16 @@ const MIN_SMOOTH_FADE: f32 = 0.01;
 const MAX_SMOOTH_FADE: f32 = 1.0;
 const MIN_INTENSITY: f32 = 0.01;
 const MAX_INTENSITY: f32 = 10.0;
+const MIN_LENS_DIRT_INTENSITY: f32 = 0.0;
+const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 
 #[repr(C)]
 #[derive(Default, Debug)]
 struct BloomUboData {
     filter: Vec4,
     intensity: f32,
+    use_lens_dirt: i32,
+    lens_dirt_intensity: f32,
     _pad: Vec3,
 }
 
@@ -54,7 +59,9 @@ pub struct Bloom {
     enabled: bool,
     show_debug_window: bool,
     anamorphic_stretch: f32,
-    anamorphic_orientation: u32,
+    enable_lens_dirt: bool,
+    lens_dirt_intensity: f32,
+    lens_dirt: Rc<Texture2D>,
 }
 
 impl_as_any!(Bloom);
@@ -80,7 +87,6 @@ impl PostprocessingEffect for Bloom {
         let Context {
             framebuffer_cache, ..
         } = context;
-        //TODO: Implement me
 
         let attachment = input.texture_attachment(0);
 
@@ -98,6 +104,8 @@ impl PostprocessingEffect for Bloom {
             0.25 / (knee + EPSILON),
         );
         self.ubo_data.intensity = self.intensity;
+        self.ubo_data.use_lens_dirt = self.enable_lens_dirt as i32;
+        self.ubo_data.lens_dirt_intensity = self.lens_dirt_intensity;
 
         self.ubo.fill_mapped(0, &self.ubo_data);
 
@@ -116,11 +124,7 @@ impl PostprocessingEffect for Bloom {
 
         let mut current_destination = framebuffer_cache.get_temporary(size, format, None);
 
-        //self.blit_framebuffers = Vec::with_capacity(self.iterations as usize);
-
         self.blit_framebuffers.push(Rc::clone(&current_destination));
-
-        // TODO: Do a Box downsample blit here and filter brights
 
         current_destination.bind();
         current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
@@ -129,9 +133,9 @@ impl PostprocessingEffect for Bloom {
         self.downsample_prefilter_program_pipeline
             .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
 
-        StateManager::set_front_face(FrontFace::Clockwise);
+        StateManager::front_face(FrontFace::Clockwise);
         FULLSCREEN_MESH.draw();
-        StateManager::set_front_face(FrontFace::CounterClockwise);
+        StateManager::front_face(FrontFace::CounterClockwise);
 
         current_destination.unbind(false);
         self.downsample_prefilter_program_pipeline.unbind();
@@ -164,9 +168,9 @@ impl PostprocessingEffect for Bloom {
                 &self.linear_sampler,
             );
 
-            StateManager::set_front_face(FrontFace::Clockwise);
+            StateManager::front_face(FrontFace::Clockwise);
             FULLSCREEN_MESH.draw();
-            StateManager::set_front_face(FrontFace::CounterClockwise);
+            StateManager::front_face(FrontFace::CounterClockwise);
 
             current_destination.unbind(false);
             self.downsample_program_pipeline.unbind();
@@ -192,12 +196,11 @@ impl PostprocessingEffect for Bloom {
                     &self.linear_sampler,
                 );
 
-                StateManager::enable_blending();
-                StateManager::set_blend_function(BlendFactor::One, BlendFactor::One);
+                StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
 
-                StateManager::set_front_face(FrontFace::Clockwise);
+                StateManager::front_face(FrontFace::Clockwise);
                 FULLSCREEN_MESH.draw();
-                StateManager::set_front_face(FrontFace::CounterClockwise);
+                StateManager::front_face(FrontFace::CounterClockwise);
 
                 StateManager::disable_blending();
 
@@ -206,8 +209,6 @@ impl PostprocessingEffect for Bloom {
 
                 current_source = Rc::clone(&current_destination);
             });
-
-        //TODO: blit to add bloom tex to input render target
 
         self.bloom_upsample_apply_program_pipeline.bind();
         self.bloom_upsample_apply_program_pipeline
@@ -218,11 +219,13 @@ impl PostprocessingEffect for Bloom {
             );
         self.bloom_upsample_apply_program_pipeline
             .set_texture_2d_with_id(1, input.texture_attachments()[0].id(), &self.linear_sampler);
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
         input.bind();
 
-        StateManager::set_front_face(FrontFace::Clockwise);
+        StateManager::front_face(FrontFace::Clockwise);
         FULLSCREEN_MESH.draw();
-        StateManager::set_front_face(FrontFace::CounterClockwise);
+        StateManager::front_face(FrontFace::CounterClockwise);
 
         input.unbind(false);
         self.bloom_upsample_apply_program_pipeline.unbind();
@@ -302,6 +305,22 @@ impl Gui for Bloom {
                         .display_format(im_str!("%.2f"))
                         .build(ui, &mut self.anamorphic_stretch);
 
+                    ui.checkbox(im_str!("Lens Dirt"), &mut self.enable_lens_dirt);
+                    if self.enable_lens_dirt {
+                        imgui::Slider::new(im_str!("Lens Dirt Intensity"))
+                            .range(RangeInclusive::new(
+                                MIN_LENS_DIRT_INTENSITY,
+                                MAX_LENS_DIRT_INTENSITY,
+                            ))
+                            .display_format(im_str!("%.2f"))
+                            .build(ui, &mut self.lens_dirt_intensity);
+
+                        ui.text("Lens Dirt Map");
+                        let tex_id = self.lens_dirt.get_id();
+                        imgui::Image::new(TextureId::new(tex_id as usize), [128.0, 128.0])
+                            .build(ui);
+                    }
+
                     ui.unindent()
                 });
         });
@@ -358,7 +377,18 @@ impl BloomBuilder {
         self
     }
 
-    pub fn build(self) -> Bloom {
+    pub fn build(self, context: Context) -> Bloom {
+        let Context {
+            asset_manager,
+            settings,
+            ..
+        } = context;
+
+        let asset_path = settings.asset_path.as_path();
+        let lens_dirt = asset_manager
+            .load_texture_2d(asset_path.join("textures/lens_dirt_mask.png"), true, false)
+            .expect("Failed to load lens dirt texture.");
+
         let (
             downsample_program_pipeline,
             downsample_prefilter_program_pipeline,
@@ -455,7 +485,9 @@ impl BloomBuilder {
             enabled: self.enabled,
             show_debug_window: false,
             anamorphic_stretch: 0.0,
-            anamorphic_orientation: 0,
+            enable_lens_dirt: true,
+            lens_dirt_intensity: 30.0,
+            lens_dirt,
         }
     }
 }
