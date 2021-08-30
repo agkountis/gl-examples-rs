@@ -31,12 +31,12 @@ impl Application {
         S: Scene + 'static,
         Cons: FnMut(Context) -> S,
     {
-        let device = Device::new();
         let mut asset_manager = AssetManager::default();
         let mut timer = Timer::new();
 
         let (event_loop, windowed_context) = Self::create_windowed_context(&settings).unwrap();
 
+        let device = Device::new();
         let mut framebuffer_cache = TemporaryFramebufferPool::new(3);
 
         let initial_scene = scene_constructor(Context::new(
