@@ -45,6 +45,7 @@ impl PostprocessingStack {
     pub fn apply(&mut self, input: &Framebuffer, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -58,7 +59,14 @@ impl PostprocessingStack {
                 .for_each(|effect| {
                     effect.apply(
                         &input,
-                        Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                        Context::new(
+                            window,
+                            device,
+                            asset_manager,
+                            timer,
+                            framebuffer_cache,
+                            settings,
+                        ),
                     )
                 });
         }
@@ -113,12 +121,18 @@ pub struct PostprocessingStackBuilder {
     enabled: bool,
 }
 
-impl PostprocessingStackBuilder {
-    pub fn new() -> Self {
+impl Default for PostprocessingStackBuilder {
+    fn default() -> Self {
         Self {
             post_effects: vec![],
             enabled: true,
         }
+    }
+}
+
+impl PostprocessingStackBuilder {
+    pub fn new() -> Self {
+        Default::default()
     }
 
     pub fn with_effect<T>(mut self, effect: T) -> Self

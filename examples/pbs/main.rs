@@ -11,7 +11,7 @@ fn main() {
     Application::run(
         Settings {
             name: String::from("PBS-rs: Physically Based Shading demo using Rust"),
-            asset_path: "examples/assets".into(),
+            asset_path: "assets".into(),
             version: Version {
                 major: 0,
                 minor: 1,
@@ -22,7 +22,7 @@ fn main() {
                 minor: 5,
                 patch: 0,
             },
-            window_size: UVec2::new(1200, 720),
+            window_size: UVec2::new(1600, 900),
             fullscreen: false,
             msaa: Msaa::None,
             vsync: true,

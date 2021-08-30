@@ -2,7 +2,6 @@ use gl::types::*;
 use gl_bindings as gl;
 use std::fmt;
 
-use crate::core::math;
 use crate::core::math::{UVec2, Vec4};
 use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
@@ -176,21 +175,17 @@ impl Framebuffer {
             let texture_attachment_ids: Vec<GLuint> =
                 vec![0; texture_attachment_create_infos.len()];
 
-            match msaa {
-                Msaa::None => unsafe {
-                    gl::CreateTextures(
-                        gl::TEXTURE_2D,
-                        texture_attachment_ids.len() as i32,
-                        texture_attachment_ids.as_ptr() as *mut GLuint,
-                    )
-                },
-                _ => unsafe {
-                    gl::CreateTextures(
-                        gl::TEXTURE_2D_MULTISAMPLE,
-                        texture_attachment_ids.len() as i32,
-                        texture_attachment_ids.as_ptr() as *mut GLuint,
-                    )
-                },
+            let tex_type = match msaa {
+                Msaa::None => gl::TEXTURE_2D,
+                _ => gl::TEXTURE_2D_MULTISAMPLE,
+            };
+
+            unsafe {
+                gl::CreateTextures(
+                    tex_type,
+                    texture_attachment_ids.len() as i32,
+                    texture_attachment_ids.as_ptr() as *mut GLuint,
+                )
             }
 
             texture_attachment_create_infos
@@ -213,7 +208,7 @@ impl Framebuffer {
                                 create_info.format() as u32,
                                 size.x as i32,
                                 size.y as i32,
-                                gl::TRUE,
+                                gl::FALSE,
                             ),
                         }
                     }
@@ -263,9 +258,8 @@ impl Framebuffer {
 
         let renderbuffer_attachment_create_infos = attachment_create_infos
             .iter()
-            .filter(|&create_info| match create_info.attachment_type() {
-                AttachmentType::Renderbuffer => true,
-                _ => false,
+            .filter(|&create_info| {
+                matches!(create_info.attachment_type(), AttachmentType::Renderbuffer)
             })
             .collect::<Vec<_>>();
 
@@ -283,7 +277,7 @@ impl Framebuffer {
             renderbuffer_attachment_create_infos
                 .iter()
                 .zip(renderbuffer_attachment_ids.iter())
-                .for_each(|(create_info, id)| {
+                .for_each(|(&create_info, id)| {
                     unsafe {
                         match msaa {
                             Msaa::None => gl::NamedRenderbufferStorage(
@@ -379,17 +373,12 @@ impl Framebuffer {
             .chain(self.renderbuffer_attachments.iter())
             .for_each(|attachment| match attachment.attachment_bind_point {
                 AttachmentBindPoint::Color(_, i) => unsafe {
-                    gl::ClearNamedFramebufferfv(
-                        self.id,
-                        gl::COLOR,
-                        i,
-                        math::utilities::value_ptr(clear_color),
-                    )
+                    gl::ClearNamedFramebufferfv(self.id, gl::COLOR, i, clear_color.as_ptr())
                 },
-                AttachmentBindPoint::Depth(_) => unsafe {
-                    let depth_clear_val: f32 = 1.0;
-                    gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val)
-                },
+                AttachmentBindPoint::Depth(_) => {
+                    let depth_clear_val = 1.0f32;
+                    unsafe { gl::ClearNamedFramebufferfv(self.id, gl::DEPTH, 0, &depth_clear_val) }
+                }
                 AttachmentBindPoint::DepthStencil(_) => unsafe {
                     let depth_clear_val: f32 = 1.0;
                     let stencil_clear_val: i32 = 0;
@@ -411,7 +400,7 @@ impl Framebuffer {
     pub fn bind(&self) {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.id);
-            StateManager::set_viewport(0, 0, self.size.x as i32, self.size.y as i32);
+            StateManager::viewport(0, 0, self.size.x as i32, self.size.y as i32);
         }
     }
 
@@ -475,15 +464,23 @@ impl Framebuffer {
     }
 
     pub fn blit(source: &Framebuffer, destination: &Framebuffer) {
-        let source_texture_attachments = &source.texture_attachments;
-        let dest_texture_attachments = &destination.texture_attachments;
+        let source_color_attachments = source
+            .texture_attachments
+            .iter()
+            .chain(source.renderbuffer_attachments.iter())
+            .filter(|&attachment| !attachment.is_depth_stencil())
+            .collect::<Vec<_>>();
 
-        assert_eq!(
-            source_texture_attachments.len(),
-            dest_texture_attachments.len()
-        );
+        let dest_color_attachments = destination
+            .texture_attachments
+            .iter()
+            .chain(destination.renderbuffer_attachments.iter())
+            .filter(|&attachment| !attachment.is_depth_stencil())
+            .collect::<Vec<_>>();
 
-        source_texture_attachments
+        assert_eq!(source_color_attachments.len(), dest_color_attachments.len());
+
+        source_color_attachments
             .iter()
             .enumerate()
             .for_each(|(i, _)| unsafe {
@@ -508,6 +505,7 @@ impl Framebuffer {
             });
 
         unsafe {
+            // TODO: This assumes all renderbuffers are depth textures, which is wrong.
             gl::BlitNamedFramebuffer(
                 source.id(),
                 destination.id(),
@@ -643,6 +641,22 @@ impl TemporaryFramebufferPool {
         );
 
         framebuffer
+    }
+
+    pub(crate) fn release_temporary(&mut self, temporary: Rc<Framebuffer>) {
+        let key = temporary
+            .texture_attachments
+            .iter()
+            .fold(0u32, |acc, attachment| acc + attachment.format as u32);
+
+        if let Some(framebuffers) = self.free_framebuffers_map.get_mut(&key) {
+            if let Some((_, in_use, _)) = framebuffers
+                .iter_mut()
+                .find(|(_, _, framebuffer)| framebuffer.id() == temporary.id())
+            {
+                *in_use = false
+            }
+        }
     }
 
     pub(crate) fn collect(&mut self) {

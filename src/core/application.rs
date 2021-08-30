@@ -1,23 +1,27 @@
+use std::{error::Error, ffi::CStr, ptr};
+
 use gl::types::*;
 use gl_bindings as gl;
-
-use crate::core::{
-    asset::AssetManager,
-    math::Vec4,
-    scene::{Scene, SceneManager},
-    timer::Timer,
-    Context, Settings,
-};
-use crate::imgui::ImGui;
-use crate::rendering::framebuffer::TemporaryFramebufferPool;
 use glutin::{
-    dpi::LogicalSize,
+    dpi::PhysicalSize,
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window, WindowBuilder},
     Api, ContextBuilder, ContextWrapper, GlProfile, GlRequest, PossiblyCurrent,
 };
-use std::{error::Error, ffi::CStr, ptr};
+
+use crate::rendering::device::Device;
+use crate::{
+    core::{
+        asset::AssetManager,
+        math::Vec4,
+        scene::{Scene, SceneManager},
+        timer::Timer,
+        Context, Settings,
+    },
+    imgui::ImGui,
+    rendering::framebuffer::TemporaryFramebufferPool,
+};
 
 pub struct Application;
 
@@ -32,10 +36,12 @@ impl Application {
 
         let (event_loop, windowed_context) = Self::create_windowed_context(&settings).unwrap();
 
+        let device = Device::new();
         let mut framebuffer_cache = TemporaryFramebufferPool::new(3);
 
         let initial_scene = scene_constructor(Context::new(
             windowed_context.window(),
+            &device,
             &mut asset_manager,
             &mut timer,
             &mut framebuffer_cache,
@@ -45,6 +51,7 @@ impl Application {
         let mut scene_manager = SceneManager::new(initial_scene);
         scene_manager.initialize(Context::new(
             windowed_context.window(),
+            &device,
             &mut asset_manager,
             &mut timer,
             &mut framebuffer_cache,
@@ -72,6 +79,7 @@ impl Application {
                     scene_manager.handle_event(
                         Context::new(
                             windowed_context.window(),
+                            &device,
                             &mut asset_manager,
                             &mut timer,
                             &mut framebuffer_cache,
@@ -88,6 +96,7 @@ impl Application {
                 Event::UserEvent(_) => {}
                 Event::Suspended => scene_manager.pause(Context::new(
                     windowed_context.window(),
+                    &device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -95,14 +104,17 @@ impl Application {
                 )),
                 Event::Resumed => scene_manager.resume(Context::new(
                     windowed_context.window(),
+                    &device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
                     &settings,
                 )),
                 Event::MainEventsCleared => {
+                    timer.tick();
                     scene_manager.update(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -116,6 +128,7 @@ impl Application {
 
                     scene_manager.pre_draw(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -127,6 +140,7 @@ impl Application {
                 Event::RedrawRequested(_) => {
                     scene_manager.draw(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -135,7 +149,17 @@ impl Application {
 
                     // Let the active scene draw UI
                     let ui = imgui.context.frame();
-                    scene_manager.gui(&ui);
+                    scene_manager.gui(
+                        Context::new(
+                            windowed_context.window(),
+                            &device,
+                            &mut asset_manager,
+                            &mut timer,
+                            &mut framebuffer_cache,
+                            &settings,
+                        ),
+                        &ui,
+                    );
                     imgui
                         .platform
                         .prepare_render(&ui, windowed_context.window());
@@ -146,6 +170,7 @@ impl Application {
                 Event::RedrawEventsCleared => {
                     scene_manager.post_draw(Context::new(
                         windowed_context.window(),
+                        &device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -156,6 +181,7 @@ impl Application {
                 }
                 Event::LoopDestroyed => scene_manager.stop(Context::new(
                     windowed_context.window(),
+                    &device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -181,11 +207,12 @@ impl Application {
         let event_loop = EventLoop::new();
         let mut window_builder = WindowBuilder::new()
             .with_title(&settings.name)
-            .with_inner_size(LogicalSize::new(
+            .with_inner_size(PhysicalSize::new(
                 settings.window_size.x,
                 settings.window_size.y,
             ))
-            .with_resizable(false);
+            .with_resizable(false)
+            .with_transparent(false);
 
         if settings.fullscreen {
             let monitor = (&event_loop).available_monitors().next().unwrap();
@@ -196,8 +223,8 @@ impl Application {
         let windowed_context = ContextBuilder::new()
             .with_double_buffer(Some(true))
             .with_gl_profile(GlProfile::Core)
-            .with_srgb(true)
-            .with_multisampling(settings.msaa as u16)
+            //.with_gl_robustness(Robustness::RobustNoResetNotification)
+            .with_multisampling(0)
             .with_vsync(settings.vsync)
             .with_gl(GlRequest::Specific(
                 Api::OpenGl,

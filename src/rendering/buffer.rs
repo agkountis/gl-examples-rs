@@ -6,6 +6,7 @@ use std::{mem, ptr};
 
 bitflags! {
     pub struct BufferStorageFlags : u32 {
+        const NONE = 0;
         const DYNAMIC = gl::DYNAMIC_STORAGE_BIT;
         const MAP_READ = gl::MAP_READ_BIT;
         const MAP_WRITE = gl::MAP_WRITE_BIT;
@@ -194,28 +195,9 @@ impl Buffer {
     pub fn map_range(&mut self, offset: isize, length: isize, map_mode: MapModeFlags) {
         assert!(self.storage_flags.intersects(BufferStorageFlags::MAP_READ_WRITE),
                 "Cannot map buffer.\n \
-                Reason: Buffer was storage does not support memory mapping.\n\
+                Reason: Buffer storage does not support memory mapping.\n\
                 Hint: Create the buffer using BufferStorageFlags::MAP_READ, BufferStorageFlags::MAP_WRITE \
                 or BUFFER_STORAGE_FLAGS::MAP_READ_WRITE");
-
-        // assert!({
-        //     let flags = 0u32;
-        // }
-        //     self.storage_flags.intersects({
-        //
-        //         match map_mode {
-        //
-        //         }
-        //         MapModeFlags::MAP_READ
-        //     })
-        //         || self.storage_flags.intersects(MapModeFlags::MAP_WRITE)
-        //         || self.storage_flags.intersects(MapModeFlags::MAP_READ_WRITE),
-        //     "Cannot map buffer. \n\
-        //         Reason: buffer_access function parameter not contained \
-        //         in the buffer's storage flags.\n\
-        //         Hint: Create the buffer using BufferStorageFlags::MAP_<READ/WRITE/READ_WRITE> \
-        //         to match the buffer_access function parameter."
-        // );
 
         assert!(
             (offset + length) <= self.size,

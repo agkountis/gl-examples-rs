@@ -109,7 +109,7 @@ impl PostprocessingEffect for ToneMapper {
         let height = window.inner_size().height;
         clear_default_framebuffer(&Vec4::new(0.0, 1.0, 0.0, 1.0));
 
-        StateManager::set_viewport(0, 0, width as i32, height as i32);
+        StateManager::viewport(0, 0, width as i32, height as i32);
 
         self.pipeline.bind();
 
@@ -128,9 +128,9 @@ impl PostprocessingEffect for ToneMapper {
             &self.sampler_nearest,
         );
 
-        StateManager::set_front_face(FrontFace::Clockwise);
+        StateManager::front_face(FrontFace::Clockwise);
         FULLSCREEN_MESH.draw();
-        StateManager::set_front_face(FrontFace::CounterClockwise);
+        StateManager::front_face(FrontFace::CounterClockwise);
 
         self.pipeline.unbind()
     }

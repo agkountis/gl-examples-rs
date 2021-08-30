@@ -47,23 +47,41 @@ pub enum FrontFace {
 }
 
 impl StateManager {
-    pub fn set_viewport(x: i32, y: i32, width: i32, height: i32) {
+    pub fn viewport(x: i32, y: i32, width: i32, height: i32) {
         unsafe { gl::Viewport(x, y, width, height) }
     }
 
-    pub fn set_blend_function(source_factor: BlendFactor, destination_factor: BlendFactor) {
+    pub fn enable_blending() {
+        unsafe { gl::Enable(gl::BLEND) }
+    }
+
+    pub fn enable_blending_with_function(
+        source_factor: BlendFactor,
+        destination_factor: BlendFactor,
+    ) {
+        unsafe {
+            gl::Enable(gl::BLEND);
+            gl::BlendFunc(source_factor as u32, destination_factor as u32)
+        }
+    }
+
+    pub fn disable_blending() {
+        unsafe { gl::Disable(gl::BLEND) }
+    }
+
+    pub fn blend_function(source_factor: BlendFactor, destination_factor: BlendFactor) {
         unsafe { gl::BlendFunc(source_factor as u32, destination_factor as u32) }
     }
 
-    pub fn set_depth_function(depth_function: DepthFunction) {
+    pub fn depth_function(depth_function: DepthFunction) {
         unsafe { gl::DepthFunc(depth_function as u32) }
     }
 
-    pub fn set_face_culling(culling: FaceCulling) {
+    pub fn face_culling(culling: FaceCulling) {
         unsafe { gl::CullFace(culling as u32) }
     }
 
-    pub fn set_front_face(front_face: FrontFace) {
+    pub fn front_face(front_face: FrontFace) {
         unsafe { gl::FrontFace(front_face as u32) }
     }
 }

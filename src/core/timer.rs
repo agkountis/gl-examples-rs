@@ -1,8 +1,10 @@
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 pub struct Timer {
     start: Instant,
-    prev_time: f32
+    prev_time: f32,
+    elapsed_time: f32,
+    delta_time: f32,
 }
 
 impl Timer {
@@ -12,20 +14,28 @@ impl Timer {
 
         Timer {
             start: now,
-            prev_time: now.elapsed().as_secs() as f32 + now.elapsed().subsec_nanos() as f32 * 0.000000001
+            prev_time: Self::duration_as_seconds(&now.elapsed()),
+            elapsed_time: 0.0,
+            delta_time: 0.0,
         }
     }
 
-    pub fn get_elapsed_time(&self) -> f32 {
-        self.start.elapsed().as_secs() as f32 + self.start.elapsed().subsec_nanos() as f32 * 0.000000001
+    pub fn elapsed_time(&self) -> f32 {
+       self.elapsed_time
     }
 
-    pub fn get_delta(&mut self) -> f32 {
-        let delta = self.get_elapsed_time() - self.prev_time;
-
-        self.prev_time = self.get_elapsed_time();
-
-        delta
+    pub fn delta_time(&self) -> f32 {
+        self.delta_time
     }
 
+    pub(crate) fn tick(&mut self) {
+        self.elapsed_time = Self::duration_as_seconds(&self.start.elapsed());
+        self.delta_time = self.elapsed_time - self.prev_time;
+
+        self.prev_time = self.elapsed_time
+    }
+
+    fn duration_as_seconds(duration: &Duration) -> f32 {
+        duration.as_nanos() as f32 * 1e-9
+    }
 }

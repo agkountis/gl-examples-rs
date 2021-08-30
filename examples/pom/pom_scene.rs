@@ -454,8 +454,8 @@ impl PomScene {
     }
 
     fn skybox_pass(&self) {
-        StateManager::set_depth_function(DepthFunction::LessOrEqual);
-        StateManager::set_face_culling(FaceCulling::Front);
+        StateManager::depth_function(DepthFunction::LessOrEqual);
+        StateManager::face_culling(FaceCulling::Front);
 
         self.resolve_framebuffer.bind();
 
@@ -497,8 +497,8 @@ impl PomScene {
         self.resolve_framebuffer.unbind(false);
         self.environment.skybox_program_pipeline.unbind();
 
-        StateManager::set_depth_function(DepthFunction::Less);
-        StateManager::set_face_culling(FaceCulling::Back)
+        StateManager::depth_function(DepthFunction::Less);
+        StateManager::face_culling(FaceCulling::Back)
     }
 }
 
@@ -581,7 +581,7 @@ impl Scene for PomScene {
                 let y = size.height;
                 //TODO: Get this from the camera
                 self.projection_matrix = perspective(x, y, 60, 0.1, 500.0);
-                StateManager::set_viewport(0, 0, x as i32, y as i32)
+                StateManager::viewport(0, 0, x as i32, y as i32)
             }
             _ => {}
         }
@@ -591,7 +591,7 @@ impl Scene for PomScene {
     fn update(&mut self, context: Context) -> Transition {
         let Context { timer, .. } = context;
 
-        self.dt = timer.get_delta();
+        self.dt = timer.delta_time();
 
         let mut dx = 0.0;
         let mut dy = 0.0;

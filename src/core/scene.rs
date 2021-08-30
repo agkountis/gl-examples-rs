@@ -23,7 +23,7 @@ pub trait Scene {
     }
     fn pre_draw(&mut self, context: Context) {}
     fn draw(&mut self, context: Context) {}
-    fn gui(&mut self, ui: &Ui) {}
+    fn gui(&mut self, context: Context, ui: &Ui) {}
     fn post_draw(&mut self, context: Context) {}
 }
 
@@ -48,6 +48,7 @@ impl SceneManager {
     pub(crate) fn handle_event(&mut self, context: Context, event: WindowEvent) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -57,7 +58,14 @@ impl SceneManager {
         if self.is_running {
             let transition = match self.scenes.last_mut() {
                 Some(scene) => scene.handle_event(
-                    Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                    Context::new(
+                        window,
+                        device,
+                        asset_manager,
+                        timer,
+                        framebuffer_cache,
+                        settings,
+                    ),
                     event,
                 ),
                 None => Transition::None,
@@ -65,7 +73,14 @@ impl SceneManager {
 
             self.handle_transition(
                 transition,
-                Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                Context::new(
+                    window,
+                    device,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ),
             );
         }
     }
@@ -73,6 +88,7 @@ impl SceneManager {
     pub(crate) fn update(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -83,6 +99,7 @@ impl SceneManager {
             let transition = match self.scenes.last_mut() {
                 Some(scene) => scene.update(Context::new(
                     window,
+                    device,
                     asset_manager,
                     timer,
                     framebuffer_cache,
@@ -93,7 +110,14 @@ impl SceneManager {
 
             self.handle_transition(
                 transition,
-                Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                Context::new(
+                    window,
+                    device,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ),
             )
         }
     }
@@ -101,6 +125,7 @@ impl SceneManager {
     pub(crate) fn pre_draw(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -111,6 +136,7 @@ impl SceneManager {
             if let Some(scene) = self.scenes.last_mut() {
                 scene.pre_draw(Context::new(
                     window,
+                    device,
                     asset_manager,
                     timer,
                     framebuffer_cache,
@@ -123,6 +149,7 @@ impl SceneManager {
     pub(crate) fn draw(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -133,6 +160,7 @@ impl SceneManager {
             if let Some(scene) = self.scenes.last_mut() {
                 scene.draw(Context::new(
                     window,
+                    device,
                     asset_manager,
                     timer,
                     framebuffer_cache,
@@ -142,10 +170,29 @@ impl SceneManager {
         }
     }
 
-    pub(crate) fn gui(&mut self, ui: &Ui) {
+    pub(crate) fn gui(&mut self, context: Context, ui: &Ui) {
         if self.is_running {
+            let Context {
+                window,
+                device,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            } = context;
+
             if let Some(scene) = self.scenes.last_mut() {
-                scene.gui(ui)
+                scene.gui(
+                    Context::new(
+                        window,
+                        device,
+                        asset_manager,
+                        timer,
+                        framebuffer_cache,
+                        settings,
+                    ),
+                    ui,
+                )
             }
         }
     }
@@ -153,6 +200,7 @@ impl SceneManager {
     pub(crate) fn post_draw(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -163,6 +211,7 @@ impl SceneManager {
             if let Some(scene) = self.scenes.last_mut() {
                 scene.post_draw(Context::new(
                     window,
+                    device,
                     asset_manager,
                     timer,
                     framebuffer_cache,
@@ -179,6 +228,7 @@ impl SceneManager {
     fn handle_transition(&mut self, transition: Transition, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -188,13 +238,21 @@ impl SceneManager {
         match transition {
             Transition::Push(scene) => self.push(
                 scene,
-                Context::new(window, asset_manager, timer, framebuffer_cache, settings),
+                Context::new(
+                    window,
+                    device,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ),
             ),
             Transition::Switch(_) => {}
             Transition::Pop => {}
             Transition::None => {}
             Transition::Quit => self.stop(Context::new(
                 window,
+                device,
                 asset_manager,
                 timer,
                 framebuffer_cache,
@@ -206,6 +264,7 @@ impl SceneManager {
     fn push(&mut self, scene: Box<dyn Scene>, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -215,6 +274,7 @@ impl SceneManager {
         if let Some(current) = self.scenes.last_mut() {
             current.pause(Context::new(
                 window,
+                device,
                 asset_manager,
                 timer,
                 framebuffer_cache,
@@ -225,6 +285,7 @@ impl SceneManager {
         self.scenes.push(scene);
         self.scenes.last_mut().unwrap().start(Context::new(
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -236,6 +297,7 @@ impl SceneManager {
         if self.is_running {
             let Context {
                 window,
+                device,
                 asset_manager,
                 timer,
                 framebuffer_cache,
@@ -245,6 +307,7 @@ impl SceneManager {
             while let Some(mut scene) = self.scenes.pop() {
                 scene.stop(Context::new(
                     window,
+                    device,
                     asset_manager,
                     timer,
                     framebuffer_cache,
@@ -259,6 +322,7 @@ impl SceneManager {
     pub(crate) fn pause(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -268,6 +332,7 @@ impl SceneManager {
         if let Some(scene) = self.scenes.last_mut() {
             scene.pause(Context::new(
                 window,
+                device,
                 asset_manager,
                 timer,
                 framebuffer_cache,
@@ -279,6 +344,7 @@ impl SceneManager {
     pub(crate) fn resume(&mut self, context: Context) {
         let Context {
             window,
+            device,
             asset_manager,
             timer,
             framebuffer_cache,
@@ -288,6 +354,7 @@ impl SceneManager {
         if let Some(scene) = self.scenes.last_mut() {
             scene.resume(Context::new(
                 window,
+                device,
                 asset_manager,
                 timer,
                 framebuffer_cache,

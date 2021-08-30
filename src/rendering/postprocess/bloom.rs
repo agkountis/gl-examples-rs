@@ -1,34 +1,45 @@
-use crate::core::math::{UVec2, Vec3, Vec4};
-use crate::imgui::{im_str, Gui, Ui};
-use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
-use crate::rendering::framebuffer::{Framebuffer, TemporaryFramebufferPool};
-use crate::rendering::postprocess::{
-    AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER,
-};
-use crate::rendering::program_pipeline::ProgramPipeline;
-use crate::rendering::shader::{Shader, ShaderStage};
-use crate::Context;
 use std::any::Any;
 use std::ops::RangeInclusive;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-const UBO_BINDING_INDEX: u32 = 0;
+use crate::color::srgb_to_linear;
+use crate::core::math::{UVec2, Vec3, Vec4};
+use crate::imgui::{im_str, Condition, Gui, Ui};
+use crate::rendering::sampler::{Anisotropy, MinificationFilter, Sampler, WrappingMode};
+use crate::rendering::state::{BlendFactor, FrontFace, StateManager};
+use crate::rendering::texture::Texture2D;
+use crate::rendering::{
+    buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
+    framebuffer::Framebuffer,
+    mesh::FULLSCREEN_MESH,
+    postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
+    program_pipeline::ProgramPipeline,
+    shader::{Shader, ShaderStage},
+};
+use crate::sampler::MagnificationFilter;
+use crate::{Context, Draw};
+use imgui::TextureId;
+
+const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
 const MIN_ITERATIONS: u32 = 1;
 const MAX_ITERATIONS: u32 = 16;
 const MIN_THRESHOLD: f32 = 0.1;
 const MAX_THRESHOLD: f32 = 10.0;
-const MIN_SMOOTH_FADE: f32 = 0.1;
+const MIN_SMOOTH_FADE: f32 = 0.01;
 const MAX_SMOOTH_FADE: f32 = 1.0;
-const MIN_INTENSITY: f32 = 0.1;
+const MIN_INTENSITY: f32 = 0.01;
 const MAX_INTENSITY: f32 = 10.0;
+const MIN_LENS_DIRT_INTENSITY: f32 = 0.0;
+const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 
 #[repr(C)]
 #[derive(Default, Debug)]
 struct BloomUboData {
     filter: Vec4,
     intensity: f32,
+    use_lens_dirt: i32,
+    lens_dirt_intensity: f32,
     _pad: Vec3,
 }
 
@@ -37,11 +48,20 @@ pub struct Bloom {
     threshold: f32,
     smooth_fade: f32,
     intensity: f32,
-    v_blur_program_pipeline: ProgramPipeline,
-    h_blur_program_pipeline: ProgramPipeline,
+    downsample_program_pipeline: ProgramPipeline,
+    downsample_prefilter_program_pipeline: ProgramPipeline,
+    upsample_program_pipeline: ProgramPipeline,
+    bloom_upsample_apply_program_pipeline: ProgramPipeline,
     ubo_data: BloomUboData,
     ubo: Buffer,
+    linear_sampler: Sampler,
+    blit_framebuffers: Vec<Rc<Framebuffer>>,
     enabled: bool,
+    show_debug_window: bool,
+    anamorphic_stretch: f32,
+    enable_lens_dirt: bool,
+    lens_dirt_intensity: f32,
+    lens_dirt: Rc<Texture2D>,
 }
 
 impl_as_any!(Bloom);
@@ -67,37 +87,58 @@ impl PostprocessingEffect for Bloom {
         let Context {
             framebuffer_cache, ..
         } = context;
-        //TODO: Implement me
 
         let attachment = input.texture_attachment(0);
 
-        assert_eq!(
-            attachment.is_depth_stencil(),
-            false,
+        assert!(
+            !attachment.is_depth_stencil(),
             "Bloom effect do not support depth texture attachments."
         );
 
-        let knee = self.threshold * self.smooth_fade;
+        let threshold = srgb_to_linear(self.threshold);
+        let knee = threshold * self.smooth_fade;
         self.ubo_data.filter = Vec4::new(
-            self.threshold,
-            self.threshold - knee,
+            threshold,
+            threshold - knee,
             2.0 * knee,
             0.25 / (knee + EPSILON),
         );
+        self.ubo_data.intensity = self.intensity;
+        self.ubo_data.use_lens_dirt = self.enable_lens_dirt as i32;
+        self.ubo_data.lens_dirt_intensity = self.lens_dirt_intensity;
 
         self.ubo.fill_mapped(0, &self.ubo_data);
 
         // Blit to half resolution and filter bright pixels.
         let mut size = UVec2::new(input.size().x / 2, input.size().y / 2);
+
+        //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
+        size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
+
         let format = attachment.format();
+
+        self.blit_framebuffers
+            .iter()
+            .for_each(|fb| framebuffer_cache.release_temporary(Rc::clone(fb)));
+        self.blit_framebuffers.clear();
 
         let mut current_destination = framebuffer_cache.get_temporary(size, format, None);
 
-        let mut temporaries = Vec::with_capacity(self.iterations as usize);
+        self.blit_framebuffers.push(Rc::clone(&current_destination));
 
-        temporaries.push(Rc::clone(&current_destination));
+        current_destination.bind();
+        current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-        // TODO: Do a Box downsample blit here and filter brights
+        self.downsample_prefilter_program_pipeline.bind();
+        self.downsample_prefilter_program_pipeline
+            .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
+
+        StateManager::front_face(FrontFace::Clockwise);
+        FULLSCREEN_MESH.draw();
+        StateManager::front_face(FrontFace::CounterClockwise);
+
+        current_destination.unbind(false);
+        self.downsample_prefilter_program_pipeline.unbind();
 
         let mut current_source = Rc::clone(&current_destination);
 
@@ -105,24 +146,89 @@ impl PostprocessingEffect for Bloom {
             size.x /= 2;
             size.y /= 2;
 
+            //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
+            size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
+
             if size.y < 2 {
                 break;
             }
 
             current_destination = framebuffer_cache.get_temporary(size, format, None);
-            temporaries.push(Rc::clone(&current_destination));
 
+            self.blit_framebuffers.push(Rc::clone(&current_destination));
             //TODO: Do a downsample blit here
+
+            current_destination.bind();
+            current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
+
+            self.downsample_program_pipeline.bind();
+            self.downsample_program_pipeline.set_texture_2d_with_id(
+                0,
+                current_source.texture_attachments()[0].id(),
+                &self.linear_sampler,
+            );
+
+            StateManager::front_face(FrontFace::Clockwise);
+            FULLSCREEN_MESH.draw();
+            StateManager::front_face(FrontFace::CounterClockwise);
+
+            current_destination.unbind(false);
+            self.downsample_program_pipeline.unbind();
+
             current_source = Rc::clone(&current_destination);
         }
 
-        temporaries.into_iter().rev().skip(1).for_each(|temporary| {
-            current_destination = temporary;
-            //TODO: Do an upsampling blit here
-            current_source = Rc::clone(&current_destination);
-        });
+        self.downsample_program_pipeline.unbind();
 
-        //TODO: blit to add bloom tex to input render target
+        self.blit_framebuffers
+            .iter()
+            .rev()
+            .skip(1)
+            .for_each(|temporary| {
+                current_destination = Rc::clone(temporary);
+                //TODO: Do an upsampling blit here
+                current_destination.bind();
+
+                self.upsample_program_pipeline.bind();
+                self.upsample_program_pipeline.set_texture_2d_with_id(
+                    0,
+                    current_source.texture_attachments()[0].id(),
+                    &self.linear_sampler,
+                );
+
+                StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
+
+                StateManager::front_face(FrontFace::Clockwise);
+                FULLSCREEN_MESH.draw();
+                StateManager::front_face(FrontFace::CounterClockwise);
+
+                StateManager::disable_blending();
+
+                self.upsample_program_pipeline.unbind();
+                current_destination.unbind(false);
+
+                current_source = Rc::clone(&current_destination);
+            });
+
+        self.bloom_upsample_apply_program_pipeline.bind();
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(
+                0,
+                current_source.texture_attachments()[0].id(),
+                &self.linear_sampler,
+            );
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(1, input.texture_attachments()[0].id(), &self.linear_sampler);
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
+        input.bind();
+
+        StateManager::front_face(FrontFace::Clockwise);
+        FULLSCREEN_MESH.draw();
+        StateManager::front_face(FrontFace::CounterClockwise);
+
+        input.unbind(false);
+        self.bloom_upsample_apply_program_pipeline.unbind();
     }
 }
 
@@ -138,21 +244,83 @@ impl Gui for Bloom {
                 .framed(false)
                 .build(ui, || {
                     ui.indent();
-                    imgui::Slider::new(im_str!("Iterations"))
+
+                    ui.checkbox(im_str!("Show debug window"), &mut self.show_debug_window);
+
+                    if self.show_debug_window {
+                        imgui::Window::new(im_str!("Bloom Debug"))
+                            .focus_on_appearing(true)
+                            .bring_to_front_on_focus(true)
+                            .size([256.0f32, 500.0f32], Condition::Appearing)
+                            .build(ui, || {
+                                self.blit_framebuffers.iter().for_each(|fb| {
+                                    let tex_id =
+                                        fb.texture_attachments().iter().next().unwrap().id();
+                                    ui.text(format!("Framebuffer ID: {}", fb.id()));
+                                    ui.indent();
+
+                                    ui.text(format!("Texture ID: {}", tex_id));
+
+                                    let dimensions =
+                                        format!("Dimensions: {}x{}", fb.size().x, fb.size().y);
+                                    ui.text(dimensions);
+
+                                    imgui::Image::new(
+                                        TextureId::new(tex_id as usize),
+                                        [fb.size().x as f32, fb.size().y as f32],
+                                    )
+                                    .uv0([0.0, 1.0])
+                                    .uv1([1.0, 0.0])
+                                    .build(ui);
+
+                                    ui.unindent()
+                                });
+                            });
+                    }
+
+                    if imgui::Slider::new(im_str!("Iterations"))
                         .range(RangeInclusive::new(MIN_ITERATIONS, MAX_ITERATIONS))
-                        .build(&ui, &mut self.iterations);
+                        .build(ui, &mut self.iterations)
+                    {
+                        self.blit_framebuffers = Vec::with_capacity(self.iterations as usize);
+                    }
+
                     imgui::Slider::new(im_str!("Threshold"))
                         .range(RangeInclusive::new(MIN_THRESHOLD, MAX_THRESHOLD))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.threshold);
+                        .build(ui, &mut self.threshold);
+
                     imgui::Slider::new(im_str!("Smooth Fade"))
                         .range(RangeInclusive::new(MIN_SMOOTH_FADE, MAX_SMOOTH_FADE))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.smooth_fade);
+                        .build(ui, &mut self.smooth_fade);
+
                     imgui::Slider::new(im_str!("Intensity"))
                         .range(RangeInclusive::new(MIN_INTENSITY, MAX_INTENSITY))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.intensity);
+                        .build(ui, &mut self.intensity);
+
+                    imgui::Slider::new(im_str!("Anamorphic Stretch"))
+                        .range(RangeInclusive::new(0.0, 1.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(ui, &mut self.anamorphic_stretch);
+
+                    ui.checkbox(im_str!("Lens Dirt"), &mut self.enable_lens_dirt);
+                    if self.enable_lens_dirt {
+                        imgui::Slider::new(im_str!("Lens Dirt Intensity"))
+                            .range(RangeInclusive::new(
+                                MIN_LENS_DIRT_INTENSITY,
+                                MAX_LENS_DIRT_INTENSITY,
+                            ))
+                            .display_format(im_str!("%.2f"))
+                            .build(ui, &mut self.lens_dirt_intensity);
+
+                        ui.text("Lens Dirt Map");
+                        let tex_id = self.lens_dirt.get_id();
+                        imgui::Image::new(TextureId::new(tex_id as usize), [128.0, 128.0])
+                            .build(ui);
+                    }
+
                     ui.unindent()
                 });
         });
@@ -160,7 +328,6 @@ impl Gui for Bloom {
 }
 
 pub struct BloomBuilder {
-    assets_path: PathBuf,
     iterations: u32,
     threshold: f32,
     smooth_fade: f32,
@@ -168,16 +335,21 @@ pub struct BloomBuilder {
     enabled: bool,
 }
 
-impl BloomBuilder {
-    pub fn new<P: AsRef<Path>>(assets_path: P) -> Self {
+impl Default for BloomBuilder {
+    fn default() -> Self {
         Self {
-            assets_path: PathBuf::from(assets_path.as_ref()),
-            iterations: 5,
+            iterations: 8,
             threshold: 1.0,
-            smooth_fade: 0.5,
-            intensity: 1.0,
+            smooth_fade: 0.54,
+            intensity: 0.1,
             enabled: true,
         }
+    }
+}
+
+impl BloomBuilder {
+    pub fn new() -> Self {
+        Default::default()
     }
 
     pub fn iterations(mut self, iterations: u32) -> Self {
@@ -205,33 +377,77 @@ impl BloomBuilder {
         self
     }
 
-    pub fn build(self) -> Bloom {
-        let (v_blur_program_pipeline, h_blur_program_pipeline) = {
-            let v_blur_fs = Shader::new(
+    pub fn build(self, context: Context) -> Bloom {
+        let Context {
+            asset_manager,
+            settings,
+            ..
+        } = context;
+
+        let asset_path = settings.asset_path.as_path();
+        let lens_dirt = asset_manager
+            .load_texture_2d(asset_path.join("textures/lens_dirt_mask.png"), true, false)
+            .expect("Failed to load lens dirt texture.");
+
+        let (
+            downsample_program_pipeline,
+            downsample_prefilter_program_pipeline,
+            upsample_program_pipeline,
+            bloom_upsample_apply_program_pipeline,
+        ) = {
+            let downsample_fs = Shader::new(
                 ShaderStage::Fragment,
-                self.assets_path.join("sdr/gaussian_blur_vertical.frag"),
+                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag",
             )
             .unwrap();
 
-            let h_blur_fs = Shader::new(
+            let downsample_prefilter_fs = Shader::new(
                 ShaderStage::Fragment,
-                self.assets_path.join("sdr/gaussian_blur_horizontal.frag"),
+                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag",
+            ).unwrap();
+
+            let upsample_blur_fs = Shader::new(
+                ShaderStage::Fragment,
+                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
             )
             .unwrap();
 
-            let v_blur_pipeline = ProgramPipeline::new()
+            let bloom_apply_fs = Shader::new(
+                ShaderStage::Fragment,
+                "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
+            )
+            .unwrap();
+
+            let downsample_pipeline = ProgramPipeline::new()
                 .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&v_blur_fs)
+                .add_shader(&downsample_fs)
                 .build()
                 .unwrap();
 
-            let h_blur_pipeline = ProgramPipeline::new()
+            let downsample_prefilter_pipeline = ProgramPipeline::new()
                 .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&h_blur_fs)
+                .add_shader(&downsample_prefilter_fs)
                 .build()
                 .unwrap();
 
-            (v_blur_pipeline, h_blur_pipeline)
+            let upsample_pipeline = ProgramPipeline::new()
+                .add_shader(&FULLSCREEN_VERTEX_SHADER)
+                .add_shader(&upsample_blur_fs)
+                .build()
+                .unwrap();
+
+            let bloom_apply_pipeline = ProgramPipeline::new()
+                .add_shader(&FULLSCREEN_VERTEX_SHADER)
+                .add_shader(&bloom_apply_fs)
+                .build()
+                .unwrap();
+
+            (
+                downsample_pipeline,
+                downsample_prefilter_pipeline,
+                upsample_pipeline,
+                bloom_apply_pipeline,
+            )
         };
 
         let mut ubo = Buffer::new(
@@ -243,16 +459,35 @@ impl BloomBuilder {
         ubo.bind(UBO_BINDING_INDEX);
         ubo.map(MapModeFlags::MAP_WRITE_PERSISTENT_COHERENT);
 
+        let linear_sampler = Sampler::new(
+            MinificationFilter::Linear,
+            MagnificationFilter::Linear,
+            WrappingMode::ClampToEdge,
+            WrappingMode::ClampToEdge,
+            WrappingMode::ClampToEdge,
+            Vec4::new(0.0, 0.0, 0.0, 1.0),
+            Anisotropy::None,
+        );
+
         Bloom {
             iterations: self.iterations,
             threshold: self.threshold,
             smooth_fade: self.smooth_fade,
             intensity: self.intensity,
-            v_blur_program_pipeline,
-            h_blur_program_pipeline,
+            downsample_program_pipeline,
+            downsample_prefilter_program_pipeline,
+            upsample_program_pipeline,
+            bloom_upsample_apply_program_pipeline,
             ubo_data: Default::default(),
             ubo,
+            linear_sampler,
+            blit_framebuffers: Vec::with_capacity(self.iterations as usize),
             enabled: self.enabled,
+            show_debug_window: false,
+            anamorphic_stretch: 0.0,
+            enable_lens_dirt: true,
+            lens_dirt_intensity: 30.0,
+            lens_dirt,
         }
     }
 }
