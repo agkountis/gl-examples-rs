@@ -747,11 +747,12 @@ impl Scene for PbsScene {
                                     .options(true)
                                     .picker(true)
                                     .alpha(false)
-                                    .build(&ui);
+                                    .build(ui);
+
                                     imgui::Slider::new(im_str!("Light Intensity"))
                                         .range(RangeInclusive::new(0.01, 300.0))
                                         .display_format(im_str!("%.1f"))
-                                        .build(&ui, &mut self.lighting.light_intensity);
+                                        .build(ui, &mut self.lighting.light_intensity);
                                 });
 
                             imgui::TreeNode::new(im_str!("BRDF"))

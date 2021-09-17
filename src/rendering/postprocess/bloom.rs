@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::color::srgb_to_linear;
 use crate::core::math::{UVec2, Vec4};
 use crate::framebuffer::TemporaryFramebufferPool;
-use crate::imgui::{im_str, Condition, Gui, Ui};
+use crate::imgui::{im_str, ColorFormat, Condition, Gui, Ui};
 use crate::rendering::{
     buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
     framebuffer::Framebuffer,
@@ -17,7 +17,7 @@ use crate::rendering::{
     texture::Texture2D,
 };
 use crate::{Context, Draw};
-use glsl_layout::{vec4, Uniform};
+use glsl_layout::{vec3, vec4, Uniform};
 use imgui::TextureId;
 use std::ops::RangeInclusive;
 
@@ -35,13 +35,27 @@ const MIN_LENS_DIRT_INTENSITY: f32 = 0.0;
 const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 
 #[repr(C)]
-#[derive(Default, Debug, Clone, Copy, Uniform)]
+#[derive(Debug, Clone, Copy, Uniform)]
 struct BloomUboData {
     spread: f32,
     filter: vec4,
     intensity: f32,
     use_lens_dirt: i32,
     lens_dirt_intensity: f32,
+    tint: vec3,
+}
+
+impl Default for BloomUboData {
+    fn default() -> Self {
+        Self {
+            spread: 0.0,
+            filter: Default::default(),
+            intensity: 0.0,
+            use_lens_dirt: 0,
+            lens_dirt_intensity: 0.0,
+            tint: [1.0, 1.0, 1.0].into(),
+        }
+    }
 }
 
 pub struct Bloom {
@@ -313,6 +327,14 @@ impl Gui for Bloom {
                             _ => im_str!("").into(),
                         },
                     );
+
+                    let a: &mut [f32; 3] = self.ubo_data.tint.as_mut();
+                    imgui::ColorEdit::new(im_str!("Tint"), a)
+                        .format(ColorFormat::Float)
+                        .options(true)
+                        .picker(true)
+                        .alpha(false)
+                        .build(ui);
 
                     if imgui::Slider::new(im_str!("Iterations"))
                         .range(RangeInclusive::new(MIN_ITERATIONS, MAX_ITERATIONS))

@@ -15,6 +15,7 @@ layout(std140, binding = 7) uniform BloomParams
     float intensity;
     int useLensDirt;
     float lensDirtIntensity;
+    vec3 tint;
 };
 
 layout(location = 0) in VsOut {
@@ -52,6 +53,8 @@ void main()
         vec3 lensDirt = bloom * lensDirtTexel.rgb * lensDirtIntensity;
         bloom += lensDirt;
     }
+
+    bloom *= tint;
 
     outColor = min(vec4(mainImageColor.rgb + bloom, mainImageColor.a), vec4(FP16_MAX));
 }
