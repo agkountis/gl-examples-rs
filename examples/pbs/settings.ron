@@ -1,0 +1,27 @@
+(
+    name: "PBS-rs: Physically Based Shading demo using Rust",
+    asset_path: "assets",
+    version: (
+        major: 0,
+        minor: 1,
+        patch: 0,
+    ),
+    graphics_api_version: (
+        major: 4,
+        minor: 5,
+        patch: 0,
+    ),
+    window_size: [
+        1600,
+        900,
+    ],
+    fullscreen: false,
+    msaa: None,
+    vsync: true,
+    default_clear_color: [
+        0.02,
+        0.02,
+        0.02,
+        1,
+    ],
+)

@@ -10,14 +10,17 @@ use-spirv = []
 auto-compile-spirv = []
 
 [dependencies]
+serde = "^1.0.0"
+ron = "^0.6.0"
 lazy_static = "^1.4.0"
-nalgebra-glm = "^0.13.0"
+nalgebra-glm = { version = "^0.13.0", features = ["serde-serialize"] }
 bitflags = "^1.0.0"
 image = "^0.22.0"
 gli-rs = "^0.4.0"
 glutin = "^0.26.0"
 gl_bindings = {path = "gl_bindings"}
 imgui = "^0.7.0"
+glsl-layout = "0.4.0"
 imgui-winit-support = "^0.7.0"
 imgui-opengl-renderer = "^0.11.0"
 

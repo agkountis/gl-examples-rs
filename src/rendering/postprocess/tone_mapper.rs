@@ -3,7 +3,7 @@ use crate::{
     framebuffer::Framebuffer,
     imgui::{im_str, Gui, Ui},
     math::Vec4,
-    mesh::FULLSCREEN_MESH,
+    mesh::utilities::draw_full_screen_quad,
     rendering::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
         postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
@@ -128,9 +128,7 @@ impl PostprocessingEffect for ToneMapper {
             &self.sampler_nearest,
         );
 
-        StateManager::front_face(FrontFace::Clockwise);
-        FULLSCREEN_MESH.draw();
-        StateManager::front_face(FrontFace::CounterClockwise);
+        draw_full_screen_quad();
 
         self.pipeline.unbind()
     }

@@ -463,20 +463,10 @@ impl Framebuffer {
         self.samples
     }
 
-    pub fn blit(source: &Framebuffer, destination: &Framebuffer) {
-        let source_color_attachments = source
-            .texture_attachments
-            .iter()
-            .chain(source.renderbuffer_attachments.iter())
-            .filter(|&attachment| !attachment.is_depth_stencil())
-            .collect::<Vec<_>>();
+    pub fn blit(source: &Framebuffer, destination: &Framebuffer, filtering: TextureFilter) {
+        let source_color_attachments = Self::extract_attachments(source);
 
-        let dest_color_attachments = destination
-            .texture_attachments
-            .iter()
-            .chain(destination.renderbuffer_attachments.iter())
-            .filter(|&attachment| !attachment.is_depth_stencil())
-            .collect::<Vec<_>>();
+        let dest_color_attachments = Self::extract_attachments(destination);
 
         assert_eq!(source_color_attachments.len(), dest_color_attachments.len());
 
@@ -500,7 +490,7 @@ impl Framebuffer {
                     destination.size().x as i32,
                     destination.size().y as i32,
                     gl::COLOR_BUFFER_BIT,
-                    gl::NEAREST,
+                    filtering as u32,
                 );
             });
 
@@ -530,7 +520,11 @@ impl Framebuffer {
         }
     }
 
-    pub fn blit_to_default(source: &Framebuffer, default_framebuffer_size: UVec2) {
+    pub fn blit_to_default(
+        source: &Framebuffer,
+        default_framebuffer_size: UVec2,
+        filtering: TextureFilter,
+    ) {
         unsafe {
             gl::BlitNamedFramebuffer(
                 source.id(),
@@ -544,7 +538,7 @@ impl Framebuffer {
                 default_framebuffer_size.x as i32,
                 default_framebuffer_size.y as i32,
                 gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
-                gl::NEAREST,
+                filtering as u32,
             );
         }
     }
@@ -585,6 +579,15 @@ impl Framebuffer {
             }
             _ => None,
         }
+    }
+
+    fn extract_attachments(framebuffer: &Framebuffer) -> Vec<&FramebufferAttachment> {
+        framebuffer
+            .texture_attachments
+            .iter()
+            .chain(framebuffer.renderbuffer_attachments.iter())
+            .filter(|&attachment| !attachment.is_depth_stencil())
+            .collect::<Vec<_>>()
     }
 }
 

@@ -10,11 +10,11 @@ layout(binding = 2) uniform sampler2D lensDirt;
 
 layout(std140, binding = 7) uniform BloomParams
 {
+    float spread;
     vec4 _filter;
     float intensity;
     int useLensDirt;
     float lensDirtIntensity;
-    float _pad;
 };
 
 layout(location = 0) in VsOut {
@@ -39,17 +39,19 @@ vec4 Upsample(vec2 uv, vec2 halfpixel)
 void main()
 {
     vec4 mainImageColor = texture(mainImage, fsIn.texcoord);
+
+//    vec2 halfpixel = texelSize.xy * texelSize.z;
     vec2 halfpixel = (1.0 / textureSize(image, 0)) * 0.5;
-    vec4 lensDirtTexel = texture(lensDirt, fsIn.texcoord);
+    halfpixel *= spread;
+
     vec3 bloom = intensity * Upsample(fsIn.texcoord, halfpixel).rgb;
 
-    vec4 finalColor;
     if (useLensDirt == TRUE)
     {
-        outColor = min(vec4(mainImageColor.rgb + bloom + (bloom * lensDirtTexel.rgb * lensDirtIntensity), mainImageColor.a), vec4(FP16_MAX));
+        vec4 lensDirtTexel = texture(lensDirt, fsIn.texcoord);
+        vec3 lensDirt = bloom * lensDirtTexel.rgb * lensDirtIntensity;
+        bloom += lensDirt;
     }
-    else
-    {
-        outColor = min(vec4(mainImageColor.rgb + bloom, mainImageColor.a), vec4(FP16_MAX));
-    }
+
+    outColor = min(vec4(mainImageColor.rgb + bloom, mainImageColor.a), vec4(FP16_MAX));
 }

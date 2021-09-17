@@ -7,10 +7,10 @@ use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
-use engine::core::camera::CameraBuilder;
 use engine::{
     camera::Camera,
     color::srgb_to_linear3f,
+    core::camera::CameraBuilder,
     imgui::*,
     math::{
         inverse,
@@ -20,9 +20,12 @@ use engine::{
     },
     rendering::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
-        framebuffer::{AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo},
+        framebuffer::{
+            AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo, TextureFilter,
+        },
         material::{Material, PbsMetallicRoughnessMaterial},
-        mesh::{Mesh, MeshUtilities},
+        mesh::utilities::generate_cube,
+        mesh::Mesh,
         postprocess::{
             bloom::BloomBuilder, tone_mapper::ToneMapper, PostprocessingStack,
             PostprocessingStackBuilder,
@@ -30,7 +33,7 @@ use engine::{
         program_pipeline::ProgramPipeline,
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
-        state::{DepthFunction, FaceCulling, FrontFace, StateManager},
+        state::{DepthFunction, FaceCulling, StateManager},
         texture::{SizedTextureFormat, TextureCube},
         Draw,
     },
@@ -171,7 +174,7 @@ impl PbsScene {
             .load_mesh(asset_path.join("models/cerberus/cerberus.glb"))
             .expect("Failed to load mesh");
 
-        let skybox_mesh = MeshUtilities::generate_cube(1.0);
+        let skybox_mesh = generate_cube(1.0);
 
         let albedo = asset_manager
             .load_texture_2d(
@@ -476,7 +479,11 @@ impl PbsScene {
         let framebuffer = &self.msaa_framebuffers[self.msaa_framebuffer_index];
         self.resolve_framebuffer
             .clear(&Vec4::new(0.0, 1.0, 0.0, 1.0));
-        Framebuffer::blit(framebuffer, &self.resolve_framebuffer);
+        Framebuffer::blit(
+            framebuffer,
+            &self.resolve_framebuffer,
+            TextureFilter::Nearest,
+        );
         framebuffer.unbind(true);
     }
 

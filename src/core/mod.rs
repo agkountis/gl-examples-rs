@@ -12,17 +12,20 @@ use crate::rendering::device::Device;
 use crate::rendering::framebuffer::TemporaryFramebufferPool;
 use crate::timer::Timer;
 use glutin::window::Window;
+use ron::de::from_reader;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
-use std::path::PathBuf;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum Msaa {
     None = 1,
@@ -32,7 +35,7 @@ pub enum Msaa {
     X16 = 16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub name: String,
     pub asset_path: PathBuf,
@@ -43,6 +46,23 @@ pub struct Settings {
     pub msaa: Msaa,
     pub vsync: bool,
     pub default_clear_color: Vec4,
+}
+
+impl Settings {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Settings {
+        let file = File::open(path.as_ref())
+            .unwrap_or_else(|_| panic!("Failed to open settings file. Path: {:?}", path.as_ref()));
+
+        let settings: Settings = match from_reader(file) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("Failed to load settings: {}", e);
+                std::process::exit(1)
+            }
+        };
+
+        settings
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

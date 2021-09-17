@@ -22,6 +22,7 @@ use crate::{
     imgui::ImGui,
     rendering::framebuffer::TemporaryFramebufferPool,
 };
+use std::io::Write;
 
 pub struct Application;
 

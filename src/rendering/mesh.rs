@@ -1,6 +1,7 @@
 use gl::types::*;
 use gl_bindings as gl;
 
+use crate::rendering::state::{FrontFace, StateManager};
 use crate::{
     core::{
         asset::Asset,
@@ -14,7 +15,7 @@ use crate::{
 use std::{mem, path::Path, ptr};
 
 lazy_static! {
-    pub static ref FULLSCREEN_MESH: FullscreenMesh = FullscreenMesh::new();
+    static ref FULLSCREEN_MESH: FullscreenMesh = FullscreenMesh::new();
 }
 
 #[derive(Debug)]
@@ -211,7 +212,6 @@ impl Asset for Mesh {
                 .read_indices()
                 .expect("Mesh has no indices.")
                 .into_u32()
-                .map(|index| index)
                 .collect::<Vec<_>>();
 
             Ok(Mesh::new(vertices, indices))
@@ -225,13 +225,19 @@ pub struct FullscreenMesh {
     vao: GLuint,
 }
 
-impl FullscreenMesh {
-    pub fn new() -> Self {
+impl Default for FullscreenMesh {
+    fn default() -> Self {
         let mut vao: GLuint = 0;
 
         unsafe { gl::CreateVertexArrays(1, &mut vao) }
 
         FullscreenMesh { vao }
+    }
+}
+
+impl FullscreenMesh {
+    pub fn new() -> Self {
+        Default::default()
     }
 }
 
@@ -245,9 +251,20 @@ impl Draw for FullscreenMesh {
     }
 }
 
-pub struct MeshUtilities;
+pub mod utilities {
+    use crate::core::math::{Vec2, Vec3, Vec4};
+    use crate::rendering::{
+        mesh::{Mesh, Vertex, FULLSCREEN_MESH},
+        state::{FrontFace, StateManager},
+        Draw,
+    };
 
-impl MeshUtilities {
+    pub fn draw_full_screen_quad() {
+        StateManager::front_face(FrontFace::Clockwise);
+        FULLSCREEN_MESH.draw();
+        StateManager::front_face(FrontFace::CounterClockwise);
+    }
+
     pub fn generate_quadrilateral(dimensions: Vec3) -> Mesh {
         let half_dimensions = dimensions * 0.5;
 
@@ -454,6 +471,6 @@ impl MeshUtilities {
     }
 
     pub fn generate_cube(size: f32) -> Mesh {
-        Self::generate_quadrilateral(Vec3::new(size, size, size))
+        generate_quadrilateral(Vec3::new(size, size, size))
     }
 }

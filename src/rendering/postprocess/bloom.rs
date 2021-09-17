@@ -1,24 +1,25 @@
 use std::any::Any;
-use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use crate::color::srgb_to_linear;
-use crate::core::math::{UVec2, Vec3, Vec4};
+use crate::core::math::{UVec2, Vec4};
+use crate::framebuffer::TemporaryFramebufferPool;
 use crate::imgui::{im_str, Condition, Gui, Ui};
-use crate::rendering::sampler::{Anisotropy, MinificationFilter, Sampler, WrappingMode};
-use crate::rendering::state::{BlendFactor, FrontFace, StateManager};
-use crate::rendering::texture::Texture2D;
 use crate::rendering::{
     buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
     framebuffer::Framebuffer,
-    mesh::FULLSCREEN_MESH,
+    mesh::utilities::draw_full_screen_quad,
     postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
     program_pipeline::ProgramPipeline,
+    sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
     shader::{Shader, ShaderStage},
+    state::{BlendFactor, FrontFace, StateManager},
+    texture::Texture2D,
 };
-use crate::sampler::MagnificationFilter;
 use crate::{Context, Draw};
+use glsl_layout::{vec4, Uniform};
 use imgui::TextureId;
+use std::ops::RangeInclusive;
 
 const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
@@ -34,20 +35,23 @@ const MIN_LENS_DIRT_INTENSITY: f32 = 0.0;
 const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 
 #[repr(C)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Copy, Uniform)]
 struct BloomUboData {
-    filter: Vec4,
+    spread: f32,
+    filter: vec4,
     intensity: f32,
     use_lens_dirt: i32,
     lens_dirt_intensity: f32,
-    _pad: Vec3,
 }
 
 pub struct Bloom {
     iterations: u32,
+    spread: f32,
     threshold: f32,
     smooth_fade: f32,
     intensity: f32,
+    resolution_divisors: [u32; 2],
+    resolution_divisor_index: usize,
     downsample_program_pipeline: ProgramPipeline,
     downsample_prefilter_program_pipeline: ProgramPipeline,
     upsample_program_pipeline: ProgramPipeline,
@@ -65,6 +69,163 @@ pub struct Bloom {
 }
 
 impl_as_any!(Bloom);
+
+impl Bloom {
+    fn update_uniforms(&mut self) {
+        let threshold = srgb_to_linear(self.threshold);
+        let knee = threshold * self.smooth_fade;
+
+        self.ubo_data.spread = self.spread;
+        self.ubo_data.filter = [
+            threshold,
+            threshold - knee,
+            2.0 * knee,
+            0.25 / (knee + EPSILON),
+        ]
+        .into();
+        self.ubo_data.intensity = self.intensity;
+        self.ubo_data.use_lens_dirt = self.enable_lens_dirt as i32;
+        self.ubo_data.lens_dirt_intensity = self.lens_dirt_intensity;
+
+        self.ubo.fill_mapped(0, &self.ubo_data.std140());
+    }
+
+    fn downsampling_passes(
+        &mut self,
+        input: &Framebuffer,
+        framebuffer_cache: &mut TemporaryFramebufferPool,
+    ) -> Rc<Framebuffer> {
+        let resolution_divisor = self.resolution_divisors[self.resolution_divisor_index];
+        let input_size = input.size();
+
+        // Blit to half resolution and filter bright pixels.
+        let mut size = UVec2::new(
+            input_size.x / resolution_divisor,
+            input_size.y / resolution_divisor,
+        );
+
+        //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
+        size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
+
+        let attachment = input.texture_attachment(0);
+
+        assert!(
+            !attachment.is_depth_stencil(),
+            "Bloom effect do not support depth texture attachments."
+        );
+
+        let format = attachment.format();
+
+        self.blit_framebuffers
+            .iter()
+            .for_each(|fb| framebuffer_cache.release_temporary(Rc::clone(fb)));
+        self.blit_framebuffers.clear();
+
+        let mut current_destination = framebuffer_cache.get_temporary(size, format, None);
+
+        self.blit_framebuffers.push(Rc::clone(&current_destination));
+
+        current_destination.bind();
+        current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
+
+        self.downsample_prefilter_program_pipeline.bind();
+        self.downsample_prefilter_program_pipeline
+            .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
+
+        draw_full_screen_quad();
+
+        current_destination.unbind(false);
+        self.downsample_prefilter_program_pipeline.unbind();
+
+        let mut current_source = Rc::clone(&current_destination);
+
+        for _ in 1..self.iterations {
+            size.x /= resolution_divisor;
+            size.y /= resolution_divisor;
+
+            //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
+            size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
+
+            if size.y < 2 || size.x < 2 {
+                break;
+            }
+
+            current_destination = framebuffer_cache.get_temporary(size, format, None);
+
+            self.blit_framebuffers.push(Rc::clone(&current_destination));
+            //TODO: Do a downsample blit here
+
+            current_destination.bind();
+            current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
+
+            self.downsample_program_pipeline.bind();
+            self.downsample_program_pipeline.set_texture_2d_with_id(
+                0,
+                current_source.texture_attachments()[0].id(),
+                &self.linear_sampler,
+            );
+
+            draw_full_screen_quad();
+
+            current_destination.unbind(false);
+            self.downsample_program_pipeline.unbind();
+
+            current_source = Rc::clone(&current_destination);
+        }
+
+        self.downsample_program_pipeline.unbind();
+
+        current_source
+    }
+
+    fn upsampling_passes(&self, input: Rc<Framebuffer>) -> Rc<Framebuffer> {
+        let mut current_source = input;
+
+        for temporary in self.blit_framebuffers.iter().rev().skip(1) {
+            let current_destination = Rc::clone(temporary);
+            //TODO: Do an upsampling blit here
+            current_destination.bind();
+
+            self.upsample_program_pipeline.bind();
+            self.upsample_program_pipeline.set_texture_2d_with_id(
+                0,
+                current_source.texture_attachments()[0].id(),
+                &self.linear_sampler,
+            );
+
+            StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
+            draw_full_screen_quad();
+            StateManager::disable_blending();
+
+            self.upsample_program_pipeline.unbind();
+            current_destination.unbind(false);
+
+            current_source = Rc::clone(&current_destination);
+        }
+
+        current_source
+    }
+
+    fn composition_pass(&self, input: &Framebuffer, output: &Framebuffer) {
+        self.bloom_upsample_apply_program_pipeline.bind();
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(
+                1,
+                output.texture_attachments()[0].id(),
+                &self.linear_sampler,
+            );
+        self.bloom_upsample_apply_program_pipeline
+            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
+        output.bind();
+
+        draw_full_screen_quad();
+
+        output.unbind(false);
+        self.bloom_upsample_apply_program_pipeline.unbind();
+    }
+}
 
 impl PostprocessingEffect for Bloom {
     fn name(&self) -> &str {
@@ -88,147 +249,11 @@ impl PostprocessingEffect for Bloom {
             framebuffer_cache, ..
         } = context;
 
-        let attachment = input.texture_attachment(0);
+        self.update_uniforms();
 
-        assert!(
-            !attachment.is_depth_stencil(),
-            "Bloom effect do not support depth texture attachments."
-        );
-
-        let threshold = srgb_to_linear(self.threshold);
-        let knee = threshold * self.smooth_fade;
-        self.ubo_data.filter = Vec4::new(
-            threshold,
-            threshold - knee,
-            2.0 * knee,
-            0.25 / (knee + EPSILON),
-        );
-        self.ubo_data.intensity = self.intensity;
-        self.ubo_data.use_lens_dirt = self.enable_lens_dirt as i32;
-        self.ubo_data.lens_dirt_intensity = self.lens_dirt_intensity;
-
-        self.ubo.fill_mapped(0, &self.ubo_data);
-
-        // Blit to half resolution and filter bright pixels.
-        let mut size = UVec2::new(input.size().x / 2, input.size().y / 2);
-
-        //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
-        size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
-
-        let format = attachment.format();
-
-        self.blit_framebuffers
-            .iter()
-            .for_each(|fb| framebuffer_cache.release_temporary(Rc::clone(fb)));
-        self.blit_framebuffers.clear();
-
-        let mut current_destination = framebuffer_cache.get_temporary(size, format, None);
-
-        self.blit_framebuffers.push(Rc::clone(&current_destination));
-
-        current_destination.bind();
-        current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
-
-        self.downsample_prefilter_program_pipeline.bind();
-        self.downsample_prefilter_program_pipeline
-            .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
-
-        StateManager::front_face(FrontFace::Clockwise);
-        FULLSCREEN_MESH.draw();
-        StateManager::front_face(FrontFace::CounterClockwise);
-
-        current_destination.unbind(false);
-        self.downsample_prefilter_program_pipeline.unbind();
-
-        let mut current_source = Rc::clone(&current_destination);
-
-        for _ in 1..self.iterations {
-            size.x /= 2;
-            size.y /= 2;
-
-            //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
-            size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
-
-            if size.y < 2 {
-                break;
-            }
-
-            current_destination = framebuffer_cache.get_temporary(size, format, None);
-
-            self.blit_framebuffers.push(Rc::clone(&current_destination));
-            //TODO: Do a downsample blit here
-
-            current_destination.bind();
-            current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
-
-            self.downsample_program_pipeline.bind();
-            self.downsample_program_pipeline.set_texture_2d_with_id(
-                0,
-                current_source.texture_attachments()[0].id(),
-                &self.linear_sampler,
-            );
-
-            StateManager::front_face(FrontFace::Clockwise);
-            FULLSCREEN_MESH.draw();
-            StateManager::front_face(FrontFace::CounterClockwise);
-
-            current_destination.unbind(false);
-            self.downsample_program_pipeline.unbind();
-
-            current_source = Rc::clone(&current_destination);
-        }
-
-        self.downsample_program_pipeline.unbind();
-
-        self.blit_framebuffers
-            .iter()
-            .rev()
-            .skip(1)
-            .for_each(|temporary| {
-                current_destination = Rc::clone(temporary);
-                //TODO: Do an upsampling blit here
-                current_destination.bind();
-
-                self.upsample_program_pipeline.bind();
-                self.upsample_program_pipeline.set_texture_2d_with_id(
-                    0,
-                    current_source.texture_attachments()[0].id(),
-                    &self.linear_sampler,
-                );
-
-                StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
-
-                StateManager::front_face(FrontFace::Clockwise);
-                FULLSCREEN_MESH.draw();
-                StateManager::front_face(FrontFace::CounterClockwise);
-
-                StateManager::disable_blending();
-
-                self.upsample_program_pipeline.unbind();
-                current_destination.unbind(false);
-
-                current_source = Rc::clone(&current_destination);
-            });
-
-        self.bloom_upsample_apply_program_pipeline.bind();
-        self.bloom_upsample_apply_program_pipeline
-            .set_texture_2d_with_id(
-                0,
-                current_source.texture_attachments()[0].id(),
-                &self.linear_sampler,
-            );
-        self.bloom_upsample_apply_program_pipeline
-            .set_texture_2d_with_id(1, input.texture_attachments()[0].id(), &self.linear_sampler);
-        self.bloom_upsample_apply_program_pipeline
-            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
-        input.bind();
-
-        StateManager::front_face(FrontFace::Clockwise);
-        FULLSCREEN_MESH.draw();
-        StateManager::front_face(FrontFace::CounterClockwise);
-
-        input.unbind(false);
-        self.bloom_upsample_apply_program_pipeline.unbind();
+        let mut current_source = self.downsampling_passes(input, framebuffer_cache);
+        current_source = self.upsampling_passes(Rc::clone(&current_source));
+        self.composition_pass(&current_source, input);
     }
 }
 
@@ -278,12 +303,28 @@ impl Gui for Bloom {
                             });
                     }
 
+                    imgui::ComboBox::new(im_str!("Resolution")).build_simple(
+                        ui,
+                        &mut self.resolution_divisor_index,
+                        &self.resolution_divisors,
+                        &|&a| match a {
+                            2 => im_str!("Half").into(),
+                            4 => im_str!("Quarter").into(),
+                            _ => im_str!("").into(),
+                        },
+                    );
+
                     if imgui::Slider::new(im_str!("Iterations"))
                         .range(RangeInclusive::new(MIN_ITERATIONS, MAX_ITERATIONS))
                         .build(ui, &mut self.iterations)
                     {
                         self.blit_framebuffers = Vec::with_capacity(self.iterations as usize);
                     }
+
+                    imgui::Slider::new(im_str!("Spread"))
+                        .range(RangeInclusive::new(1.0, 10.0))
+                        .display_format(im_str!("%.2f"))
+                        .build(ui, &mut self.spread);
 
                     imgui::Slider::new(im_str!("Threshold"))
                         .range(RangeInclusive::new(MIN_THRESHOLD, MAX_THRESHOLD))
@@ -452,7 +493,7 @@ impl BloomBuilder {
 
         let mut ubo = Buffer::new(
             "Bloom UBO",
-            std::mem::size_of::<BloomUboData>() as isize,
+            std::mem::size_of::<<BloomUboData as Uniform>::Std140>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -471,9 +512,12 @@ impl BloomBuilder {
 
         Bloom {
             iterations: self.iterations,
+            spread: 1.0,
             threshold: self.threshold,
             smooth_fade: self.smooth_fade,
             intensity: self.intensity,
+            resolution_divisors: [2, 4],
+            resolution_divisor_index: 0,
             downsample_program_pipeline,
             downsample_prefilter_program_pipeline,
             upsample_program_pipeline,
