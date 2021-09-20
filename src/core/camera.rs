@@ -102,9 +102,6 @@ impl Camera {
         mouse_scroll: f32,
         dt: f32,
     ) {
-        const EPSILON: f32 = 0.00001;
-
-        // if mouse_dx < -EPSILON || mouse_dx > EPSILON || mouse_dy < -EPSILON || mouse_dy > EPSILON {
         self.pitch += mouse_dy * self.orbit_speed * dt;
 
         self.yaw += mouse_dx * self.orbit_speed * dt;
@@ -116,13 +113,10 @@ impl Camera {
         }
 
         self.pitch = clamp_scalar(self.pitch, -89.99, 89.99);
-        // }
 
-        // if mouse_scroll != 0.0 {
         let mut scroll_amount = mouse_scroll * self.zoom_speed;
         scroll_amount *= self.distance * 0.3;
         self.distance -= scroll_amount * dt;
-        // }
 
         self.distance =
             math::lerp_scalar(self.prev_distance, self.distance, dt * self.zoom_dampening);

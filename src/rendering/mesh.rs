@@ -1,7 +1,6 @@
 use gl::types::*;
 use gl_bindings as gl;
 
-use crate::rendering::state::{FrontFace, StateManager};
 use crate::{
     core::{
         asset::Asset,
@@ -260,9 +259,11 @@ pub mod utilities {
     };
 
     pub fn draw_full_screen_quad() {
+        StateManager::depth_write(false);
         StateManager::front_face(FrontFace::Clockwise);
         FULLSCREEN_MESH.draw();
         StateManager::front_face(FrontFace::CounterClockwise);
+        StateManager::depth_write(true);
     }
 
     pub fn generate_quadrilateral(dimensions: Vec3) -> Mesh {

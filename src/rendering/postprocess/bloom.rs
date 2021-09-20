@@ -1,25 +1,25 @@
 use std::any::Any;
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
-use crate::color::srgb_to_linear;
-use crate::core::math::{UVec2, Vec4};
-use crate::framebuffer::TemporaryFramebufferPool;
-use crate::imgui::{im_str, ColorFormat, Condition, Gui, Ui};
-use crate::rendering::{
-    buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
-    framebuffer::Framebuffer,
-    mesh::utilities::draw_full_screen_quad,
-    postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
-    program_pipeline::ProgramPipeline,
-    sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-    shader::{Shader, ShaderStage},
-    state::{BlendFactor, FrontFace, StateManager},
-    texture::Texture2D,
+use crate::{
+    color::srgb_to_linear,
+    core::math::{UVec2, Vec4},
+    imgui::{im_str, ColorFormat, Condition, Gui, TextureId, Ui},
+    rendering::{
+        buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
+        framebuffer::{Framebuffer, TemporaryFramebufferPool},
+        mesh::utilities::draw_full_screen_quad,
+        postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
+        program_pipeline::ProgramPipeline,
+        sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
+        shader::{Shader, ShaderStage},
+        state::{BlendFactor, StateManager},
+        texture::Texture2D,
+    },
+    Context,
 };
-use crate::{Context, Draw};
-use glsl_layout::{vec3, vec4, Uniform};
-use imgui::TextureId;
-use std::ops::RangeInclusive;
+use crevice::std140::AsStd140;
 
 const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
@@ -35,21 +35,21 @@ const MIN_LENS_DIRT_INTENSITY: f32 = 0.0;
 const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Uniform)]
+#[derive(Debug, AsStd140)]
 struct BloomUboData {
     spread: f32,
-    filter: vec4,
+    filter: mint::Vector4<f32>,
     intensity: f32,
     use_lens_dirt: i32,
     lens_dirt_intensity: f32,
-    tint: vec3,
+    tint: mint::Vector3<f32>,
 }
 
 impl Default for BloomUboData {
     fn default() -> Self {
         Self {
             spread: 0.0,
-            filter: Default::default(),
+            filter: [0.0, 0.0, 0.0, 0.0].into(),
             intensity: 0.0,
             use_lens_dirt: 0,
             lens_dirt_intensity: 0.0,
@@ -64,6 +64,7 @@ pub struct Bloom {
     threshold: f32,
     smooth_fade: f32,
     intensity: f32,
+    tint: [f32; 3],
     resolution_divisors: [u32; 2],
     resolution_divisor_index: usize,
     downsample_program_pipeline: ProgramPipeline,
@@ -97,11 +98,12 @@ impl Bloom {
             0.25 / (knee + EPSILON),
         ]
         .into();
+        self.ubo_data.tint = self.tint.into();
         self.ubo_data.intensity = self.intensity;
         self.ubo_data.use_lens_dirt = self.enable_lens_dirt as i32;
         self.ubo_data.lens_dirt_intensity = self.lens_dirt_intensity;
 
-        self.ubo.fill_mapped(0, &self.ubo_data.std140());
+        self.ubo.fill_mapped(0, &self.ubo_data.as_std140());
     }
 
     fn downsampling_passes(
@@ -328,8 +330,7 @@ impl Gui for Bloom {
                         },
                     );
 
-                    let a: &mut [f32; 3] = self.ubo_data.tint.as_mut();
-                    imgui::ColorEdit::new(im_str!("Tint"), a)
+                    imgui::ColorEdit::new(im_str!("Tint"), &mut self.tint)
                         .format(ColorFormat::Float)
                         .options(true)
                         .picker(true)
@@ -515,7 +516,7 @@ impl BloomBuilder {
 
         let mut ubo = Buffer::new(
             "Bloom UBO",
-            std::mem::size_of::<<BloomUboData as Uniform>::Std140>() as isize,
+            std::mem::size_of::<<BloomUboData as AsStd140>::Std140Type>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -538,6 +539,7 @@ impl BloomBuilder {
             threshold: self.threshold,
             smooth_fade: self.smooth_fade,
             intensity: self.intensity,
+            tint: [1.0; 3],
             resolution_divisors: [2, 4],
             resolution_divisor_index: 0,
             downsample_program_pipeline,

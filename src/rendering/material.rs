@@ -12,6 +12,7 @@ use crate::{
         texture::Texture2D,
     },
 };
+use crevice::std140::AsStd140;
 use std::{ops::RangeInclusive, path::Path, rc::Rc};
 
 const MATERIAL_UBO_BINDING_INDEX: u32 = 4;
@@ -29,9 +30,9 @@ pub trait Material: Gui {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, AsStd140)]
 struct MaterialPropertyBlock {
-    base_color: Vec4,
+    base_color: mint::Vector4<f32>,
     metallic_scale: f32,
     metallic_bias: f32,
     roughness_scale: f32,
@@ -43,7 +44,6 @@ struct MaterialPropertyBlock {
     max_pom_layers: f32,
     displacement_scale: f32,
     parallax_mapping_method: i32,
-    _pad: f32,
 }
 
 pub struct PbsMetallicRoughnessMaterial {
@@ -56,6 +56,7 @@ pub struct PbsMetallicRoughnessMaterial {
     property_block: MaterialPropertyBlock,
     program_pipeline: ProgramPipeline,
     material_ubo: Buffer,
+    parallax_mapping_method: usize,
 }
 
 impl PbsMetallicRoughnessMaterial {
@@ -66,31 +67,22 @@ impl PbsMetallicRoughnessMaterial {
         normals: Rc<Texture2D>,
         displacement: Option<Rc<Texture2D>>,
     ) -> Self {
-        let (vertex_shader, fragment_shader) = match displacement {
-            Some(_) => (
-                Shader::new(
-                    ShaderStage::Vertex,
-                    asset_path.as_ref().join("sdr/pbs_pom.vert"),
-                )
-                .unwrap(),
-                Shader::new(
-                    ShaderStage::Fragment,
-                    asset_path.as_ref().join("sdr/pbs_pom.frag"),
-                )
-                .unwrap(),
-            ),
-            None => (
-                Shader::new(
-                    ShaderStage::Vertex,
-                    asset_path.as_ref().join("sdr/pbs.vert"),
-                )
-                .unwrap(),
-                Shader::new(
-                    ShaderStage::Fragment,
-                    asset_path.as_ref().join("sdr/pbs.frag"),
-                )
-                .unwrap(),
-            ),
+        let vertex_shader = Shader::new(
+            ShaderStage::Vertex,
+            asset_path.as_ref().join("sdr/pbs.vert"),
+        )
+        .unwrap();
+        let fragment_shader = match displacement {
+            Some(_) => Shader::new(
+                ShaderStage::Fragment,
+                asset_path.as_ref().join("sdr/pbs_pom.frag"),
+            )
+            .unwrap(),
+            None => Shader::new(
+                ShaderStage::Fragment,
+                asset_path.as_ref().join("sdr/pbs.frag"),
+            )
+            .unwrap(),
         };
 
         let program_pipeline = ProgramPipeline::new()
@@ -120,7 +112,7 @@ impl PbsMetallicRoughnessMaterial {
 
         let mut material_ubo = Buffer::new(
             "MaterialPropertyBlock UBO",
-            std::mem::size_of::<MaterialPropertyBlock>() as isize,
+            std::mem::size_of::<<MaterialPropertyBlock as AsStd140>::Std140Type>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -135,7 +127,7 @@ impl PbsMetallicRoughnessMaterial {
             ibl_brdf_lut,
             sampler,
             property_block: MaterialPropertyBlock {
-                base_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                base_color: [1.0, 1.0, 1.0, 1.0].into(),
                 metallic_scale: 1.0,
                 metallic_bias: 0.0,
                 roughness_scale: 1.0,
@@ -146,11 +138,11 @@ impl PbsMetallicRoughnessMaterial {
                 min_pom_layers: 8.0,
                 max_pom_layers: 32.0,
                 displacement_scale: 0.018,
-                parallax_mapping_method: 4,
-                _pad: 0.0,
+                parallax_mapping_method: 0,
             },
             program_pipeline,
             material_ubo,
+            parallax_mapping_method: 4,
         }
     }
 
@@ -163,7 +155,8 @@ impl Material for PbsMetallicRoughnessMaterial {
     fn bind(&self) {
         self.program_pipeline.bind();
 
-        self.material_ubo.fill_mapped(0, &self.property_block);
+        self.material_ubo
+            .fill_mapped(0, &self.property_block.as_std140());
 
         self.program_pipeline
             .set_texture_2d(ALBEDO_MAP_BINDING_INDEX, &self.albedo, &self.sampler)
@@ -182,7 +175,7 @@ impl Material for PbsMetallicRoughnessMaterial {
         if let Some(displacement) = &self.displacement {
             self.program_pipeline.set_texture_2d(
                 DISPLACEMENT_MAP_BINDING_INDEX,
-                &displacement,
+                displacement,
                 &self.sampler,
             );
         }
@@ -210,7 +203,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                 ui.group(|| {
                     ui.text(im_str!("Albedo Map"));
                     imgui::Image::new((self.albedo.get_id() as usize).into(), [128.0, 128.0])
-                        .build(&ui);
+                        .build(ui);
                     ui.spacing();
 
                     let mut albedo_color: [f32; 4] = self.property_block.base_color.into();
@@ -219,7 +212,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .alpha(true)
                         .hdr(true)
                         .picker(true)
-                        .build(&ui)
+                        .build(ui)
                     {
                         self.property_block.base_color = albedo_color.into()
                     }
@@ -232,38 +225,38 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         (self.metallic_roughness_ao.get_id() as usize).into(),
                         [128.0, 128.0],
                     )
-                    .build(&ui);
+                    .build(ui);
                     ui.spacing();
                     imgui::Slider::new(im_str!("Metallic Scale"))
                         .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.property_block.metallic_scale);
+                        .build(ui, &mut self.property_block.metallic_scale);
                     imgui::Slider::new(im_str!("Metallic Bias"))
                         .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.property_block.metallic_bias);
+                        .build(ui, &mut self.property_block.metallic_bias);
                     ui.spacing();
                     imgui::Slider::new(im_str!("Roughness Scale"))
                         .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.property_block.roughness_scale);
+                        .build(ui, &mut self.property_block.roughness_scale);
                     imgui::Slider::new(im_str!("Roughness Bias"))
                         .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.property_block.roughness_bias);
+                        .build(ui, &mut self.property_block.roughness_bias);
                     ui.spacing();
                     imgui::Slider::new(im_str!("AO Scale"))
                         .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.property_block.ao_scale);
+                        .build(ui, &mut self.property_block.ao_scale);
                     imgui::Slider::new(im_str!("AO Bias"))
                         .range(RangeInclusive::new(-1.0, 1.0))
                         .display_format(im_str!("%.2f"))
-                        .build(&ui, &mut self.property_block.ao_bias);
+                        .build(ui, &mut self.property_block.ao_bias);
                     imgui::Slider::new(im_str!("Reflectance"))
                         .range(RangeInclusive::new(0.0, 1.0))
                         .display_format(im_str!("%.1f"))
-                        .build(&ui, &mut self.property_block.reflectance);
+                        .build(ui, &mut self.property_block.reflectance);
 
                     ui.spacing();
                     ui.spacing();
@@ -271,7 +264,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     ui.group(|| {
                         ui.text(im_str!("Normal Map"));
                         imgui::Image::new((self.normals.get_id() as usize).into(), [128.0, 128.0])
-                            .build(&ui);
+                            .build(ui);
                         ui.spacing();
                     });
                 });
@@ -294,10 +287,10 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .build(ui, || {
                             ui.spacing();
                             ui.group(|| {
-                                let pom_method = &mut self.property_block.parallax_mapping_method;
+                                let pom_method = &mut self.parallax_mapping_method;
                                 imgui::ComboBox::new(im_str!("Method")).build_simple_string(
                                     ui,
-                                    unsafe { &mut *(pom_method as *mut i32 as *mut usize) },
+                                    &mut self.parallax_mapping_method,
                                     &[
                                         im_str!("None"),
                                         im_str!("Parallax Mapping"),
@@ -306,6 +299,9 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                         im_str!("Parallax Occlusion Mapping"),
                                     ],
                                 );
+
+                                self.property_block.parallax_mapping_method =
+                                    self.parallax_mapping_method as i32;
 
                                 imgui::Drag::new(im_str!("Displacement Scale"))
                                     .range(RangeInclusive::new(0.001, 1.0))

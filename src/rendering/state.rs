@@ -51,6 +51,10 @@ impl StateManager {
         unsafe { gl::Viewport(x, y, width, height) }
     }
 
+    pub fn depth_write(state: bool) {
+        unsafe { gl::DepthMask(state as u8) }
+    }
+
     pub fn enable_blending() {
         unsafe { gl::Enable(gl::BLEND) }
     }

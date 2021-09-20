@@ -6,12 +6,12 @@ fn main() {
     }
 
     let paths = [
-        "**/examples/**/sdr/*.vert",
-        "**/examples/**/sdr/*.tesc",
-        "**/examples/**/sdr/*.tese",
-        "**/examples/**/sdr/*.geom",
-        "**/examples/**/sdr/*.frag",
-        "**/examples/**/sdr/*.comp",
+        "**/assets/**/sdr/*.vert",
+        "**/assets/**/sdr/*.tesc",
+        "**/assets/**/sdr/*.tese",
+        "**/assets/**/sdr/*.geom",
+        "**/assets/**/sdr/*.frag",
+        "**/assets/**/sdr/*.comp",
     ]
     .iter()
     .flat_map(|&pattern| {
@@ -23,11 +23,11 @@ fn main() {
     })
     .collect::<Vec<_>>();
 
-    println!("cargo:rerun-if-changed=examples/assets/sdr");
+    println!("cargo:rerun-if-changed=assets/sdr");
     paths.iter().for_each(|path| {
         let output_fname = path.file_name().unwrap().to_str().unwrap().to_owned() + ".spv";
         let output = Command::new("glslangValidator")
-            .current_dir("examples/assets/sdr")
+            .current_dir("assets/sdr")
             .args(&[
                 "-G",
                 "-e main",

@@ -10,8 +10,7 @@ use crate::{
         program_pipeline::ProgramPipeline,
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
-        state::{FrontFace, StateManager},
-        Draw,
+        state::StateManager,
     },
     Context,
 };

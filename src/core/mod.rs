@@ -1,7 +1,6 @@
 pub mod application;
 pub mod asset;
 pub mod camera;
-pub mod entity;
 pub mod math;
 pub mod scene;
 pub mod timer;

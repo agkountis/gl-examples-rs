@@ -7,6 +7,7 @@ use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
+use crevice::std140::AsStd140;
 use engine::{
     camera::Camera,
     color::srgb_to_linear3f,
@@ -93,16 +94,18 @@ struct Controls {
 }
 
 #[repr(C)]
+#[derive(Debug, AsStd140)]
 struct VertexPerDrawUniforms {
-    model_matrix: Mat4,
-    normal_matrix: Mat4,
+    model_matrix: mint::ColumnMatrix4<f32>,
+    normal_matrix: mint::ColumnMatrix4<f32>,
 }
 
 #[repr(C)]
+#[derive(Debug, AsStd140)]
 struct FragmentPerFrameUniforms {
-    light_direction: Vec4,
-    light_color: Vec4,
-    ss_variance_and_threshold: Vec2,
+    light_direction: mint::Vector4<f32>,
+    light_color: mint::Vector4<f32>,
+    ss_variance_and_threshold: mint::Vector2<f32>,
     geometric_specular_aa: i32,
     specular_ao: i32,
     render_mode: i32,
@@ -353,7 +356,7 @@ impl PbsScene {
 
         let mut vertex_per_draw_ubo = Buffer::new(
             "Vertex Per Draw UBO",
-            mem::size_of::<VertexPerDrawUniforms>() as isize,
+            mem::size_of::<<VertexPerDrawUniforms as AsStd140>::Std140Type>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -362,7 +365,7 @@ impl PbsScene {
 
         let mut fragment_per_frame_ubo = Buffer::new(
             "Fragment Per Frame UBO",
-            std::mem::size_of::<FragmentPerFrameUniforms>() as isize,
+            std::mem::size_of::<<FragmentPerFrameUniforms as AsStd140>::Std140Type>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -489,12 +492,12 @@ impl PbsScene {
 
     fn update_uniform_buffers(&self) {
         let vertex_per_draw_uniforms = VertexPerDrawUniforms {
-            model_matrix: self.model.transform,
-            normal_matrix: transpose(&inverse(&self.model.transform)),
+            model_matrix: self.model.transform.into(),
+            normal_matrix: transpose(&inverse(&self.model.transform)).into(),
         };
 
         self.vertex_per_draw_ubo
-            .fill_mapped(0, &vertex_per_draw_uniforms);
+            .fill_mapped(0, &vertex_per_draw_uniforms.as_std140());
 
         let mut light_color: Vec3 = srgb_to_linear3f(&self.lighting.light_color.into());
         light_color *= self.lighting.light_intensity;
@@ -505,9 +508,10 @@ impl PbsScene {
                 self.lighting.light_direction[1],
                 self.lighting.light_direction[2],
                 1.0,
-            ),
-            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 0.0),
-            ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned(),
+            )
+            .into(),
+            light_color: Vec4::new(light_color.x, light_color.y, light_color.z, 0.0).into(),
+            ss_variance_and_threshold: self.lighting.ss_variance_and_threshold.clone_owned().into(),
             geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
             specular_ao: self.lighting.specular_ao as i32,
             render_mode: self.render_mode as i32,
@@ -517,7 +521,7 @@ impl PbsScene {
         };
 
         self.fragment_per_frame_ubo
-            .fill_mapped(0, &fragment_per_frame_uniforms);
+            .fill_mapped(0, &fragment_per_frame_uniforms.as_std140());
     }
 }
 
