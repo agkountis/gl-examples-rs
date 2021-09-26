@@ -1,4 +1,4 @@
-use crate::imgui::{im_str, Condition, Gui, Ui};
+use crate::imgui::{Condition, Gui, Ui};
 use gl_bindings as gl;
 use std::ffi::CStr;
 
@@ -100,7 +100,7 @@ impl Gui for Device {
     fn gui(&mut self, ui: &Ui) {
         let info = self.info();
 
-        imgui::Window::new(im_str!("Bloom Debug"))
+        imgui::Window::new("Device Info")
             .focus_on_appearing(true)
             .bring_to_front_on_focus(true)
             .size([256.0f32, 500.0f32], Condition::Appearing)

@@ -1,4 +1,4 @@
-use crate::imgui::{im_str, Gui, Ui};
+use crate::imgui::{Gui, Ui};
 use crate::rendering::framebuffer::Framebuffer;
 use crate::rendering::shader::{Shader, ShaderStage};
 use crate::{AsAny, AsAnyMut, Context};
@@ -95,10 +95,10 @@ impl PostprocessingStack {
 
 impl Gui for PostprocessingStack {
     fn gui(&mut self, ui: &Ui) {
-        ui.checkbox(im_str!("##post_stack"), &mut self.enabled);
+        ui.checkbox("##post_stack", &mut self.enabled);
         ui.same_line_with_spacing(30.0, 3.0);
 
-        if imgui::CollapsingHeader::new(im_str!("Post-processing"))
+        if imgui::CollapsingHeader::new("Post-processing")
             .default_open(true)
             .open_on_arrow(true)
             .open_on_double_click(true)

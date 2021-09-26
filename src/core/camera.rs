@@ -1,11 +1,9 @@
-use std::ops::RangeInclusive;
-
 use glutin::dpi::PhysicalSize;
 use nalgebra_glm::{normalize, quat_normalize};
 
 use crate::core::math::{clamp_scalar, rotate_vec3, Vec4};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
-use crate::imgui::{im_str, Gui, Ui};
+use crate::imgui::{Gui, Ui};
 use crate::math::{perspective, quaternion};
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 
@@ -311,7 +309,7 @@ impl CameraBuilder {
 
 impl Gui for Camera {
     fn gui(&mut self, ui: &Ui) {
-        if imgui::CollapsingHeader::new(im_str!("Camera"))
+        if imgui::CollapsingHeader::new("Camera")
             .default_open(true)
             .open_on_arrow(true)
             .open_on_double_click(true)
@@ -319,55 +317,52 @@ impl Gui for Camera {
         {
             ui.spacing();
             ui.group(|| {
-                imgui::TreeNode::new(im_str!("Controls"))
+                imgui::TreeNode::new("Controls")
                     .default_open(true)
                     .open_on_arrow(true)
                     .open_on_double_click(true)
                     .framed(false)
                     .build(ui, || {
-                        imgui::TreeNode::new(im_str!("Lens"))
+                        imgui::TreeNode::new("Lens")
                             .default_open(true)
                             .open_on_arrow(true)
                             .open_on_double_click(true)
                             .framed(false)
                             .build(ui, || {
                                 let mut aperture = self.aperture;
-                                if imgui::Slider::new(im_str!("Aperture (f-stop)"))
-                                    .range(RangeInclusive::new(32.0, 1.4))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Aperture (f-stop)", 32.0, 1.4)
+                                    .display_format("%.2f")
                                     .build(ui, &mut aperture)
                                 {
                                     self.aperture = aperture;
                                 }
 
                                 let mut shutter_speed = self.shutter_speed;
-                                if imgui::Slider::new(im_str!("Shutter Speed (s)"))
-                                    .range(RangeInclusive::new(0.00025, 30.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Shutter Speed (s)", 0.00025, 30.0)
+                                    .display_format("%.2f")
                                     .build(ui, &mut shutter_speed)
                                 {
                                     self.shutter_speed = shutter_speed;
                                 }
 
                                 let mut sensitivity = self.sensitivity;
-                                if imgui::Slider::new(im_str!("Sensitivity (ISO)"))
-                                    .range(RangeInclusive::new(200.0, 1600.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Sensitivity (ISO)", 200.0, 1600.0)
+                                    .display_format("%.2f")
                                     .build(ui, &mut sensitivity)
                                 {
                                     self.sensitivity = sensitivity;
                                 }
                             });
 
-                        imgui::TreeNode::new(im_str!("Projection"))
+                        imgui::TreeNode::new("Projection")
                             .default_open(true)
                             .open_on_arrow(true)
                             .open_on_double_click(true)
                             .framed(false)
                             .build(ui, || {
                                 let mut fov = self.fov_deg;
-                                if imgui::Drag::new(im_str!("Field of View"))
-                                    .range(RangeInclusive::new(1u32, 180u32))
+                                if imgui::Drag::new("Field of View")
+                                    .range(1u32, 180u32)
                                     .speed(1.0)
                                     .build(ui, &mut fov)
                                 {
@@ -375,9 +370,9 @@ impl Gui for Camera {
                                 }
 
                                 let mut near_plane = self.near_plane;
-                                if imgui::Drag::new(im_str!("Near Plane"))
-                                    .range(RangeInclusive::new(0.5, 5000.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Drag::new("Near Plane")
+                                    .range(0.5, 5000.0)
+                                    .display_format("%.2f")
                                     .speed(0.5)
                                     .build(&ui, &mut near_plane)
                                 {
@@ -385,9 +380,9 @@ impl Gui for Camera {
                                 }
 
                                 let mut far_plane = self.far_plane;
-                                if imgui::Drag::new(im_str!("Far Plane"))
-                                    .range(RangeInclusive::new(0.5, 5000.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Drag::new("Far Plane")
+                                    .range(0.5, 5000.0)
+                                    .display_format("%.2f")
                                     .speed(0.5)
                                     .build(&ui, &mut far_plane)
                                 {
@@ -395,43 +390,39 @@ impl Gui for Camera {
                                 }
                             });
 
-                        imgui::TreeNode::new(im_str!("Movement"))
+                        imgui::TreeNode::new("Movement")
                             .default_open(true)
                             .open_on_arrow(true)
                             .open_on_double_click(true)
                             .framed(false)
                             .build(ui, || {
                                 let mut orbit_speed = self.orbit_speed;
-                                if imgui::Slider::new(im_str!("Orbit Speed"))
-                                    .range(RangeInclusive::new(1.0, 10.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Orbit Speed", 1.0, 10.0)
+                                    .display_format("%.2f")
                                     .build(&ui, &mut orbit_speed)
                                 {
                                     self.set_orbit_speed(orbit_speed)
                                 }
 
                                 let mut orbit_dampening = self.orbit_dampening();
-                                if imgui::Slider::new(im_str!("Orbit Dampening"))
-                                    .range(RangeInclusive::new(1.0, 10.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Orbit Dampening", 1.0, 10.0)
+                                    .display_format("%.2f")
                                     .build(&ui, &mut orbit_dampening)
                                 {
                                     self.set_orbit_dampening(orbit_dampening)
                                 }
 
                                 let mut zoom_speed = self.zoom_speed();
-                                if imgui::Slider::new(im_str!("Zoom Speed"))
-                                    .range(RangeInclusive::new(1.0, 40.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Zoom Speed", 1.0, 40.0)
+                                    .display_format("%.2f")
                                     .build(&ui, &mut zoom_speed)
                                 {
                                     self.set_zoom_speed(zoom_speed)
                                 }
 
                                 let mut zoom_dampening = self.zoom_dampening();
-                                if imgui::Slider::new(im_str!("Zoom Dampening"))
-                                    .range(RangeInclusive::new(0.1, 10.0))
-                                    .display_format(im_str!("%.2f"))
+                                if imgui::Slider::new("Zoom Dampening", 0.1, 10.0)
+                                    .display_format("%.2f")
                                     .build(&ui, &mut zoom_dampening)
                                 {
                                     self.set_zoom_dampening(zoom_dampening)

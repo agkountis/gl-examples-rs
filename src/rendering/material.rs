@@ -4,7 +4,7 @@ use crate::rendering::texture::Texture2DLoadConfig;
 use crate::sampler::Anisotropy;
 use crate::{
     core::math::Vec4,
-    imgui::{im_str, ColorFormat, Gui, Ui},
+    imgui::{ColorFormat, Gui, Ui},
     rendering::{
         program_pipeline::ProgramPipeline,
         sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use crevice::std140::AsStd140;
-use std::{ops::RangeInclusive, path::Path, rc::Rc};
+use std::{path::Path, rc::Rc};
 
 const MATERIAL_UBO_BINDING_INDEX: u32 = 4;
 const ALBEDO_MAP_BINDING_INDEX: u32 = 0;
@@ -192,7 +192,7 @@ impl Material for PbsMetallicRoughnessMaterial {
 
 impl Gui for PbsMetallicRoughnessMaterial {
     fn gui(&mut self, ui: &Ui) {
-        if imgui::CollapsingHeader::new(im_str!("Material"))
+        if imgui::CollapsingHeader::new("Material")
             .default_open(true)
             .open_on_arrow(true)
             .open_on_double_click(true)
@@ -201,13 +201,13 @@ impl Gui for PbsMetallicRoughnessMaterial {
             ui.spacing();
             ui.group(|| {
                 ui.group(|| {
-                    ui.text(im_str!("Albedo Map"));
+                    ui.text("Albedo Map");
                     imgui::Image::new((self.albedo.get_id() as usize).into(), [128.0, 128.0])
                         .build(ui);
                     ui.spacing();
 
                     let mut albedo_color: [f32; 4] = self.property_block.base_color.into();
-                    if imgui::ColorEdit::new(im_str!("Base Color"), &mut albedo_color)
+                    if imgui::ColorEdit::new("Base Color", &mut albedo_color)
                         .format(ColorFormat::Float)
                         .alpha(true)
                         .hdr(true)
@@ -220,49 +220,42 @@ impl Gui for PbsMetallicRoughnessMaterial {
                 ui.spacing();
                 ui.spacing();
                 ui.group(|| {
-                    ui.text(im_str!("Metallic/Roughness/Ao Map"));
+                    ui.text("Metallic/Roughness/Ao Map");
                     imgui::Image::new(
                         (self.metallic_roughness_ao.get_id() as usize).into(),
                         [128.0, 128.0],
                     )
                     .build(ui);
                     ui.spacing();
-                    imgui::Slider::new(im_str!("Metallic Scale"))
-                        .range(RangeInclusive::new(0.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Metallic Scale", 0.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.property_block.metallic_scale);
-                    imgui::Slider::new(im_str!("Metallic Bias"))
-                        .range(RangeInclusive::new(-1.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Metallic Bias", -1.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.property_block.metallic_bias);
                     ui.spacing();
-                    imgui::Slider::new(im_str!("Roughness Scale"))
-                        .range(RangeInclusive::new(0.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Roughness Scale", 0.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.property_block.roughness_scale);
-                    imgui::Slider::new(im_str!("Roughness Bias"))
-                        .range(RangeInclusive::new(-1.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Roughness Bias", -1.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.property_block.roughness_bias);
                     ui.spacing();
-                    imgui::Slider::new(im_str!("AO Scale"))
-                        .range(RangeInclusive::new(0.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("AO Scale", 0.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.property_block.ao_scale);
-                    imgui::Slider::new(im_str!("AO Bias"))
-                        .range(RangeInclusive::new(-1.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("AO Bias", -1.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.property_block.ao_bias);
-                    imgui::Slider::new(im_str!("Reflectance"))
-                        .range(RangeInclusive::new(0.0, 1.0))
-                        .display_format(im_str!("%.1f"))
+                    imgui::Slider::new("Reflectance", 0.0, 1.0)
+                        .display_format("%.1f")
                         .build(ui, &mut self.property_block.reflectance);
 
                     ui.spacing();
                     ui.spacing();
 
                     ui.group(|| {
-                        ui.text(im_str!("Normal Map"));
+                        ui.text("Normal Map");
                         imgui::Image::new((self.normals.get_id() as usize).into(), [128.0, 128.0])
                             .build(ui);
                         ui.spacing();
@@ -273,12 +266,12 @@ impl Gui for PbsMetallicRoughnessMaterial {
                     ui.spacing();
                     ui.spacing();
 
-                    ui.text(im_str!("Displacement Map"));
+                    ui.text("Displacement Map");
                     imgui::Image::new((displacement.get_id() as usize).into(), [128.0, 128.0])
                         .build(&ui);
                     ui.spacing();
 
-                    imgui::TreeNode::new(im_str!("Parallax Mapping"))
+                    imgui::TreeNode::new("Parallax Mapping")
                         .default_open(true)
                         .open_on_arrow(true)
                         .open_on_double_click(true)
@@ -287,40 +280,37 @@ impl Gui for PbsMetallicRoughnessMaterial {
                         .build(ui, || {
                             ui.spacing();
                             ui.group(|| {
-                                let pom_method = &mut self.parallax_mapping_method;
-                                imgui::ComboBox::new(im_str!("Method")).build_simple_string(
-                                    ui,
+                                ui.combo_simple_string(
+                                    "Method",
                                     &mut self.parallax_mapping_method,
                                     &[
-                                        im_str!("None"),
-                                        im_str!("Parallax Mapping"),
-                                        im_str!("Parallax Mapping + Offset Limiting"),
-                                        im_str!("Steep Parallax Mapping"),
-                                        im_str!("Parallax Occlusion Mapping"),
+                                        "None",
+                                        "Parallax Mapping",
+                                        "Parallax Mapping + Offset Limiting",
+                                        "Steep Parallax Mapping",
+                                        "Parallax Occlusion Mapping",
                                     ],
                                 );
 
                                 self.property_block.parallax_mapping_method =
                                     self.parallax_mapping_method as i32;
 
-                                imgui::Drag::new(im_str!("Displacement Scale"))
-                                    .range(RangeInclusive::new(0.001, 1.0))
+                                imgui::Drag::new("Displacement Scale")
+                                    .range(0.001, 1.0)
                                     .speed(0.001)
-                                    .display_format(im_str!("%.3f"))
+                                    .display_format("%.3f")
                                     .build(&ui, &mut self.property_block.displacement_scale);
 
                                 if ui.is_item_hovered() {
-                                    ui.tooltip_text(im_str!(
-                                        "Drag left/right or double click to edit"
-                                    ));
+                                    ui.tooltip_text("Drag left/right or double click to edit");
                                 }
 
                                 if self.property_block.parallax_mapping_method == 3
                                     || self.property_block.parallax_mapping_method == 4
                                 {
-                                    imgui::DragRange::new(im_str!("Min/Max Layers"))
-                                        .range(RangeInclusive::new(1.0, 256.0))
-                                        .display_format(im_str!("%.0f"))
+                                    imgui::DragRange::new("Min/Max Layers")
+                                        .range(1.0, 256.0)
+                                        .display_format("%.0f")
                                         .build(
                                             &ui,
                                             &mut self.property_block.min_pom_layers,

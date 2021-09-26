@@ -677,7 +677,7 @@ impl Scene for PbsScene {
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
-        imgui::Window::new(im_str!("Inspector"))
+        imgui::Window::new("Inspector")
             .size([358.0, 500.0], Condition::Appearing)
             .position([2.0, 0.0], Condition::Appearing)
             .mouse_inputs(true)
@@ -686,27 +686,27 @@ impl Scene for PbsScene {
             .build(ui, || {
                 ui.dummy([358.0, 0.0]);
 
-                imgui::ComboBox::new(im_str!("Render Mode")).build_simple_string(
-                    ui,
+                ui.combo_simple_string(
+                    "Render Mode",
                     &mut self.render_mode,
                     &[
-                        im_str!("Lit"),
-                        im_str!("Albedo"),
-                        im_str!("Metallic"),
-                        im_str!("Roughness"),
-                        im_str!("Normals"),
-                        im_str!("Tangents"),
-                        im_str!("UV"),
-                        im_str!("NdotV"),
-                        im_str!("AO"),
-                        im_str!("Specular AO"),
-                        im_str!("Horizon Specular AO"),
-                        im_str!("Diffuse Ambient"),
-                        im_str!("Specular Ambient"),
-                        im_str!("Fresnel"),
-                        im_str!("Fresnel * Radiance"),
-                        im_str!("Analytical Lights Only"),
-                        im_str!("IBL only"),
+                        "Lit",
+                        "Albedo",
+                        "Metallic",
+                        "Roughness",
+                        "Normals",
+                        "Tangents",
+                        "UV",
+                        "NdotV",
+                        "AO",
+                        "Specular AO",
+                        "Horizon Specular AO",
+                        "Diffuse Ambient",
+                        "Specular Ambient",
+                        "Fresnel",
+                        "Fresnel * Radiance",
+                        "Analytical Lights Only",
+                        "IBL only",
                     ],
                 );
 
@@ -718,33 +718,33 @@ impl Scene for PbsScene {
                 ui.spacing();
 
                 // Lighting
-                if imgui::CollapsingHeader::new(im_str!("Lighting"))
+                if imgui::CollapsingHeader::new("Lighting")
                     .default_open(true)
                     .open_on_arrow(true)
                     .open_on_double_click(true)
                     .build(ui)
                 {
                     ui.spacing();
-                    imgui::TreeNode::new(im_str!("Analytical"))
+                    imgui::TreeNode::new("Analytical")
                         .default_open(true)
                         .open_on_arrow(true)
                         .open_on_double_click(true)
                         .framed(false)
                         .build(ui, || {
-                            imgui::TreeNode::new(im_str!("Directional Light"))
+                            imgui::TreeNode::new("Directional Light")
                                 .default_open(true)
                                 .open_on_arrow(true)
                                 .open_on_double_click(true)
                                 .framed(false)
                                 .build(ui, || {
-                                    imgui::Drag::new(im_str!("Light Direction"))
-                                        .range(RangeInclusive::new(-1.0, 1.0))
-                                        .display_format(im_str!("%.2f"))
+                                    imgui::Drag::new("Light Direction")
+                                        .range(-1.0, 1.0)
+                                        .display_format("%.2f")
                                         .speed(0.01)
                                         .build_array(ui, &mut self.lighting.light_direction);
 
                                     imgui::ColorEdit::new(
-                                        im_str!("Light Color"),
+                                        "Light Color",
                                         &mut self.lighting.light_color,
                                     )
                                     .format(ColorFormat::Float)
@@ -753,53 +753,50 @@ impl Scene for PbsScene {
                                     .alpha(false)
                                     .build(ui);
 
-                                    imgui::Slider::new(im_str!("Light Intensity"))
-                                        .range(RangeInclusive::new(0.01, 300.0))
-                                        .display_format(im_str!("%.1f"))
+                                    imgui::Slider::new("Light Intensity", 0.01, 300.0)
+                                        .display_format("%.1f")
                                         .build(ui, &mut self.lighting.light_intensity);
                                 });
 
-                            imgui::TreeNode::new(im_str!("BRDF"))
+                            imgui::TreeNode::new("BRDF")
                                 .default_open(true)
                                 .open_on_arrow(true)
                                 .open_on_double_click(true)
                                 .framed(false)
                                 .build(ui, || {
-                                    imgui::ComboBox::new(im_str!("BRDF Type")).build_simple_string(
-                                        ui,
+                                    ui.combo_simple_string(
+                                        "BRDF Type",
                                         &mut self.lighting.brdf_type,
-                                        &[im_str!("Fillament"), im_str!("Unreal Engine 4")],
+                                        &["Fillament", "Unreal Engine 4"],
                                     );
 
                                     if self.lighting.brdf_type == 0 {
                                         ui.checkbox(
-                                            im_str!("Multi-Scattering"),
+                                            "Multi-Scattering",
                                             &mut self.lighting.multi_scattering,
                                         );
                                     }
 
                                     ui.checkbox(
-                                        im_str!("##geomspecaa"),
+                                        "##geomspecaa",
                                         &mut self.lighting.geometric_specular_aa,
                                     );
-                                    ui.same_line(72.0);
-                                    imgui::TreeNode::new(im_str!("Geometric Specular AA"))
+                                    ui.same_line_with_pos(72.0);
+                                    imgui::TreeNode::new("Geometric Specular AA")
                                         .default_open(true)
                                         .open_on_arrow(true)
                                         .open_on_double_click(true)
                                         .framed(false)
                                         .build(ui, || {
                                             ui.indent();
-                                            imgui::Slider::new(im_str!("Screen Space Variance"))
-                                                .range(RangeInclusive::new(0.01, 1.0))
-                                                .display_format(im_str!("%.2f"))
+                                            imgui::Slider::new("Screen Space Variance", 0.01, 1.0)
+                                                .display_format("%.2f")
                                                 .build(
                                                     &ui,
                                                     &mut self.lighting.ss_variance_and_threshold.x,
                                                 );
-                                            imgui::Slider::new(im_str!("Threshold"))
-                                                .range(RangeInclusive::new(0.01, 1.0))
-                                                .display_format(im_str!("%.2f"))
+                                            imgui::Slider::new("Threshold", 0.01, 1.0)
+                                                .display_format("%.2f")
                                                 .build(
                                                     &ui,
                                                     &mut self.lighting.ss_variance_and_threshold.y,
@@ -809,50 +806,45 @@ impl Scene for PbsScene {
                                 });
                         });
 
-                    imgui::TreeNode::new(im_str!("Image-Based"))
+                    imgui::TreeNode::new("Image-Based")
                         .default_open(true)
                         .open_on_arrow(true)
                         .open_on_double_click(true)
                         .framed(false)
                         .build(ui, || {
-                            ui.checkbox(im_str!("Specular AO"), &mut self.lighting.specular_ao);
+                            ui.checkbox("Specular AO", &mut self.lighting.specular_ao);
 
-                            imgui::ComboBox::new(im_str!("Environment")).build_simple_string(
-                                ui,
+                            ui.combo_simple_string(
+                                "Environment",
                                 &mut self.environment.active_environment,
-                                &[im_str!("Exterior"), im_str!("Interior")],
+                                &["Exterior", "Interior"],
                             );
 
                             let skybox_type_ref = unsafe {
                                 &mut *(&mut self.environment.skybox_type as *mut SkyboxType
                                     as *mut usize)
                             };
-                            imgui::ComboBox::new(im_str!("Skybox")).build_simple_string(
-                                ui,
+                            ui.combo_simple_string(
+                                "Skybox",
                                 skybox_type_ref,
-                                &[
-                                    im_str!("Original"),
-                                    im_str!("Radiance"),
-                                    im_str!("Irradiance"),
-                                ],
+                                &["Original", "Radiance", "Irradiance"],
                             );
 
-                            imgui::Slider::new(im_str!("Max reflection LOD"))
-                                .range(RangeInclusive::new(1, 9))
+                            imgui::Slider::new("Max reflection LOD", 1, 9)
                                 .build(&ui, &mut self.lighting.max_reflection_lod);
                         });
                 }
 
-                if imgui::CollapsingHeader::new(im_str!("Anti-Aliasing"))
+                if imgui::CollapsingHeader::new("Anti-Aliasing")
                     .default_open(true)
                     .open_on_arrow(true)
                     .open_on_double_click(true)
                     .build(ui)
                 {
-                    imgui::ComboBox::new(im_str!("MSAA")).build_simple_string(
-                        ui,
+                    ui.combo_simple_string(
+                        "MSAA",
                         &mut self.msaa_framebuffer_index,
-                        &[im_str!("X1"), im_str!("X2"), im_str!("X4"), im_str!("X8")],
+                        &["X1", "X2", "X4", "X8"],
                     );
                 }
 

@@ -1,7 +1,7 @@
 use crate::{
     core::application::clear_default_framebuffer,
     framebuffer::Framebuffer,
-    imgui::{im_str, Gui, Ui},
+    imgui::{Gui, Ui},
     math::Vec4,
     mesh::utilities::draw_full_screen_quad,
     rendering::{
@@ -15,7 +15,7 @@ use crate::{
     Context,
 };
 
-use std::{any::Any, ops::RangeInclusive};
+use std::any::Any;
 
 #[repr(C)]
 struct ToneMappingPerFrameUniforms {
@@ -141,30 +141,29 @@ impl Default for ToneMapper {
 
 impl Gui for ToneMapper {
     fn gui(&mut self, ui: &Ui) {
-        imgui::TreeNode::new(im_str!("Tone Mapping"))
+        imgui::TreeNode::new("Tone Mapping")
             .default_open(true)
             .open_on_arrow(true)
             .open_on_double_click(true)
             .build(ui, || {
                 ui.spacing();
-                imgui::ComboBox::new(im_str!("Operator")).build_simple_string(
-                    &ui,
+                ui.combo_simple_string(
+                    "Operator",
                     &mut self.operator,
                     &[
-                        im_str!("ACESFitted"),
-                        im_str!("ACESFilmic"),
-                        im_str!("Reinhard"),
-                        im_str!("Luma-Based Reinhard"),
-                        im_str!("White-Preserving Luma-Based Reinhard"),
-                        im_str!("Uncharted 2"),
-                        im_str!("RomBinDaHouse"),
+                        "ACESFitted",
+                        "ACESFilmic",
+                        "Reinhard",
+                        "Luma-Based Reinhard",
+                        "White-Preserving Luma-Based Reinhard",
+                        "Uncharted 2",
+                        "RomBinDaHouse",
                     ],
                 );
 
                 if self.operator == 4 {
-                    imgui::Slider::new(im_str!("White Threshold"))
-                        .range(RangeInclusive::new(0.3, 30.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("White Threshold", 0.3, 30.0)
+                        .display_format("%.2f")
                         .build(&ui, &mut self.white_threshold);
                 }
 

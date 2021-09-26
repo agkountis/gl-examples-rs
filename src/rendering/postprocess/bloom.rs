@@ -1,11 +1,10 @@
 use std::any::Any;
-use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use crate::{
     color::srgb_to_linear,
     core::math::{UVec2, Vec4},
-    imgui::{im_str, ColorFormat, Condition, Gui, TextureId, Ui},
+    imgui::{ColorFormat, Condition, Gui, TextureId, Ui},
     rendering::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
         framebuffer::{Framebuffer, TemporaryFramebufferPool},
@@ -276,9 +275,9 @@ impl PostprocessingEffect for Bloom {
 impl Gui for Bloom {
     fn gui(&mut self, ui: &Ui) {
         ui.group(|| {
-            ui.checkbox(im_str!("##bloom"), &mut self.enabled);
-            ui.same_line(20.0);
-            imgui::TreeNode::new(im_str!("Bloom"))
+            ui.checkbox("##bloom", &mut self.enabled);
+            ui.same_line_with_pos(20.0);
+            imgui::TreeNode::new("Bloom")
                 .default_open(true)
                 .open_on_arrow(true)
                 .open_on_double_click(true)
@@ -286,10 +285,10 @@ impl Gui for Bloom {
                 .build(ui, || {
                     ui.indent();
 
-                    ui.checkbox(im_str!("Show debug window"), &mut self.show_debug_window);
+                    ui.checkbox("Show debug window", &mut self.show_debug_window);
 
                     if self.show_debug_window {
-                        imgui::Window::new(im_str!("Bloom Debug"))
+                        imgui::Window::new("Bloom Debug")
                             .focus_on_appearing(true)
                             .bring_to_front_on_focus(true)
                             .size([256.0f32, 500.0f32], Condition::Appearing)
@@ -319,65 +318,70 @@ impl Gui for Bloom {
                             });
                     }
 
-                    imgui::ComboBox::new(im_str!("Resolution")).build_simple(
-                        ui,
+                    ui.combo(
+                        "Resolution",
                         &mut self.resolution_divisor_index,
                         &self.resolution_divisors,
-                        &|&a| match a {
-                            2 => im_str!("Half").into(),
-                            4 => im_str!("Quarter").into(),
-                            _ => im_str!("").into(),
+                        |&a| match a {
+                            2 => "Half".into(),
+                            4 => "Quarter".into(),
+                            _ => "".into(),
                         },
                     );
 
-                    imgui::ColorEdit::new(im_str!("Tint"), &mut self.tint)
+                    // imgui::ComboBox::new("Resolution").build_simple(
+                    //     ui,
+                    //     &mut self.resolution_divisor_index,
+                    //     &self.resolution_divisors,
+                    //     &|&a| match a {
+                    //         2 => "Half",
+                    //         4 => "Quarter",
+                    //         _ => "",
+                    //     },
+                    // );
+
+                    imgui::ColorEdit::new("Tint", &mut self.tint)
                         .format(ColorFormat::Float)
                         .options(true)
                         .picker(true)
                         .alpha(false)
                         .build(ui);
 
-                    if imgui::Slider::new(im_str!("Iterations"))
-                        .range(RangeInclusive::new(MIN_ITERATIONS, MAX_ITERATIONS))
+                    if imgui::Slider::new("Iterations", MIN_ITERATIONS, MAX_ITERATIONS)
                         .build(ui, &mut self.iterations)
                     {
                         self.blit_framebuffers = Vec::with_capacity(self.iterations as usize);
                     }
 
-                    imgui::Slider::new(im_str!("Spread"))
-                        .range(RangeInclusive::new(1.0, 10.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Spread", 1.0, 10.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.spread);
 
-                    imgui::Slider::new(im_str!("Threshold"))
-                        .range(RangeInclusive::new(MIN_THRESHOLD, MAX_THRESHOLD))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Threshold", MIN_THRESHOLD, MAX_THRESHOLD)
+                        .display_format("%.2f")
                         .build(ui, &mut self.threshold);
 
-                    imgui::Slider::new(im_str!("Smooth Fade"))
-                        .range(RangeInclusive::new(MIN_SMOOTH_FADE, MAX_SMOOTH_FADE))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Smooth Fade", MIN_SMOOTH_FADE, MAX_SMOOTH_FADE)
+                        .display_format("%.2f")
                         .build(ui, &mut self.smooth_fade);
 
-                    imgui::Slider::new(im_str!("Intensity"))
-                        .range(RangeInclusive::new(MIN_INTENSITY, MAX_INTENSITY))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Intensity", MIN_INTENSITY, MAX_INTENSITY)
+                        .display_format("%.2f")
                         .build(ui, &mut self.intensity);
 
-                    imgui::Slider::new(im_str!("Anamorphic Stretch"))
-                        .range(RangeInclusive::new(0.0, 1.0))
-                        .display_format(im_str!("%.2f"))
+                    imgui::Slider::new("Anamorphic Stretch", 0.0, 1.0)
+                        .display_format("%.2f")
                         .build(ui, &mut self.anamorphic_stretch);
 
-                    ui.checkbox(im_str!("Lens Dirt"), &mut self.enable_lens_dirt);
+                    ui.checkbox("Lens Dirt", &mut self.enable_lens_dirt);
                     if self.enable_lens_dirt {
-                        imgui::Slider::new(im_str!("Lens Dirt Intensity"))
-                            .range(RangeInclusive::new(
-                                MIN_LENS_DIRT_INTENSITY,
-                                MAX_LENS_DIRT_INTENSITY,
-                            ))
-                            .display_format(im_str!("%.2f"))
-                            .build(ui, &mut self.lens_dirt_intensity);
+                        imgui::Slider::new(
+                            "Lens Dirt Intensity",
+                            MIN_LENS_DIRT_INTENSITY,
+                            MAX_LENS_DIRT_INTENSITY,
+                        )
+                        .display_format("%.2f")
+                        .build(ui, &mut self.lens_dirt_intensity);
 
                         ui.text("Lens Dirt Map");
                         let tex_id = self.lens_dirt.get_id();
