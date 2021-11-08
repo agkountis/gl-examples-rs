@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::{
     core::application::clear_default_framebuffer,
     framebuffer::Framebuffer,
@@ -7,15 +9,14 @@ use crate::{
     rendering::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
         postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
-        program_pipeline::ProgramPipeline,
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-        shader::{Shader, ShaderStage},
+        shader::{Shader, ShaderBuilder, ShaderStage},
         state::StateManager,
     },
     Context,
 };
 
-use std::any::Any;
+const TONEMAPPER_FRAGMENT_SHADER_PATH: &str = "src/rendering/postprocess/shaders/tonemap.frag";
 
 #[repr(C)]
 struct ToneMappingPerFrameUniforms {
@@ -26,7 +27,7 @@ struct ToneMappingPerFrameUniforms {
 }
 
 pub struct ToneMapper {
-    pipeline: ProgramPipeline,
+    shader: Shader,
     tone_mapper_ubo: Buffer,
     sampler_nearest: Sampler,
     operator: usize,
@@ -39,17 +40,10 @@ impl_as_any!(ToneMapper);
 
 impl ToneMapper {
     pub fn new() -> Self {
-        let pipeline = ProgramPipeline::new()
-            .add_shader(&FULLSCREEN_VERTEX_SHADER)
-            .add_shader(
-                &Shader::new(
-                    ShaderStage::Fragment,
-                    "src/rendering/postprocess/shaders/tonemap.frag",
-                )
-                .unwrap(),
-            )
-            .build()
-            .unwrap();
+        let shader = ShaderBuilder::new("ToneMapping Shader")
+            .with_module(&FULLSCREEN_VERTEX_SHADER)
+            .with_stage(ShaderStage::Fragment, TONEMAPPER_FRAGMENT_SHADER_PATH)
+            .build();
 
         let mut tone_mapper_ubo = Buffer::new(
             "Tonemapping Fragment UBO",
@@ -71,7 +65,7 @@ impl ToneMapper {
         );
 
         ToneMapper {
-            pipeline,
+            shader: shader,
             tone_mapper_ubo,
             sampler_nearest,
             operator: 0,
@@ -110,7 +104,7 @@ impl PostprocessingEffect for ToneMapper {
 
         StateManager::viewport(0, 0, width as i32, height as i32);
 
-        self.pipeline.bind();
+        self.shader.bind();
 
         let tone_mapping_uniforms = ToneMappingPerFrameUniforms {
             operator: self.operator as i32,
@@ -121,7 +115,7 @@ impl PostprocessingEffect for ToneMapper {
 
         self.tone_mapper_ubo.fill_mapped(0, &tone_mapping_uniforms);
 
-        self.pipeline.set_texture_2d_with_id(
+        self.shader.set_texture_2d_with_id(
             0,
             input.texture_attachment(0).id(),
             &self.sampler_nearest,
@@ -129,7 +123,7 @@ impl PostprocessingEffect for ToneMapper {
 
         draw_full_screen_quad();
 
-        self.pipeline.unbind()
+        self.shader.unbind()
     }
 }
 
@@ -164,7 +158,7 @@ impl Gui for ToneMapper {
                 if self.operator == 4 {
                     imgui::Slider::new("White Threshold", 0.3, 30.0)
                         .display_format("%.2f")
-                        .build(&ui, &mut self.white_threshold);
+                        .build(ui, &mut self.white_threshold);
                 }
 
                 ui.new_line()

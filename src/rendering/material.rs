@@ -1,19 +1,21 @@
+use std::{path::Path, rc::Rc};
+
+use crevice::std140::AsStd140;
+
 use crate::core::asset::Asset;
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 use crate::rendering::texture::Texture2DLoadConfig;
 use crate::sampler::Anisotropy;
+use crate::shader::ShaderBuilder;
 use crate::{
     core::math::Vec4,
     imgui::{ColorFormat, Gui, Ui},
     rendering::{
-        program_pipeline::ProgramPipeline,
         sampler::{MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
         texture::Texture2D,
     },
 };
-use crevice::std140::AsStd140;
-use std::{path::Path, rc::Rc};
 
 const MATERIAL_UBO_BINDING_INDEX: u32 = 4;
 const ALBEDO_MAP_BINDING_INDEX: u32 = 0;
@@ -26,7 +28,8 @@ const DISPLACEMENT_MAP_BINDING_INDEX: u32 = 6;
 pub trait Material: Gui {
     fn bind(&self);
     fn unbind(&self);
-    fn program_pipeline(&self) -> &ProgramPipeline;
+    fn shader(&self) -> &Shader;
+    fn shader_mut(&mut self) -> &mut Shader;
 }
 
 #[repr(C)]
@@ -54,7 +57,7 @@ pub struct PbsMetallicRoughnessMaterial {
     ibl_brdf_lut: Texture2D,
     sampler: Sampler,
     property_block: MaterialPropertyBlock,
-    program_pipeline: ProgramPipeline,
+    shader: Shader,
     material_ubo: Buffer,
     parallax_mapping_method: usize,
 }
@@ -67,29 +70,21 @@ impl PbsMetallicRoughnessMaterial {
         normals: Rc<Texture2D>,
         displacement: Option<Rc<Texture2D>>,
     ) -> Self {
-        let vertex_shader = Shader::new(
-            ShaderStage::Vertex,
-            asset_path.as_ref().join("sdr/pbs.vert"),
-        )
-        .unwrap();
-        let fragment_shader = match displacement {
-            Some(_) => Shader::new(
-                ShaderStage::Fragment,
-                asset_path.as_ref().join("sdr/pbs_pom.frag"),
+        let mut shader = ShaderBuilder::new("PBS Shader")
+            .with_stage(
+                ShaderStage::Vertex,
+                asset_path.as_ref().join("sdr/pbs.vert"),
             )
-            .unwrap(),
-            None => Shader::new(
+            .with_stage(
                 ShaderStage::Fragment,
                 asset_path.as_ref().join("sdr/pbs.frag"),
             )
-            .unwrap(),
-        };
+            .with_keyword_set(&["_", "FEATURE_PARALLAX_MAPPING"])
+            .build();
 
-        let program_pipeline = ProgramPipeline::new()
-            .add_shader(&vertex_shader)
-            .add_shader(&fragment_shader)
-            .build()
-            .unwrap();
+        if displacement.is_some() {
+            shader.enable_keyword("FEATURE_PARALLAX_MAPPING")
+        }
 
         let sampler = Sampler::new(
             MinificationFilter::LinearMipmapLinear,
@@ -140,25 +135,21 @@ impl PbsMetallicRoughnessMaterial {
                 displacement_scale: 0.018,
                 parallax_mapping_method: 0,
             },
-            program_pipeline,
+            shader,
             material_ubo,
             parallax_mapping_method: 4,
         }
-    }
-
-    pub fn set_program_pipeline(&mut self, program_pipeline: ProgramPipeline) {
-        self.program_pipeline = program_pipeline
     }
 }
 
 impl Material for PbsMetallicRoughnessMaterial {
     fn bind(&self) {
-        self.program_pipeline.bind();
+        self.shader.bind();
 
         self.material_ubo
             .fill_mapped(0, &self.property_block.as_std140());
 
-        self.program_pipeline
+        self.shader
             .set_texture_2d(ALBEDO_MAP_BINDING_INDEX, &self.albedo, &self.sampler)
             .set_texture_2d(
                 M_R_AO_MAP_BINDING_INDEX,
@@ -173,20 +164,21 @@ impl Material for PbsMetallicRoughnessMaterial {
             );
 
         if let Some(displacement) = &self.displacement {
-            self.program_pipeline.set_texture_2d(
-                DISPLACEMENT_MAP_BINDING_INDEX,
-                displacement,
-                &self.sampler,
-            );
+            self.shader
+                .set_texture_2d(DISPLACEMENT_MAP_BINDING_INDEX, displacement, &self.sampler);
         }
     }
 
     fn unbind(&self) {
-        self.program_pipeline.unbind();
+        self.shader.unbind();
     }
 
-    fn program_pipeline(&self) -> &ProgramPipeline {
-        &self.program_pipeline
+    fn shader(&self) -> &Shader {
+        &self.shader
+    }
+
+    fn shader_mut(&mut self) -> &mut Shader {
+        &mut self.shader
     }
 }
 
@@ -268,7 +260,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
 
                     ui.text("Displacement Map");
                     imgui::Image::new((displacement.get_id() as usize).into(), [128.0, 128.0])
-                        .build(&ui);
+                        .build(ui);
                     ui.spacing();
 
                     imgui::TreeNode::new("Parallax Mapping")
@@ -299,7 +291,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                     .range(0.001, 1.0)
                                     .speed(0.001)
                                     .display_format("%.3f")
-                                    .build(&ui, &mut self.property_block.displacement_scale);
+                                    .build(ui, &mut self.property_block.displacement_scale);
 
                                 if ui.is_item_hovered() {
                                     ui.tooltip_text("Drag left/right or double click to edit");
@@ -312,7 +304,7 @@ impl Gui for PbsMetallicRoughnessMaterial {
                                         .range(1.0, 256.0)
                                         .display_format("%.0f")
                                         .build(
-                                            &ui,
+                                            ui,
                                             &mut self.property_block.min_pom_layers,
                                             &mut self.property_block.max_pom_layers,
                                         );

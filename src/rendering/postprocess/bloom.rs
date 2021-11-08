@@ -1,6 +1,10 @@
 use std::any::Any;
 use std::rc::Rc;
 
+use crevice::std140::AsStd140;
+
+use crate::rendering::shader::Shader;
+use crate::shader::ShaderBuilder;
 use crate::{
     color::srgb_to_linear,
     core::math::{UVec2, Vec4},
@@ -10,15 +14,13 @@ use crate::{
         framebuffer::{Framebuffer, TemporaryFramebufferPool},
         mesh::utilities::draw_full_screen_quad,
         postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
-        program_pipeline::ProgramPipeline,
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-        shader::{Shader, ShaderStage},
+        shader::ShaderStage,
         state::{BlendFactor, StateManager},
         texture::Texture2D,
     },
     Context,
 };
-use crevice::std140::AsStd140;
 
 const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
@@ -66,10 +68,10 @@ pub struct Bloom {
     tint: [f32; 3],
     resolution_divisors: [u32; 2],
     resolution_divisor_index: usize,
-    downsample_program_pipeline: ProgramPipeline,
-    downsample_prefilter_program_pipeline: ProgramPipeline,
-    upsample_program_pipeline: ProgramPipeline,
-    bloom_upsample_apply_program_pipeline: ProgramPipeline,
+    downsample_shader: Shader,
+    downsample_prefilter_shader: Shader,
+    upsample_shader: Shader,
+    bloom_upsample_apply_shader: Shader,
     ubo_data: BloomUboData,
     ubo: Buffer,
     linear_sampler: Sampler,
@@ -143,14 +145,17 @@ impl Bloom {
         current_destination.bind();
         current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-        self.downsample_prefilter_program_pipeline.bind();
-        self.downsample_prefilter_program_pipeline
-            .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
+        self.downsample_prefilter_shader.bind();
+        self.downsample_prefilter_shader.set_texture_2d_with_id(
+            0,
+            input.texture_attachments()[0].id(),
+            &self.linear_sampler,
+        );
 
         draw_full_screen_quad();
 
         current_destination.unbind(false);
-        self.downsample_prefilter_program_pipeline.unbind();
+        self.downsample_prefilter_shader.unbind();
 
         let mut current_source = Rc::clone(&current_destination);
 
@@ -173,8 +178,8 @@ impl Bloom {
             current_destination.bind();
             current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-            self.downsample_program_pipeline.bind();
-            self.downsample_program_pipeline.set_texture_2d_with_id(
+            self.downsample_shader.bind();
+            self.downsample_shader.set_texture_2d_with_id(
                 0,
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
@@ -183,12 +188,12 @@ impl Bloom {
             draw_full_screen_quad();
 
             current_destination.unbind(false);
-            self.downsample_program_pipeline.unbind();
+            self.downsample_shader.unbind();
 
             current_source = Rc::clone(&current_destination);
         }
 
-        self.downsample_program_pipeline.unbind();
+        self.downsample_shader.unbind();
 
         current_source
     }
@@ -201,8 +206,8 @@ impl Bloom {
             //TODO: Do an upsampling blit here
             current_destination.bind();
 
-            self.upsample_program_pipeline.bind();
-            self.upsample_program_pipeline.set_texture_2d_with_id(
+            self.upsample_shader.bind();
+            self.upsample_shader.set_texture_2d_with_id(
                 0,
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
@@ -212,7 +217,7 @@ impl Bloom {
             draw_full_screen_quad();
             StateManager::disable_blending();
 
-            self.upsample_program_pipeline.unbind();
+            self.upsample_shader.unbind();
             current_destination.unbind(false);
 
             current_source = Rc::clone(&current_destination);
@@ -222,23 +227,28 @@ impl Bloom {
     }
 
     fn composition_pass(&self, input: &Framebuffer, output: &Framebuffer) {
-        self.bloom_upsample_apply_program_pipeline.bind();
-        self.bloom_upsample_apply_program_pipeline
-            .set_texture_2d_with_id(0, input.texture_attachments()[0].id(), &self.linear_sampler);
-        self.bloom_upsample_apply_program_pipeline
-            .set_texture_2d_with_id(
-                1,
-                output.texture_attachments()[0].id(),
-                &self.linear_sampler,
-            );
-        self.bloom_upsample_apply_program_pipeline
-            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
+        self.bloom_upsample_apply_shader.bind();
+        self.bloom_upsample_apply_shader.set_texture_2d_with_id(
+            0,
+            input.texture_attachments()[0].id(),
+            &self.linear_sampler,
+        );
+        self.bloom_upsample_apply_shader.set_texture_2d_with_id(
+            1,
+            output.texture_attachments()[0].id(),
+            &self.linear_sampler,
+        );
+        self.bloom_upsample_apply_shader.set_texture_2d_with_id(
+            2,
+            self.lens_dirt.get_id(),
+            &self.linear_sampler,
+        );
         output.bind();
 
         draw_full_screen_quad();
 
         output.unbind(false);
-        self.bloom_upsample_apply_program_pipeline.unbind();
+        self.bloom_upsample_apply_shader.unbind();
     }
 }
 
@@ -328,17 +338,6 @@ impl Gui for Bloom {
                             _ => "".into(),
                         },
                     );
-
-                    // imgui::ComboBox::new("Resolution").build_simple(
-                    //     ui,
-                    //     &mut self.resolution_divisor_index,
-                    //     &self.resolution_divisors,
-                    //     &|&a| match a {
-                    //         2 => "Half",
-                    //         4 => "Quarter",
-                    //         _ => "",
-                    //     },
-                    // );
 
                     imgui::ColorEdit::new("Tint", &mut self.tint)
                         .format(ColorFormat::Float)
@@ -458,63 +457,45 @@ impl BloomBuilder {
             .expect("Failed to load lens dirt texture.");
 
         let (
-            downsample_program_pipeline,
-            downsample_prefilter_program_pipeline,
-            upsample_program_pipeline,
-            bloom_upsample_apply_program_pipeline,
+            downsample_shader,
+            downsample_prefilter_shader,
+            upsample_shader,
+            bloom_upsample_apply_shader,
         ) = {
-            let downsample_fs = Shader::new(
-                ShaderStage::Fragment,
-                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag",
-            )
-            .unwrap();
+            let downsample_shader = ShaderBuilder::new("Downsample Shader")
+                .with_module(&FULLSCREEN_VERTEX_SHADER)
+                .with_stage(
+                    ShaderStage::Fragment,
+                    "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag",
+                )
+                .build();
 
-            let downsample_prefilter_fs = Shader::new(
-                ShaderStage::Fragment,
-                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag",
-            ).unwrap();
+            let downsample_prefilter_shader = ShaderBuilder::new("Downsample Prefilter Shader")
+                .with_module(&FULLSCREEN_VERTEX_SHADER)
+                .with_stage(ShaderStage::Fragment, "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag")
+                .build();
 
-            let upsample_blur_fs = Shader::new(
-                ShaderStage::Fragment,
-                "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
-            )
-            .unwrap();
+            let upsample_shader = ShaderBuilder::new("Upsample Shader")
+                .with_module(&FULLSCREEN_VERTEX_SHADER)
+                .with_stage(
+                    ShaderStage::Fragment,
+                    "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
+                )
+                .build();
 
-            let bloom_apply_fs = Shader::new(
-                ShaderStage::Fragment,
-                "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
-            )
-            .unwrap();
-
-            let downsample_pipeline = ProgramPipeline::new()
-                .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&downsample_fs)
-                .build()
-                .unwrap();
-
-            let downsample_prefilter_pipeline = ProgramPipeline::new()
-                .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&downsample_prefilter_fs)
-                .build()
-                .unwrap();
-
-            let upsample_pipeline = ProgramPipeline::new()
-                .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&upsample_blur_fs)
-                .build()
-                .unwrap();
-
-            let bloom_apply_pipeline = ProgramPipeline::new()
-                .add_shader(&FULLSCREEN_VERTEX_SHADER)
-                .add_shader(&bloom_apply_fs)
-                .build()
-                .unwrap();
+            let bloom_apply_shader = ShaderBuilder::new("Upsample Shader")
+                .with_module(&FULLSCREEN_VERTEX_SHADER)
+                .with_stage(
+                    ShaderStage::Fragment,
+                    "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
+                )
+                .build();
 
             (
-                downsample_pipeline,
-                downsample_prefilter_pipeline,
-                upsample_pipeline,
-                bloom_apply_pipeline,
+                downsample_shader,
+                downsample_prefilter_shader,
+                upsample_shader,
+                bloom_apply_shader,
             )
         };
 
@@ -546,10 +527,10 @@ impl BloomBuilder {
             tint: [1.0; 3],
             resolution_divisors: [2, 4],
             resolution_divisor_index: 0,
-            downsample_program_pipeline,
-            downsample_prefilter_program_pipeline,
-            upsample_program_pipeline,
-            bloom_upsample_apply_program_pipeline,
+            downsample_shader,
+            downsample_prefilter_shader,
+            upsample_shader,
+            bloom_upsample_apply_shader,
             ubo_data: Default::default(),
             ubo,
             linear_sampler,

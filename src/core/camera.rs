@@ -374,7 +374,7 @@ impl Gui for Camera {
                                     .range(0.5, 5000.0)
                                     .display_format("%.2f")
                                     .speed(0.5)
-                                    .build(&ui, &mut near_plane)
+                                    .build(ui, &mut near_plane)
                                 {
                                     self.near_plane = near_plane;
                                 }
@@ -384,7 +384,7 @@ impl Gui for Camera {
                                     .range(0.5, 5000.0)
                                     .display_format("%.2f")
                                     .speed(0.5)
-                                    .build(&ui, &mut far_plane)
+                                    .build(ui, &mut far_plane)
                                 {
                                     self.far_plane = far_plane;
                                 }
@@ -399,7 +399,7 @@ impl Gui for Camera {
                                 let mut orbit_speed = self.orbit_speed;
                                 if imgui::Slider::new("Orbit Speed", 1.0, 10.0)
                                     .display_format("%.2f")
-                                    .build(&ui, &mut orbit_speed)
+                                    .build(ui, &mut orbit_speed)
                                 {
                                     self.set_orbit_speed(orbit_speed)
                                 }
@@ -407,7 +407,7 @@ impl Gui for Camera {
                                 let mut orbit_dampening = self.orbit_dampening();
                                 if imgui::Slider::new("Orbit Dampening", 1.0, 10.0)
                                     .display_format("%.2f")
-                                    .build(&ui, &mut orbit_dampening)
+                                    .build(ui, &mut orbit_dampening)
                                 {
                                     self.set_orbit_dampening(orbit_dampening)
                                 }
@@ -415,7 +415,7 @@ impl Gui for Camera {
                                 let mut zoom_speed = self.zoom_speed();
                                 if imgui::Slider::new("Zoom Speed", 1.0, 40.0)
                                     .display_format("%.2f")
-                                    .build(&ui, &mut zoom_speed)
+                                    .build(ui, &mut zoom_speed)
                                 {
                                     self.set_zoom_speed(zoom_speed)
                                 }
@@ -423,7 +423,7 @@ impl Gui for Camera {
                                 let mut zoom_dampening = self.zoom_dampening();
                                 if imgui::Slider::new("Zoom Dampening", 0.1, 10.0)
                                     .display_format("%.2f")
-                                    .build(&ui, &mut zoom_dampening)
+                                    .build(ui, &mut zoom_dampening)
                                 {
                                     self.set_zoom_dampening(zoom_dampening)
                                 }

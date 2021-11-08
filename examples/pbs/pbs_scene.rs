@@ -3,11 +3,12 @@ use std::{
     {ops::RangeInclusive, rc::Rc},
 };
 
+use crevice::std140::AsStd140;
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
-use crevice::std140::AsStd140;
+use engine::rendering::shader::program::ShaderProgram;
 use engine::{
     camera::Camera,
     color::srgb_to_linear3f,
@@ -31,9 +32,8 @@ use engine::{
             bloom::BloomBuilder, tone_mapper::ToneMapper, PostprocessingStack,
             PostprocessingStackBuilder,
         },
-        program_pipeline::ProgramPipeline,
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-        shader::{Shader, ShaderStage},
+        shader::{ShaderModule, ShaderStage},
         state::{DepthFunction, FaceCulling, StateManager},
         texture::{SizedTextureFormat, TextureCube},
         Draw,
@@ -58,7 +58,7 @@ enum SkyboxType {
 
 struct Environment {
     maps: [EnvironmentMaps; 2],
-    skybox_program_pipeline: ProgramPipeline,
+    skybox_program_pipeline: ShaderProgram,
     skybox_mesh: Mesh,
     active_environment: usize,
     skybox_type: SkyboxType,
@@ -163,12 +163,14 @@ impl PbsScene {
             .max_distance(200.0)
             .build();
 
-        let skybox_prog = ProgramPipeline::new()
-            .add_shader(
-                &Shader::new(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert")).unwrap(),
+        let skybox_prog = ShaderProgram::new()
+            .with_shader_module(
+                &ShaderModule::new(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert"))
+                    .unwrap(),
             )
-            .add_shader(
-                &Shader::new(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag")).unwrap(),
+            .with_shader_module(
+                &ShaderModule::new(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag"))
+                    .unwrap(),
             )
             .build()
             .unwrap();
@@ -792,13 +794,13 @@ impl Scene for PbsScene {
                                             imgui::Slider::new("Screen Space Variance", 0.01, 1.0)
                                                 .display_format("%.2f")
                                                 .build(
-                                                    &ui,
+                                                    ui,
                                                     &mut self.lighting.ss_variance_and_threshold.x,
                                                 );
                                             imgui::Slider::new("Threshold", 0.01, 1.0)
                                                 .display_format("%.2f")
                                                 .build(
-                                                    &ui,
+                                                    ui,
                                                     &mut self.lighting.ss_variance_and_threshold.y,
                                                 );
                                             ui.unindent()
@@ -831,7 +833,7 @@ impl Scene for PbsScene {
                             );
 
                             imgui::Slider::new("Max reflection LOD", 1, 9)
-                                .build(&ui, &mut self.lighting.max_reflection_lod);
+                                .build(ui, &mut self.lighting.max_reflection_lod);
                         });
                 }
 

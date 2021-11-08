@@ -1,5 +1,4 @@
 use crate::rendering::mesh::Mesh;
-use crate::rendering::shader::{Shader, ShaderStage};
 use crate::rendering::texture::{Texture2D, Texture2DLoadConfig, TextureCube};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -22,7 +21,6 @@ pub struct AssetManager {
     textures: HashMap<String, Rc<Texture2D>>,
     cube_maps: HashMap<String, Rc<TextureCube>>,
     meshes: HashMap<String, Rc<Mesh>>,
-    shaders: HashMap<String, Rc<Shader>>,
 }
 
 impl AssetManager {
@@ -80,25 +78,6 @@ impl AssetManager {
                     .or_insert_with(|| Rc::clone(&mesh));
 
                 Ok(mesh)
-            }
-            None => Err(String::from("Invalid file path.")),
-        }
-    }
-
-    pub fn load_shader<P: AsRef<Path>>(
-        &mut self,
-        path: P,
-        stage: ShaderStage,
-    ) -> Result<Rc<Shader>, String> {
-        match path.as_ref().file_name() {
-            Some(fname) => {
-                let shader = Rc::new(Shader::load(path.as_ref(), Some(stage))?);
-
-                self.shaders
-                    .entry(String::from(fname.to_string_lossy()))
-                    .or_insert_with(|| Rc::clone(&shader));
-
-                Ok(shader)
             }
             None => Err(String::from("Invalid file path.")),
         }
