@@ -1,10 +1,3 @@
-#[macro_use]
-macro_rules! offset_of {
-    ($ty:ty, $field:ident) => {
-        unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
-    };
-}
-
 pub mod buffer;
 pub mod color;
 pub mod device;

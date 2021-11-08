@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate memoffset;
+
 #[macro_export]
 macro_rules! impl_as_any {
     ($t: ty) => {

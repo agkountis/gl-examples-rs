@@ -72,16 +72,16 @@ impl Utils {
         is_srgb: bool,
     ) -> Result<(SizedTextureFormat, TextureFormat), String> {
         match color_type {
-            ColorType::Gray(_) => Ok((SizedTextureFormat::R8, TextureFormat::Red)),
-            ColorType::GrayA(_) => Ok((SizedTextureFormat::Rg8, TextureFormat::Rg)),
-            ColorType::RGB(_) => {
+            ColorType::L8 => Ok((SizedTextureFormat::R8, TextureFormat::Red)),
+            ColorType::La8 => Ok((SizedTextureFormat::Rg8, TextureFormat::Rg)),
+            ColorType::Rgb8 => {
                 if is_srgb {
                     Ok((SizedTextureFormat::Srgb8, TextureFormat::Rgb))
                 } else {
                     Ok((SizedTextureFormat::Rgb8, TextureFormat::Rgb))
                 }
             }
-            ColorType::RGBA(_) => {
+            ColorType::Rgba8 => {
                 if is_srgb {
                     Ok((SizedTextureFormat::Srgb8A8, TextureFormat::Rgba))
                 } else {
@@ -168,7 +168,7 @@ impl Texture2D {
                 height as i32,
                 formats.1 as u32,
                 gl::UNSIGNED_BYTE,
-                image.raw_pixels().as_ptr() as *const GLvoid,
+                image.as_bytes().as_ptr() as *const GLvoid,
             );
 
             if generate_mipmap {
