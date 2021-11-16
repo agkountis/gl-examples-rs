@@ -36,12 +36,12 @@ impl Application {
 
         let (event_loop, windowed_context) = Self::create_windowed_context(&settings).unwrap();
 
-        let device = Device::new();
+        let mut device = Device::new();
         let mut framebuffer_cache = TemporaryFramebufferPool::new(3);
 
         let initial_scene = scene_constructor(Context::new(
             windowed_context.window(),
-            &device,
+            &mut device,
             &mut asset_manager,
             &mut timer,
             &mut framebuffer_cache,
@@ -51,7 +51,7 @@ impl Application {
         let mut scene_manager = SceneManager::new(initial_scene);
         scene_manager.initialize(Context::new(
             windowed_context.window(),
-            &device,
+            &mut device,
             &mut asset_manager,
             &mut timer,
             &mut framebuffer_cache,
@@ -79,7 +79,7 @@ impl Application {
                     scene_manager.handle_event(
                         Context::new(
                             windowed_context.window(),
-                            &device,
+                            &mut device,
                             &mut asset_manager,
                             &mut timer,
                             &mut framebuffer_cache,
@@ -96,7 +96,7 @@ impl Application {
                 Event::UserEvent(_) => {}
                 Event::Suspended => scene_manager.pause(Context::new(
                     windowed_context.window(),
-                    &device,
+                    &mut device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -104,7 +104,7 @@ impl Application {
                 )),
                 Event::Resumed => scene_manager.resume(Context::new(
                     windowed_context.window(),
-                    &device,
+                    &mut device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -114,7 +114,7 @@ impl Application {
                     timer.tick();
                     scene_manager.update(Context::new(
                         windowed_context.window(),
-                        &device,
+                        &mut device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -128,7 +128,7 @@ impl Application {
 
                     scene_manager.pre_draw(Context::new(
                         windowed_context.window(),
-                        &device,
+                        &mut device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -140,7 +140,7 @@ impl Application {
                 Event::RedrawRequested(_) => {
                     scene_manager.draw(Context::new(
                         windowed_context.window(),
-                        &device,
+                        &mut device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -152,7 +152,7 @@ impl Application {
                     scene_manager.gui(
                         Context::new(
                             windowed_context.window(),
-                            &device,
+                            &mut device,
                             &mut asset_manager,
                             &mut timer,
                             &mut framebuffer_cache,
@@ -170,7 +170,7 @@ impl Application {
                 Event::RedrawEventsCleared => {
                     scene_manager.post_draw(Context::new(
                         windowed_context.window(),
-                        &device,
+                        &mut device,
                         &mut asset_manager,
                         &mut timer,
                         &mut framebuffer_cache,
@@ -181,7 +181,7 @@ impl Application {
                 }
                 Event::LoopDestroyed => scene_manager.stop(Context::new(
                     windowed_context.window(),
-                    &device,
+                    &mut device,
                     &mut asset_manager,
                     &mut timer,
                     &mut framebuffer_cache,
@@ -264,13 +264,13 @@ impl Application {
     }
 
     extern "system" fn debug_callback(
-        source: GLenum,
+        _source: GLenum,
         message_type: GLenum,
-        id: GLuint,
+        _id: GLuint,
         severity: GLenum,
-        length: GLsizei,
+        _length: GLsizei,
         message: *const GLchar,
-        user_param: *mut GLvoid,
+        _user_param: *mut GLvoid,
     ) {
         let msg = unsafe { CStr::from_ptr(message) };
 

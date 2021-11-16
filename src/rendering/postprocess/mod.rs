@@ -1,20 +1,12 @@
 use crate::imgui::{Gui, Ui};
 use crate::rendering::framebuffer::Framebuffer;
-use crate::rendering::shader::{module::ShaderModule, Shader, ShaderStage};
+use crate::rendering::shader::ShaderStage;
 use crate::{AsAny, AsAnyMut, Context};
 
 pub mod bloom;
 pub mod tone_mapper;
 
-lazy_static! {
-    pub(crate) static ref FULLSCREEN_VERTEX_SHADER: ShaderModule = {
-        ShaderModule::new(
-            ShaderStage::Vertex,
-            "src/rendering/postprocess/shaders/fullscreen.vert",
-        )
-        .unwrap()
-    };
-}
+const FULLSCREEN_VERTEX_SHADER_PATH: &str = "src/rendering/postprocess/shaders/fullscreen.vert";
 
 pub trait PostprocessingEffect: Gui + AsAny + AsAnyMut {
     fn name(&self) -> &str;

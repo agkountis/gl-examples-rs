@@ -1,4 +1,5 @@
 use crate::imgui::{Condition, Gui, Ui};
+use crate::rendering::shader::shader_manager::ShaderManager;
 use gl_bindings as gl;
 use std::ffi::CStr;
 
@@ -74,16 +75,10 @@ impl DeviceInfo {
     }
 }
 
+#[derive(Default)]
 pub struct Device {
     info: DeviceInfo,
-}
-
-impl Default for Device {
-    fn default() -> Self {
-        Self {
-            info: DeviceInfo::new(),
-        }
-    }
+    shader_manager: ShaderManager,
 }
 
 impl Device {
@@ -93,6 +88,10 @@ impl Device {
 
     pub fn info(&self) -> &DeviceInfo {
         &self.info
+    }
+    
+    pub fn shader_manager(&mut self) -> &mut ShaderManager {
+        &mut self.shader_manager
     }
 }
 

@@ -3,8 +3,9 @@ use std::rc::Rc;
 
 use crevice::std140::AsStd140;
 
+use crate::postprocess::FULLSCREEN_VERTEX_SHADER_PATH;
 use crate::rendering::shader::Shader;
-use crate::shader::ShaderBuilder;
+use crate::shader::ShaderCreateInfo;
 use crate::{
     color::srgb_to_linear,
     core::math::{UVec2, Vec4},
@@ -13,7 +14,7 @@ use crate::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
         framebuffer::{Framebuffer, TemporaryFramebufferPool},
         mesh::utilities::draw_full_screen_quad,
-        postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
+        postprocess::{AsAny, AsAnyMut, PostprocessingEffect},
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::ShaderStage,
         state::{BlendFactor, StateManager},
@@ -68,10 +69,10 @@ pub struct Bloom {
     tint: [f32; 3],
     resolution_divisors: [u32; 2],
     resolution_divisor_index: usize,
-    downsample_shader: Shader,
-    downsample_prefilter_shader: Shader,
-    upsample_shader: Shader,
-    bloom_upsample_apply_shader: Shader,
+    downsample_shader: Rc<Shader>,
+    downsample_prefilter_shader: Rc<Shader>,
+    upsample_shader: Rc<Shader>,
+    bloom_upsample_apply_shader: Rc<Shader>,
     ubo_data: BloomUboData,
     ubo: Buffer,
     linear_sampler: Sampler,
@@ -448,6 +449,7 @@ impl BloomBuilder {
         let Context {
             asset_manager,
             settings,
+            device,
             ..
         } = context;
 
@@ -462,34 +464,39 @@ impl BloomBuilder {
             upsample_shader,
             bloom_upsample_apply_shader,
         ) = {
-            let downsample_shader = ShaderBuilder::new("Downsample Shader")
-                .with_module(&FULLSCREEN_VERTEX_SHADER)
-                .with_stage(
-                    ShaderStage::Fragment,
-                    "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag",
-                )
-                .build();
+            let downsample_shader = device.shader_manager().create_shader(
+                &ShaderCreateInfo::builder("Downsample Shader")
+                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
+                    .stage(ShaderStage::Fragment, "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag")
+                    .build()
+            );
 
-            let downsample_prefilter_shader = ShaderBuilder::new("Downsample Prefilter Shader")
-                .with_module(&FULLSCREEN_VERTEX_SHADER)
-                .with_stage(ShaderStage::Fragment, "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag")
-                .build();
+            let downsample_prefilter_shader = device.shader_manager().create_shader(
+                &ShaderCreateInfo::builder("Downsample Prefilter Shader")
+                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
+                    .stage(ShaderStage::Fragment, "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag")
+                    .build()
+            );
 
-            let upsample_shader = ShaderBuilder::new("Upsample Shader")
-                .with_module(&FULLSCREEN_VERTEX_SHADER)
-                .with_stage(
-                    ShaderStage::Fragment,
-                    "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
-                )
-                .build();
+            let upsample_shader = device.shader_manager().create_shader(
+                &ShaderCreateInfo::builder("Upsample Shader")
+                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
+                    .stage(
+                        ShaderStage::Fragment,
+                        "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
+                    )
+                    .build(),
+            );
 
-            let bloom_apply_shader = ShaderBuilder::new("Upsample Shader")
-                .with_module(&FULLSCREEN_VERTEX_SHADER)
-                .with_stage(
-                    ShaderStage::Fragment,
-                    "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
-                )
-                .build();
+            let bloom_apply_shader = device.shader_manager().create_shader(
+                &ShaderCreateInfo::builder("Apply Bloom Shader")
+                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
+                    .stage(
+                        ShaderStage::Fragment,
+                        "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
+                    )
+                    .build(),
+            );
 
             (
                 downsample_shader,

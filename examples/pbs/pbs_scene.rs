@@ -1,14 +1,13 @@
-use std::{
-    mem,
-    {ops::RangeInclusive, rc::Rc},
-};
+use std::mem;
+use std::rc::Rc;
 
 use crevice::std140::AsStd140;
 use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
-use engine::rendering::shader::program::ShaderProgram;
+use engine::rendering::buffer::BufferStorageFlags;
+use engine::rendering::shader::{Shader, ShaderCreateInfo};
 use engine::{
     camera::Camera,
     color::srgb_to_linear3f,
@@ -21,7 +20,7 @@ use engine::{
         vector::{UVec2, Vec2, Vec3, Vec4},
     },
     rendering::{
-        buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
+        buffer::{Buffer, BufferTarget, MapModeFlags},
         framebuffer::{
             AttachmentType, Framebuffer, FramebufferAttachmentCreateInfo, TextureFilter,
         },
@@ -33,7 +32,7 @@ use engine::{
             PostprocessingStackBuilder,
         },
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-        shader::{ShaderModule, ShaderStage},
+        shader::ShaderStage,
         state::{DepthFunction, FaceCulling, StateManager},
         texture::{SizedTextureFormat, TextureCube},
         Draw,
@@ -58,7 +57,7 @@ enum SkyboxType {
 
 struct Environment {
     maps: [EnvironmentMaps; 2],
-    skybox_program_pipeline: ShaderProgram,
+    skybox_program_pipeline: Rc<Shader>,
     skybox_mesh: Mesh,
     active_environment: usize,
     skybox_type: SkyboxType,
@@ -163,17 +162,13 @@ impl PbsScene {
             .max_distance(200.0)
             .build();
 
-        let skybox_prog = ShaderProgram::new()
-            .with_shader_module(
-                &ShaderModule::new(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert"))
-                    .unwrap(),
-            )
-            .with_shader_module(
-                &ShaderModule::new(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag"))
-                    .unwrap(),
-            )
-            .build()
-            .unwrap();
+        let shader_manager = device.shader_manager();
+        let skybox_prog = shader_manager.create_shader(
+            &ShaderCreateInfo::builder("SkyboxShader")
+                .stage(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert"))
+                .stage(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag"))
+                .build(),
+        );
 
         let mesh = asset_manager
             .load_mesh(asset_path.join("models/cerberus/cerberus.glb"))
@@ -335,7 +330,14 @@ impl PbsScene {
 
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(bloom)
-            .with_effect(ToneMapper::new())
+            .with_effect(ToneMapper::new(Context::new(
+                window,
+                device,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            )))
             .build();
 
         let sampler_mipmap_linear = Sampler::new(
@@ -349,6 +351,14 @@ impl PbsScene {
         );
 
         let material = PbsMetallicRoughnessMaterial::new(
+            Context::new(
+                window,
+                device,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            ),
             asset_path,
             albedo,
             metallic_roughness_ao,
@@ -421,11 +431,11 @@ impl PbsScene {
 
         self.material.bind();
 
-        let program_pipeline = self.material.program_pipeline();
+        let shader = self.material.shader();
 
         const IRRADIANCE_MAP_BINDING_INDEX: u32 = 4;
         const RADIANCE_MAP_BINDING_INDEX: u32 = 5;
-        program_pipeline
+        shader
             .set_texture_cube(
                 IRRADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].irradiance,

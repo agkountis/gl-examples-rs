@@ -1,5 +1,8 @@
 use std::any::Any;
+use std::rc::Rc;
 
+use crate::rendering::postprocess::FULLSCREEN_VERTEX_SHADER_PATH;
+use crate::shader::ShaderCreateInfo;
 use crate::{
     core::application::clear_default_framebuffer,
     framebuffer::Framebuffer,
@@ -8,9 +11,9 @@ use crate::{
     mesh::utilities::draw_full_screen_quad,
     rendering::{
         buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags},
-        postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER},
+        postprocess::{AsAny, AsAnyMut, PostprocessingEffect},
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
-        shader::{Shader, ShaderBuilder, ShaderStage},
+        shader::{Shader, ShaderStage},
         state::StateManager,
     },
     Context,
@@ -27,7 +30,7 @@ struct ToneMappingPerFrameUniforms {
 }
 
 pub struct ToneMapper {
-    shader: Shader,
+    shader: Rc<Shader>,
     tone_mapper_ubo: Buffer,
     sampler_nearest: Sampler,
     operator: usize,
@@ -39,11 +42,15 @@ pub struct ToneMapper {
 impl_as_any!(ToneMapper);
 
 impl ToneMapper {
-    pub fn new() -> Self {
-        let shader = ShaderBuilder::new("ToneMapping Shader")
-            .with_module(&FULLSCREEN_VERTEX_SHADER)
-            .with_stage(ShaderStage::Fragment, TONEMAPPER_FRAGMENT_SHADER_PATH)
+    pub fn new(context: Context) -> Self {
+        let Context { device, .. } = context;
+
+        let create_info = ShaderCreateInfo::builder("ToneMapping Shader")
+            .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
+            .stage(ShaderStage::Fragment, TONEMAPPER_FRAGMENT_SHADER_PATH)
             .build();
+
+        let shader = device.shader_manager().create_shader(&create_info);
 
         let mut tone_mapper_ubo = Buffer::new(
             "Tonemapping Fragment UBO",
@@ -65,7 +72,7 @@ impl ToneMapper {
         );
 
         ToneMapper {
-            shader: shader,
+            shader,
             tone_mapper_ubo,
             sampler_nearest,
             operator: 0,
@@ -124,12 +131,6 @@ impl PostprocessingEffect for ToneMapper {
         draw_full_screen_quad();
 
         self.shader.unbind()
-    }
-}
-
-impl Default for ToneMapper {
-    fn default() -> Self {
-        ToneMapper::new()
     }
 }
 

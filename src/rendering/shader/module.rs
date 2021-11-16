@@ -1,8 +1,6 @@
 use std::fmt::Debug;
-use std::path::Path;
 use std::{ffi::CString, ptr};
 
-use crate::asset::Asset;
 use gl::types::*;
 use gl_bindings as gl;
 use shaderc::CompilationArtifact;
@@ -10,7 +8,7 @@ use shaderc::CompilationArtifact;
 use crate::shader::ShaderStage;
 
 #[derive(Debug)]
-pub struct ShaderModule {
+pub(crate) struct ShaderModule {
     id: GLuint,
     stage: ShaderStage,
 }

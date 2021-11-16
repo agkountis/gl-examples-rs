@@ -1,12 +1,13 @@
+use std::borrow::BorrowMut;
 use std::{path::Path, rc::Rc};
 
 use crevice::std140::AsStd140;
 
 use crate::core::asset::Asset;
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
+use crate::rendering::shader::ShaderCreateInfo;
 use crate::rendering::texture::Texture2DLoadConfig;
 use crate::sampler::Anisotropy;
-use crate::shader::ShaderBuilder;
 use crate::{
     core::math::Vec4,
     imgui::{ColorFormat, Gui, Ui},
@@ -15,6 +16,7 @@ use crate::{
         shader::{Shader, ShaderStage},
         texture::Texture2D,
     },
+    Context,
 };
 
 const MATERIAL_UBO_BINDING_INDEX: u32 = 4;
@@ -28,8 +30,7 @@ const DISPLACEMENT_MAP_BINDING_INDEX: u32 = 6;
 pub trait Material: Gui {
     fn bind(&self);
     fn unbind(&self);
-    fn shader(&self) -> &Shader;
-    fn shader_mut(&mut self) -> &mut Shader;
+    fn shader(&self) -> Rc<Shader>;
 }
 
 #[repr(C)]
@@ -57,30 +58,38 @@ pub struct PbsMetallicRoughnessMaterial {
     ibl_brdf_lut: Texture2D,
     sampler: Sampler,
     property_block: MaterialPropertyBlock,
-    shader: Shader,
+    shader: Rc<Shader>,
     material_ubo: Buffer,
     parallax_mapping_method: usize,
 }
 
 impl PbsMetallicRoughnessMaterial {
     pub fn new<P: AsRef<Path>>(
+        context: Context,
         asset_path: P,
         albedo: Rc<Texture2D>,
         metallic_roughness_ao: Rc<Texture2D>,
         normals: Rc<Texture2D>,
         displacement: Option<Rc<Texture2D>>,
     ) -> Self {
-        let mut shader = ShaderBuilder::new("PBS Shader")
-            .with_stage(
+        let Context { device, .. } = context;
+
+        let create_info = ShaderCreateInfo::builder("PBS Shader")
+            .stage(
                 ShaderStage::Vertex,
                 asset_path.as_ref().join("sdr/pbs.vert"),
             )
-            .with_stage(
+            .stage(
                 ShaderStage::Fragment,
                 asset_path.as_ref().join("sdr/pbs.frag"),
             )
-            .with_keyword_set(&["_", "FEATURE_PARALLAX_MAPPING"])
+            .keyword_set(&["_", "FEATURE_PARALLAX_MAPPING"])
+            .keyword_set(&["_", "FEATURE_SPECULAR_AA"])
+            .keyword_set(&["_", "FEATURE_SPECULAR_AO"])
+            .keyword_set(&["FEATURE_BRDF_FILLAMENT", "FEATURE_BRDF_UE4"])
             .build();
+
+        let mut shader = device.shader_manager().create_shader(&create_info);
 
         if displacement.is_some() {
             shader.enable_keyword("FEATURE_PARALLAX_MAPPING")
@@ -173,12 +182,8 @@ impl Material for PbsMetallicRoughnessMaterial {
         self.shader.unbind();
     }
 
-    fn shader(&self) -> &Shader {
-        &self.shader
-    }
-
-    fn shader_mut(&mut self) -> &mut Shader {
-        &mut self.shader
+    fn shader(&self) -> Rc<Shader> {
+        Rc::clone(&self.shader)
     }
 }
 

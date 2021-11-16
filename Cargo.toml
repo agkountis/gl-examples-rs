@@ -28,6 +28,7 @@ imgui-winit-support = "^0.8.0"
 imgui-opengl-renderer = { git = "https://github.com/agkountis/rust-imgui-opengl-renderer" }
 shaderc = "^0.7.0"
 itertools = "^0.10.0"
+uuid = { version = "0.8", features = ["v4"] }
 
 [dependencies.gltf]
 version = "^0.15"

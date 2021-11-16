@@ -7,17 +7,17 @@ use crate::rendering::shader::module::ShaderModule;
 use crate::rendering::shader::ShaderStage;
 
 #[derive(Debug)]
-pub struct ShaderProgram {
+pub(crate) struct ShaderProgram {
     id: GLuint,
 }
 
 impl ShaderProgram {
-    pub fn id(&self) -> GLuint {
+    pub(crate) fn id(&self) -> GLuint {
         self.id
     }
 }
 
-pub struct ShaderProgramBuilder<'a> {
+pub(crate) struct ShaderProgramBuilder<'a> {
     modules: [Option<&'a ShaderModule>; 5],
 }
 
@@ -32,7 +32,7 @@ impl<'a> ShaderProgramBuilder<'a> {
         Default::default()
     }
 
-    pub fn with_shader_module(mut self, shader: &'a ShaderModule) -> Self {
+    pub(crate) fn with_shader_module(mut self, shader: &'a ShaderModule) -> Self {
         let idx = Self::shader_stage_to_array_index(shader.stage());
 
         if self.modules[idx].is_some() {

@@ -85,7 +85,7 @@ impl Rectangle {
 
 pub struct Context<'a> {
     pub window: &'a Window,
-    pub device: &'a Device,
+    pub device: &'a mut Device,
     pub asset_manager: &'a mut AssetManager,
     pub timer: &'a mut Timer,
     pub framebuffer_cache: &'a mut TemporaryFramebufferPool,
@@ -95,7 +95,7 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     pub fn new(
         window: &'a Window,
-        device: &'a Device,
+        device: &'a mut Device,
         asset_manager: &'a mut AssetManager,
         timer: &'a mut Timer,
         framebuffer_cache: &'a mut TemporaryFramebufferPool,
