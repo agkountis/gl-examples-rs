@@ -1,6 +1,8 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
+#include "src/rendering/postprocess/shaders/include/dual_filtering_blur_sampling.glsl"
+
 #define FP16_MAX 65536.0
 #define TRUE 1
 
@@ -24,19 +26,6 @@ layout(location = 0) in VsOut {
 
 layout(location = 0) out vec4 outColor;
 
-vec4 Upsample(vec2 uv, vec2 halfpixel)
-{
-    vec4 sum = texture(image, uv + vec2(-halfpixel.x * 2.0, 0.0));
-    sum += texture(image, uv + vec2(-halfpixel.x, halfpixel.y)) * 2.0;
-    sum += texture(image, uv + vec2(0.0, halfpixel.y * 2.0));
-    sum += texture(image, uv + vec2(halfpixel.x, halfpixel.y)) * 2.0;
-    sum += texture(image, uv + vec2(halfpixel.x * 2.0, 0.0));
-    sum += texture(image, uv + vec2(halfpixel.x, -halfpixel.y)) * 2.0;
-    sum += texture(image, uv + vec2(0.0, -halfpixel.y * 2.0));
-    sum += texture(image, uv + vec2(-halfpixel.x, -halfpixel.y)) * 2.0;
-    return sum / 12.0;
-}
-
 void main()
 {
     vec4 mainImageColor = texture(mainImage, fsIn.texcoord);
@@ -45,7 +34,7 @@ void main()
     vec2 halfpixel = (1.0 / textureSize(image, 0)) * 0.5;
     halfpixel *= spread;
 
-    vec3 bloom = intensity * Upsample(fsIn.texcoord, halfpixel).rgb;
+    vec3 bloom = intensity * Upsample(image, fsIn.texcoord, halfpixel).rgb;
 
     if (useLensDirt == TRUE)
     {

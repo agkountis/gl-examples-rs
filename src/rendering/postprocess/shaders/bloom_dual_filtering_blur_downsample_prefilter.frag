@@ -1,6 +1,8 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
+#include "src/rendering/postprocess/shaders/include/dual_filtering_blur_sampling.glsl"
+
 layout(binding = 0) uniform sampler2D image;
 
 layout(std140, binding = 7) uniform BloomParams
@@ -14,16 +16,6 @@ layout(location = 0) in VsOut {
 } fsIn;
 
 layout(location = 0) out vec4 outColor;
-
-vec4 Downsample(vec2 uv, vec2 halfpixel)
-{
-    vec4 sum = texture(image, uv) * 4.0;
-    sum += texture(image, uv - halfpixel.xy);
-    sum += texture(image, uv + halfpixel.xy);
-    sum += texture(image, uv + vec2(halfpixel.x, -halfpixel.y));
-    sum += texture(image, uv - vec2(halfpixel.x, -halfpixel.y));
-    return sum / 8.0;
-}
 
 vec3 Prefilter (vec3 c) {
     float brightness = max(c.r, max(c.g, c.b));
@@ -41,6 +33,6 @@ void main()
     vec2 halfpixel = (1.0 / textureSize(image, 0)) * 0.5;
     halfpixel *= spread;
 
-    vec4 pixelColor = Downsample(fsIn.texcoord, halfpixel);
+    vec4 pixelColor = Downsample(image, fsIn.texcoord, halfpixel);
     outColor = vec4(Prefilter(pixelColor.rgb), pixelColor.a);
 }
