@@ -114,4 +114,39 @@ vec3 RomBinDaHouse(vec3 color)
     return exp(-1.0 / (2.72 * color + 0.15));
 }
 
+#if defined(TONE_MAP_FUNC_ACES_FITTED)
+
+    #define TONE_MAP(x) ACESFitted(x)
+
+#elif defined(TONE_MAP_FUNC_ACES_FILMIC)
+
+    #define TONE_MAP(x) ACESFilm(x)
+
+#elif defined(TONE_MAP_FUNC_REINHARD)
+
+    #define TONE_MAP(x) Reinhard(x)
+
+#elif defined(TONE_MAP_FUNC_LUMA_BASED_REINHARD)
+
+    #define TONE_MAP(x) LumaBasedReinhard(x)
+
+#elif defined(TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD)
+
+    #define TONE_MAP(x) WhitePreservingLumaBasedReinhard(x)
+
+#elif defined(TONE_MAP_FUNC_UNCHARTED_2)
+
+    #define TONE_MAP(x) Uncharted2(x)
+
+#elif defined(TONE_MAP_FUNC_ROMBINDAHOUSE)
+
+    #define TONE_MAP(x) RomBinDaHouse(x)
+
+#else
+
+    #define TONE_MAP(x) vec3(1.0, 0.0, 0.0)
+
+#endif
+
+
 #endif // TONEMAPPING_FUNCTIONS_GLSL

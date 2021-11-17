@@ -48,9 +48,19 @@ impl ToneMapper {
         let create_info = ShaderCreateInfo::builder("ToneMapping Shader")
             .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
             .stage(ShaderStage::Fragment, TONEMAPPER_FRAGMENT_SHADER_PATH)
+            .keyword_set(&[
+                "TONE_MAP_FUNC_ACES_FITTED",
+                "TONE_MAP_FUNC_ACES_FILMIC",
+                "TONE_MAP_FUNC_REINHARD",
+                "TONE_MAP_FUNC_LUMA_BASED_REINHARD",
+                "TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD",
+                "TONE_MAP_FUNC_UNCHARTED_2",
+                "TONE_MAP_FUNC_ROMBINDAHOUSE",
+            ])
             .build();
 
         let shader = device.shader_manager().create_shader(&create_info);
+        shader.enable_keyword("TONE_MAP_FUNC_ACES_FITTED");
 
         let mut tone_mapper_ubo = Buffer::new(
             "Tonemapping Fragment UBO",
@@ -142,7 +152,7 @@ impl Gui for ToneMapper {
             .open_on_double_click(true)
             .build(ui, || {
                 ui.spacing();
-                ui.combo_simple_string(
+                if ui.combo_simple_string(
                     "Operator",
                     &mut self.operator,
                     &[
@@ -154,7 +164,27 @@ impl Gui for ToneMapper {
                         "Uncharted 2",
                         "RomBinDaHouse",
                     ],
-                );
+                ) {
+                    println!("TONE MAP FUNC CHANGE!");
+
+                    if self.operator == 0 {
+                        self.shader.enable_keyword("TONE_MAP_FUNC_ACES_FITTED")
+                    } else if self.operator == 1 {
+                        self.shader.enable_keyword("TONE_MAP_FUNC_ACES_FILMIC")
+                    } else if self.operator == 2 {
+                        self.shader.enable_keyword("TONE_MAP_FUNC_REINHARD")
+                    } else if self.operator == 3 {
+                        self.shader
+                            .enable_keyword("TONE_MAP_FUNC_LUMA_BASED_REINHARD")
+                    } else if self.operator == 4 {
+                        self.shader
+                            .enable_keyword("TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD")
+                    } else if self.operator == 5 {
+                        self.shader.enable_keyword("TONE_MAP_FUNC_UNCHARTED_2")
+                    } else if self.operator == 6 {
+                        self.shader.enable_keyword("TONE_MAP_FUNC_ROMBINDAHOUSE")
+                    }
+                }
 
                 if self.operator == 4 {
                     imgui::Slider::new("White Threshold", 0.3, 30.0)

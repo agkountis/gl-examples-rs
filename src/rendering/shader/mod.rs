@@ -150,23 +150,38 @@ impl Shader {
     }
 
     pub fn enable_keyword(&self, keyword: &str) {
-        let bits = self.keyword_bitfield_map[keyword];
+        if let Some(&bits) = self.keyword_bitfield_map.get(keyword) {
+            let mut active_variant = self.active_variant.borrow_mut();
+            let mut active_variant_bitfield = self.active_variant_bitfield.borrow_mut();
 
-        let mut active_variant = self.active_variant_bitfield.borrow_mut();
-        let mut active_variant_bitfield = self.active_variant_bitfield.borrow_mut();
+            //TODO: the final bitfield must be a combination of each keyword set's bitfield.
 
-        *active_variant_bitfield = *self.active_variant.borrow() | bits;
-        *active_variant = self.shader_variants[&*self.active_variant_bitfield.borrow()].id();
+            // *active_variant_bitfield = *active_variant_bitfield | bits;
+            *active_variant_bitfield = bits;
+            *active_variant =
+                if let Some(variant) = self.shader_variants.get(&*active_variant_bitfield) {
+                    variant.id()
+                } else {
+                    eprintln!(
+                        "ERROR: Variant with bitfield {} does not exist!",
+                        *active_variant_bitfield
+                    );
+
+                    *active_variant
+                }
+        } else {
+            eprintln!("ERROR: Keyword {} not found!", keyword)
+        }
     }
 
     pub fn disable_keyword(&self, keyword: &str) {
         let bits = self.keyword_bitfield_map[keyword];
 
-        let mut active_variant = self.active_variant_bitfield.borrow_mut();
+        let mut active_variant = self.active_variant.borrow_mut();
         let mut active_variant_bitfield = self.active_variant_bitfield.borrow_mut();
 
-        *active_variant_bitfield = *self.active_variant.borrow() & bits;
-        *active_variant = self.shader_variants[&*self.active_variant_bitfield.borrow()].id();
+        *active_variant_bitfield &= bits;
+        *active_variant = self.shader_variants[&*active_variant_bitfield].id();
     }
 
     pub fn bind(&self) {
