@@ -1,10 +1,8 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
-#define EPSILON                             1e-5
-#define F0_DIELECTRIC                       0.04
-#define PI                                  3.14159265359
-#define ONE_OVER_PI                         0.318309886
+#include "src/rendering/postprocess/shaders/include/engine.glsl"
+
 #define MIN_ROUGHNESS                       0.045
 
 #define RENDER_MODE_ALBEDO                  1
@@ -27,15 +25,14 @@
 #define BRDF_FILLAMENT                      0
 #define BRDF_UE4                            1
 
-layout(location = 0) in VsOut {
+INPUT_BLOCK_BEGIN(0, VsOut)
     vec3 wViewDirection;
     vec3 wNormal;
     vec4 wTangent;
     vec2 texcoord;
-} fsIn;
+INPUT_BLOCK_END_NAMED(fsIn)
 
-layout(std140, binding = 2) uniform PerFrameBlock
-{
+UNIFORM_BLOCK_BEGIN(2, PerFrameBlock)
     vec4 wLightDirection;
     vec4 lightColor;
     vec2 ssVarianceAndThreshold;
@@ -45,10 +42,9 @@ layout(std140, binding = 2) uniform PerFrameBlock
     int brdfType;
     int mulriScattering;
     float maxReflectionLod;
-};
+UNIFORM_BLOCK_END
 
-layout(std140, binding = 4) uniform MaterialBlock
-{
+UNIFORM_BLOCK_BEGIN(4, MaterialBlock)
     vec4 baseColor;
     float metallicScale;
     float metallicBias;
@@ -57,194 +53,21 @@ layout(std140, binding = 4) uniform MaterialBlock
     float aoScale;
     float aoBias;
     float reflectance;
-};
+UNIFORM_BLOCK_END
 
-layout(binding = 0) uniform sampler2D albedoMap;
-layout(binding = 1) uniform sampler2D normalMap;
-layout(binding = 2) uniform sampler2D m_r_aoMap;
-layout(binding = 3) uniform sampler2D brdfLUT;
+SAMPLER_2D(0, albedoMap);
+SAMPLER_2D(1, normalMap);
+SAMPLER_2D(2, m_r_aoMap);
+SAMPLER_2D(3, brdfLUT);
 
-layout(binding = 4) uniform samplerCube irradianceMap;
-layout(binding = 5) uniform samplerCube radianceMap;
+SAMPLER_CUBE(4, irradianceMap);
+SAMPLER_CUBE(5, radianceMap);
 
-layout(location = 0) out vec4 outColor;
+OUTPUT(0, outColor);
 
-struct ShadingProperties {
-    vec4 albedo;
-    float perceptualRoughness;
-    float roughness;
-    float metallic;
-    float ao;
-    float so;
-    float horizonSo;
-    vec2 brdfLUT;
-    vec3 F0;
-    vec3 irradiance;
-    vec3 radiance;
-    float NoV;
-    float NoL;
-    float NoH;
-    float HoV;
-    vec3 n;
-    vec3 r;
-    vec3 t;
-};
-
-mat3 CreateTangentToWorldMatrix(in vec3 n, in vec3 t, in float tSign)
-{
-    t = normalize(t - dot(t, n) * n);
-
-    //Calculate the binormal
-    vec3 b = normalize(cross(n, t) * tSign);
-
-    return mat3(t, b, n);
-}
-
-float PerceptualRoughnessToRoughness(float perceptualRoughness)
-{
-    return perceptualRoughness * perceptualRoughness;
-}
-
-float RoughnessToPerceptualRoughness(float roughness)
-{
-    return sqrt(roughness);
-}
-
-// PBS FUNCTIONS --------------------------------------------------
-
-// Analytical Lights---
-vec3 FresnelSchlick(in float NdotV, in vec3 F0)
-{
-    vec3 F90 = vec3(1.0);
-
-    if (specularAO == 1) {
-        F90 = vec3(clamp(dot(F0, vec3(50.0 * 0.33)), 0.0, 1.0));
-    }
-
-    return F0 + (F90 - F0) * pow(1.0 - NdotV, 5.0);
-}
-
-float DistributionGGX(in float NdotH, in float roughness)
-{
-    float a = roughness;
-    float a2 = a * a;
-    float NdotH2 = NdotH * NdotH;
-
-    float num   = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;
-
-    return num / denom;
-}
-
-// Fillament
-float D_GGX(float NoH, float a) {
-    float a2 = a * a;
-    float f = (NoH * a2 - NoH) * NoH + 1.0;
-    return a2 / (PI * f * f);
-}
-
-// Reference: http://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA(slides).pdf
-// Reference: http://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf
-float BiasedAxisAlignedGeometricSpecularAA(in vec3 wNormal, in float perceptualRoughness)
-{
-    vec3 du = dFdx(wNormal);
-    vec3 dv = dFdy(wNormal);
-
-    float variance = ssVarianceAndThreshold.x * (dot(du, du) + dot(dv, dv));
-
-    float roughness = PerceptualRoughnessToRoughness(perceptualRoughness);
-    float kernelRoughness = min(2.0 * variance, ssVarianceAndThreshold.y);
-    float squareRoughness = clamp(roughness * roughness + kernelRoughness, 0.0, 1.0);
-
-    return RoughnessToPerceptualRoughness(sqrt(squareRoughness));
-}
-
-float ComputeSpecularAO(float NoV, float ao, float roughness)
-{
-    return clamp(pow(NoV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
-}
-
-float ComputeHorizonSpecularAO(vec3 r, vec3 n)
-{
-    float horizon = min(1.0 + dot(r, n), 1.0);
-    return horizon * horizon;
-}
-
-float G_SchlickGGX(in float NdotV, in float perceptualRoughness)
-{
-    float r = perceptualRoughness + 1.0;
-    float k = (r * r) / 8.0;
-
-    float num   = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
-
-    return num / denom;
-}
-
-// UE4
-float V_SmithSchlickGGX(in float NdotV, in float NdotL, in float roughness)
-{
-    float ggx2  = G_SchlickGGX(NdotV, roughness);
-    float ggx1  = G_SchlickGGX(NdotL, roughness);
-
-    return ggx1 * ggx2;
-}
-
-float V_SmithGGXCorrelated(float NoV, float NoL, float roughness)
-{
-    float a2 = roughness * roughness;
-    float lambdaV = NoL * sqrt((NoV - a2 * NoV) * NoV + a2);
-    float lambdaL = NoV * sqrt((NoL - a2 * NoL) * NoL + a2);
-    return 0.5 / (lambdaV + lambdaL);
-}
-
-float V_SmithGGXCorrelatedFast(float NoV, float NoL, float roughness) {
-    float a = roughness;
-    float GGXV = NoL * (NoV * (1.0 - a) + a);
-    float GGXL = NoV * (NoL * (1.0 - a) + a);
-    return 0.5 / (GGXV + GGXL);
-}
-
-vec3 FillamentBRDF(in ShadingProperties props)
-{
-    vec3 F = FresnelSchlick(props.HoV, props.F0);
-    float D = D_GGX(props.NoH, props.roughness);
-    float V = V_SmithGGXCorrelated(props.NoV, props.NoL, props.roughness);
-
-    vec3 specular = (D * V) * F;
-
-    if (mulriScattering == 1) {
-        vec3 energyCompensation = 1.0 + props.F0 * (1.0 / props.brdfLUT.x - 1.0);
-        // Scale the specular lobe to account for multiscattering
-        specular *= energyCompensation;
-    }
-
-    //Energy conservation
-    vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - props.metallic);
-
-    return (kD * props.albedo.rgb * ONE_OVER_PI + specular) * lightColor.rgb * props.NoL;
-}
-
-vec3 UE4BRDF(in ShadingProperties props)
-{
-    vec3 F = FresnelSchlick(props.HoV, props.F0);
-    float D = DistributionGGX(props.NoH, props.roughness);
-    float V = V_SmithSchlickGGX(props.NoV, props.NoL, props.perceptualRoughness);
-
-    vec3 numerator = (D * V) * F;
-
-    float denominator = 4.0 * props.NoV * props.NoL;
-
-    vec3 specular = numerator / max(denominator, EPSILON);
-
-    //Energy conservation
-    vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - props.metallic);
-
-    return (kD * props.albedo.rgb * ONE_OVER_PI + specular) * lightColor.rgb * props.NoL;
-}
+#include "assets/sdr/include/pbs_common.glsl"
+#include "assets/sdr/include/brdf.glsl"
+#include "assets/sdr/include/ibl.glsl"
 
 vec3 BRDF(in ShadingProperties props)
 {
@@ -257,53 +80,6 @@ vec3 BRDF(in ShadingProperties props)
             return vec3(1.0, 0.0, 1.0); // Error
     }
 }
-
-// --------------------
-
-// IBL-----------------
-vec3 EnvironmentBRDFApprox( vec3 F0, float roughness, float NoV )
-{
-    const vec4 c0 = vec4( -1, -0.0275, -0.572, 0.022 );
-    const vec4 c1 = vec4( 1, 0.0425, 1.04, -0.04 );
-    vec4 r = roughness * c0 + c1;
-    float a004 = min( r.x * r.x, exp2( -9.28 * NoV ) ) * r.x + r.y;
-    vec2 AB = vec2( -1.04, 1.04 ) * a004 + r.zw;
-    return F0 * AB.x + AB.y;
-}
-
-vec3 IBL(in ShadingProperties props)
-{
-    vec3 F = FresnelSchlick(props.NoV, props.F0);
-
-    vec3 kD = 1.0 - F;
-    kD *= 1.0 - props.metallic;
-
-    vec3 indirectDiffuse = props.irradiance * props.albedo.rgb;
-    vec3 indirectSpecular = props.radiance * (props.F0 * props.brdfLUT.x + props.brdfLUT.y);
-
-    if (specularAO == 1) {
-        indirectSpecular *= props.so;
-        indirectSpecular *= props.horizonSo;
-        return kD * indirectDiffuse * props.ao + indirectSpecular;
-    }
-
-    return (kD * indirectDiffuse + indirectSpecular) * props.ao;
-}
-
-// reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
-vec3 GetSpecularDominantDirection(const vec3 n, const vec3 r, in float roughness)
-{
-    return mix(r, n, roughness * roughness);
-}
-
-// reference: https://github.com/google/filament/blob/main/shaders/src/light_indirect.fs
-float PerceptualRoughnessToLod(in float perceptualRoughness)
-{
-    return maxReflectionLod * perceptualRoughness * (2.0 - perceptualRoughness);
-}
-// --------------------
-
-// END PBS FUNCTIONS ----------------------------------------------
 
 float ConvertToGrayscale(in vec3 color)
 {

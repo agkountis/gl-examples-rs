@@ -69,10 +69,7 @@ pub struct Bloom {
     tint: [f32; 3],
     resolution_divisors: [u32; 2],
     resolution_divisor_index: usize,
-    downsample_shader: Rc<Shader>,
-    downsample_prefilter_shader: Rc<Shader>,
-    upsample_shader: Rc<Shader>,
-    bloom_upsample_apply_shader: Rc<Shader>,
+    bloom_shader: Rc<Shader>,
     ubo_data: BloomUboData,
     ubo: Buffer,
     linear_sampler: Sampler,
@@ -146,8 +143,9 @@ impl Bloom {
         current_destination.bind();
         current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-        self.downsample_prefilter_shader.bind();
-        self.downsample_prefilter_shader.set_texture_2d_with_id(
+        self.bloom_shader
+            .enable_keyword("BLOOM_PASS_DOWNSAMPLE_PREFILTER");
+        self.bloom_shader.set_texture_2d_with_id(
             0,
             input.texture_attachments()[0].id(),
             &self.linear_sampler,
@@ -156,9 +154,10 @@ impl Bloom {
         draw_full_screen_quad();
 
         current_destination.unbind(false);
-        self.downsample_prefilter_shader.unbind();
 
         let mut current_source = Rc::clone(&current_destination);
+
+        self.bloom_shader.enable_keyword("BLOOM_PASS_DOWNSAMPLE");
 
         for _ in 1..self.iterations {
             size.x /= resolution_divisor;
@@ -179,8 +178,7 @@ impl Bloom {
             current_destination.bind();
             current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-            self.downsample_shader.bind();
-            self.downsample_shader.set_texture_2d_with_id(
+            self.bloom_shader.set_texture_2d_with_id(
                 0,
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
@@ -189,12 +187,9 @@ impl Bloom {
             draw_full_screen_quad();
 
             current_destination.unbind(false);
-            self.downsample_shader.unbind();
 
             current_source = Rc::clone(&current_destination);
         }
-
-        self.downsample_shader.unbind();
 
         current_source
     }
@@ -202,13 +197,13 @@ impl Bloom {
     fn upsampling_passes(&self, input: Rc<Framebuffer>) -> Rc<Framebuffer> {
         let mut current_source = input;
 
+        self.bloom_shader.enable_keyword("BLOOM_PASS_UPSAMPLE");
         for temporary in self.blit_framebuffers.iter().rev().skip(1) {
             let current_destination = Rc::clone(temporary);
             //TODO: Do an upsampling blit here
             current_destination.bind();
 
-            self.upsample_shader.bind();
-            self.upsample_shader.set_texture_2d_with_id(
+            self.bloom_shader.set_texture_2d_with_id(
                 0,
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
@@ -218,7 +213,6 @@ impl Bloom {
             draw_full_screen_quad();
             StateManager::disable_blending();
 
-            self.upsample_shader.unbind();
             current_destination.unbind(false);
 
             current_source = Rc::clone(&current_destination);
@@ -228,28 +222,26 @@ impl Bloom {
     }
 
     fn composition_pass(&self, input: &Framebuffer, output: &Framebuffer) {
-        self.bloom_upsample_apply_shader.bind();
-        self.bloom_upsample_apply_shader.set_texture_2d_with_id(
+        self.bloom_shader
+            .enable_keyword("BLOOM_PASS_UPSAMPLE_APPLY");
+        self.bloom_shader.set_texture_2d_with_id(
             0,
             input.texture_attachments()[0].id(),
             &self.linear_sampler,
         );
-        self.bloom_upsample_apply_shader.set_texture_2d_with_id(
+        self.bloom_shader.set_texture_2d_with_id(
             1,
             output.texture_attachments()[0].id(),
             &self.linear_sampler,
         );
-        self.bloom_upsample_apply_shader.set_texture_2d_with_id(
-            2,
-            self.lens_dirt.get_id(),
-            &self.linear_sampler,
-        );
+        self.bloom_shader
+            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
         output.bind();
 
         draw_full_screen_quad();
 
         output.unbind(false);
-        self.bloom_upsample_apply_shader.unbind();
+        self.bloom_shader.unbind();
     }
 }
 
@@ -458,53 +450,21 @@ impl BloomBuilder {
             .load_texture_2d(asset_path.join("textures/lens_dirt_mask.png"), true, false)
             .expect("Failed to load lens dirt texture.");
 
-        let (
-            downsample_shader,
-            downsample_prefilter_shader,
-            upsample_shader,
-            bloom_upsample_apply_shader,
-        ) = {
-            let downsample_shader = device.shader_manager().create_shader(
-                &ShaderCreateInfo::builder("Downsample Shader")
-                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
-                    .stage(ShaderStage::Fragment, "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample.frag")
-                    .build()
-            );
-
-            let downsample_prefilter_shader = device.shader_manager().create_shader(
-                &ShaderCreateInfo::builder("Downsample Prefilter Shader")
-                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
-                    .stage(ShaderStage::Fragment, "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_downsample_prefilter.frag")
-                    .build()
-            );
-
-            let upsample_shader = device.shader_manager().create_shader(
-                &ShaderCreateInfo::builder("Upsample Shader")
-                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
-                    .stage(
-                        ShaderStage::Fragment,
-                        "src/rendering/postprocess/shaders/bloom_dual_filtering_blur_upsample.frag",
-                    )
-                    .build(),
-            );
-
-            let bloom_apply_shader = device.shader_manager().create_shader(
-                &ShaderCreateInfo::builder("Apply Bloom Shader")
-                    .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
-                    .stage(
-                        ShaderStage::Fragment,
-                        "src/rendering/postprocess/shaders/bloom_dual_filtering_apply.frag",
-                    )
-                    .build(),
-            );
-
-            (
-                downsample_shader,
-                downsample_prefilter_shader,
-                upsample_shader,
-                bloom_apply_shader,
-            )
-        };
+        let mut bloom_shader = device.shader_manager().create_shader(
+            &ShaderCreateInfo::builder("Bloom Shader")
+                .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
+                .stage(
+                    ShaderStage::Fragment,
+                    "src/rendering/postprocess/shaders/bloom.frag",
+                )
+                .keyword_set(&[
+                    "BLOOM_PASS_DOWNSAMPLE_PREFILTER",
+                    "BLOOM_PASS_DOWNSAMPLE",
+                    "BLOOM_PASS_UPSAMPLE",
+                    "BLOOM_PASS_UPSAMPLE_APPLY",
+                ])
+                .build(),
+        );
 
         let mut ubo = Buffer::new(
             "Bloom UBO",
@@ -534,10 +494,7 @@ impl BloomBuilder {
             tint: [1.0; 3],
             resolution_divisors: [2, 4],
             resolution_divisor_index: 0,
-            downsample_shader,
-            downsample_prefilter_shader,
-            upsample_shader,
-            bloom_upsample_apply_shader,
+            bloom_shader,
             ubo_data: Default::default(),
             ubo,
             linear_sampler,
