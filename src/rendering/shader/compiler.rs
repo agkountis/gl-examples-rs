@@ -78,10 +78,10 @@ impl Compiler {
         source_file_name: &str,
         include_depth: usize,
     ) -> IncludeCallbackResult {
-        println!("Attempting to resolve include: {}", requested_file_name);
+        println!("Attempting to resolve library: {}", requested_file_name);
         println!("Include Type: {:?}", include_type);
         println!("Directive source file: {}", source_file_name);
-        println!("Current include depth: {}", include_depth);
+        println!("Current library depth: {}", include_depth);
 
         let mut content = String::new();
 

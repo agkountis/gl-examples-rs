@@ -55,6 +55,14 @@ impl StateManager {
         unsafe { gl::DepthMask(state as u8) }
     }
 
+    pub fn depth_testing(enabled: bool) {
+        if enabled {
+            unsafe { gl::Enable(gl::DEPTH_TEST) }
+        } else {
+            unsafe { gl::Disable(gl::DEPTH_TEST) }
+        }
+    }
+
     pub fn enable_blending() {
         unsafe { gl::Enable(gl::BLEND) }
     }

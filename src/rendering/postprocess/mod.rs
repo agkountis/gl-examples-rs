@@ -6,7 +6,7 @@ use crate::{AsAny, AsAnyMut, Context};
 pub mod bloom;
 pub mod tone_mapper;
 
-const FULLSCREEN_VERTEX_SHADER_PATH: &str = "src/rendering/postprocess/shaders/fullscreen.vert";
+const FULLSCREEN_VERTEX_SHADER_PATH: &str = "assets/shaders/fullscreen.vert";
 
 pub trait PostprocessingEffect: Gui + AsAny + AsAnyMut {
     fn name(&self) -> &str;

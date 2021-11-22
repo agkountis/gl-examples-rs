@@ -77,16 +77,16 @@ impl PbsMetallicRoughnessMaterial {
         let create_info = ShaderCreateInfo::builder("PBS Shader")
             .stage(
                 ShaderStage::Vertex,
-                asset_path.as_ref().join("sdr/pbs.vert"),
+                asset_path.as_ref().join("shaders/pbs.vert"),
             )
             .stage(
                 ShaderStage::Fragment,
-                asset_path.as_ref().join("sdr/pbs.frag"),
+                asset_path.as_ref().join("shaders/pbs.frag"),
             )
             .keyword_set(&["_", "FEATURE_PARALLAX_MAPPING"])
-            .keyword_set(&["_", "FEATURE_SPECULAR_AA"])
-            .keyword_set(&["_", "FEATURE_SPECULAR_AO"])
-            .keyword_set(&["FEATURE_BRDF_FILLAMENT", "FEATURE_BRDF_UE4"])
+            // .keyword_set(&["_", "FEATURE_SPECULAR_AA"])
+            // .keyword_set(&["_", "FEATURE_SPECULAR_AO"])
+            // .keyword_set(&["FEATURE_BRDF_FILLAMENT", "FEATURE_BRDF_UE4"])
             .build();
 
         let mut shader = device.shader_manager().create_shader(&create_info);

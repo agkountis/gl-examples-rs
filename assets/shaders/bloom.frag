@@ -1,8 +1,8 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
-#include "src/rendering/postprocess/shaders/include/engine.glsl"
-#include "src/rendering/postprocess/shaders/include/dual_filtering_blur_sampling.glsl"
+#include "assets/shaders/library/engine.glsl"
+#include "assets/shaders/library/dual_filtering_blur_sampling.glsl"
 
 SAMPLER_2D(0, image);
 SAMPLER_2D(1, mainImage);

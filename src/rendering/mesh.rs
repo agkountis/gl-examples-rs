@@ -260,9 +260,11 @@ pub mod utilities {
 
     pub fn draw_full_screen_quad() {
         StateManager::depth_write(false);
+        StateManager::depth_testing(false);
         StateManager::front_face(FrontFace::Clockwise);
         FULLSCREEN_MESH.draw();
         StateManager::front_face(FrontFace::CounterClockwise);
+        StateManager::depth_testing(true);
         StateManager::depth_write(true);
     }
 

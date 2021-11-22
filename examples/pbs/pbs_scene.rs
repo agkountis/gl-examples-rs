@@ -165,8 +165,11 @@ impl PbsScene {
         let shader_manager = device.shader_manager();
         let skybox_prog = shader_manager.create_shader(
             &ShaderCreateInfo::builder("SkyboxShader")
-                .stage(ShaderStage::Vertex, asset_path.join("sdr/skybox.vert"))
-                .stage(ShaderStage::Fragment, asset_path.join("sdr/skybox.frag"))
+                .stage(ShaderStage::Vertex, asset_path.join("shaders/skybox.vert"))
+                .stage(
+                    ShaderStage::Fragment,
+                    asset_path.join("shaders/skybox.frag"),
+                )
                 .build(),
         );
 

@@ -1,7 +1,7 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
-#include "src/rendering/postprocess/shaders/include/engine.glsl"
+#include "assets/shaders/library/engine.glsl"
 
 #define MIN_ROUGHNESS                       0.045
 
@@ -53,6 +53,12 @@ UNIFORM_BLOCK_BEGIN(4, MaterialBlock)
     float aoScale;
     float aoBias;
     float reflectance;
+#ifdef FEATURE_PARALLAX_MAPPING
+    float pomMinLayers;
+    float pomMaxLayers;
+    float pomDisplacementScale;
+    int parallaxMappingMethod;
+#endif // FEATURE_PARALLAX_MAPPING
 UNIFORM_BLOCK_END
 
 SAMPLER_2D(0, albedoMap);
@@ -63,11 +69,20 @@ SAMPLER_2D(3, brdfLUT);
 SAMPLER_CUBE(4, irradianceMap);
 SAMPLER_CUBE(5, radianceMap);
 
+#ifdef FEATURE_PARALLAX_MAPPING
+    SAMPLER_2D(6, displacementMap);
+#endif
+
 OUTPUT(0, outColor);
 
-#include "assets/sdr/include/pbs_common.glsl"
-#include "assets/sdr/include/brdf.glsl"
-#include "assets/sdr/include/ibl.glsl"
+#ifdef FEATURE_PARALLAX_MAPPING
+    #include "assets/shaders/library/parallax_mapping.glsl"
+#endif // FEATURE_PARALLAX_MAPPING
+
+#include "assets/shaders/library/pbs_common.glsl"
+
+#include "assets/shaders/library/brdf.glsl"
+#include "assets/shaders/library/ibl.glsl"
 
 vec3 BRDF(in ShadingProperties props)
 {
@@ -86,13 +101,6 @@ float ConvertToGrayscale(in vec3 color)
     return dot(color, vec3(0.2125, 0.7154, 0.0721));
 }
 
-vec3 SampleNormalMap(in sampler2D normalMap, in vec2 texcoords, in float strength)
-{
-    vec3 norm = texture(normalMap, texcoords).rgb * 2.0 - 1.0;
-    norm.xy *= strength;
-    return norm;
-}
-
 void CalculateF0(inout ShadingProperties props)
 {
     props.F0 = 0.16 * reflectance * reflectance * (1.0 - props.metallic) + props.albedo.rgb * props.metallic;
@@ -109,31 +117,11 @@ void PopulateIBLProperties(inout ShadingProperties props)
     props.brdfLUT = texture(brdfLUT, vec2(props.NoV, props.perceptualRoughness)).rg;
 }
 
-void PopulateVectorProducts(inout ShadingProperties props)
-{
-    props.t = normalize(fsIn.wTangent.xyz);
-    mat3 tangentToWorldMat = CreateTangentToWorldMatrix(normalize(fsIn.wNormal), props.t, fsIn.wTangent.w);
-
-    props.n = normalize(tangentToWorldMat * SampleNormalMap(normalMap, fsIn.texcoord, 1.0));
-
-    vec3 v = normalize(fsIn.wViewDirection);
-    vec3 l = normalize(wLightDirection).xyz;
-    vec3 h = normalize(l + v);
-    props.r = reflect(-v, props.n);
-
-    props.NoH = clamp(dot(props.n, h), 0.0, 1.0);
-
-    props.NoV = clamp(abs(dot(props.n, v)), 0.0, 1.0);
-
-    props.NoL = clamp(dot(props.n, l), 0.0, 1.0);
-    props.HoV = clamp(dot(h, v), 0.0, 1.0);
-}
-
 void PopulateMaterialProperties(inout ShadingProperties props)
 {
-    props.albedo = texture(albedoMap, fsIn.texcoord) * vec4(baseColor.rgb, 1.0);
+    props.albedo = texture(albedoMap, props.texcoord) * vec4(baseColor.rgb, 1.0);
 
-    vec3 m_r_ao = texture(m_r_aoMap, fsIn.texcoord).rgb;
+    vec3 m_r_ao = texture(m_r_aoMap, props.texcoord).rgb;
     props.metallic = clamp((m_r_ao.r + metallicBias) * metallicScale, 0.0, 1.0);
     props.perceptualRoughness = clamp((m_r_ao.g + roughnessBias) * roughnessScale, MIN_ROUGHNESS, 1.0) ;
 
@@ -176,7 +164,7 @@ vec4 ComputeOutputColor(in ShadingProperties props)
         case RENDER_MODE_TANGENTS:
             return vec4(props.t * 0.5 + 0.5, 1.0);
         case RENDER_MODE_UV:
-            return vec4(fsIn.texcoord, 0.0, 1.0);
+            return vec4(props.texcoord, 0.0, 1.0);
         case RENDER_MODE_NDOTV:
             return vec4(props.NoV.xxx, 1.0);
         case RENDER_MODE_AO:

@@ -453,10 +453,7 @@ impl BloomBuilder {
         let mut bloom_shader = device.shader_manager().create_shader(
             &ShaderCreateInfo::builder("Bloom Shader")
                 .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
-                .stage(
-                    ShaderStage::Fragment,
-                    "src/rendering/postprocess/shaders/bloom.frag",
-                )
+                .stage(ShaderStage::Fragment, "assets/shaders/bloom.frag")
                 .keyword_set(&[
                     "BLOOM_PASS_DOWNSAMPLE_PREFILTER",
                     "BLOOM_PASS_DOWNSAMPLE",

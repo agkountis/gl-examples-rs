@@ -3,7 +3,6 @@
 
 layout(std140, binding = 3) uniform ToneMappingBlock
 {
-    int tonemappingOperator;
     float whiteThreshold;
     float exposure;
 };

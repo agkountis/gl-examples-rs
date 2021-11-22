@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::rc::Rc;
 
+use crate::core::math::Vec2;
 use crate::rendering::postprocess::FULLSCREEN_VERTEX_SHADER_PATH;
 use crate::shader::ShaderCreateInfo;
 use crate::{
@@ -19,14 +20,13 @@ use crate::{
     Context,
 };
 
-const TONEMAPPER_FRAGMENT_SHADER_PATH: &str = "src/rendering/postprocess/shaders/tonemap.frag";
+const TONEMAPPER_FRAGMENT_SHADER_PATH: &str = "assets/shaders/tonemap.frag";
 
 #[repr(C)]
 struct ToneMappingPerFrameUniforms {
-    operator: i32,
     white_threshold: f32,
     exposure: f32,
-    _pad: f32,
+    _pad: Vec2,
 }
 
 pub struct ToneMapper {
@@ -124,10 +124,9 @@ impl PostprocessingEffect for ToneMapper {
         self.shader.bind();
 
         let tone_mapping_uniforms = ToneMappingPerFrameUniforms {
-            operator: self.operator as i32,
             white_threshold: self.white_threshold,
             exposure: self.exposure,
-            _pad: 0.0,
+            _pad: Vec2::new(0.0, 0.0),
         };
 
         self.tone_mapper_ubo.fill_mapped(0, &tone_mapping_uniforms);
