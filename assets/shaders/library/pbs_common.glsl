@@ -91,8 +91,9 @@ void PopulateVectorProducts(inout ShadingProperties props)
     mat3 worldToTangentMat = transpose(tangentToWorldMat);
 
     props.tViewDirection = normalize(worldToTangentMat * v);
-    CalculateTextureCoordinates(props);
 #endif
+
+    CalculateTextureCoordinates(props);
 
     // TODO: SampleNormalMap is not defined in this file. Fix this
     props.n = normalize(tangentToWorldMat * SampleNormalMap(normalMap, props.texcoord, 1.0));

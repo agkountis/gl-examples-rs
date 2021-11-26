@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use std::{path::Path, rc::Rc};
 
 use crevice::std140::AsStd140;
@@ -84,12 +83,12 @@ impl PbsMetallicRoughnessMaterial {
                 asset_path.as_ref().join("shaders/pbs.frag"),
             )
             .keyword_set(&["_", "FEATURE_PARALLAX_MAPPING"])
-            // .keyword_set(&["_", "FEATURE_SPECULAR_AA"])
-            // .keyword_set(&["_", "FEATURE_SPECULAR_AO"])
-            // .keyword_set(&["FEATURE_BRDF_FILLAMENT", "FEATURE_BRDF_UE4"])
+            .keyword_set(&["_", "FEATURE_SPECULAR_AA"])
+            .keyword_set(&["_", "FEATURE_SPECULAR_AO"])
+            .keyword_set(&["FEATURE_BRDF_FILLAMENT", "FEATURE_BRDF_UE4"])
             .build();
 
-        let mut shader = device.shader_manager().create_shader(&create_info);
+        let shader = device.shader_manager().create_shader(&create_info);
 
         if displacement.is_some() {
             shader.enable_keyword("FEATURE_PARALLAX_MAPPING")

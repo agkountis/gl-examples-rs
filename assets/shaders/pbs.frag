@@ -22,9 +22,6 @@
 #define RENDER_MODE_ANALYTICAL_LIGHTS_ONLY  15
 #define RENDER_MODE_IBL_ONLY                16
 
-#define BRDF_FILLAMENT                      0
-#define BRDF_UE4                            1
-
 INPUT_BLOCK_BEGIN(0, VsOut)
     vec3 wViewDirection;
     vec3 wNormal;
@@ -39,7 +36,6 @@ UNIFORM_BLOCK_BEGIN(2, PerFrameBlock)
     int specularAA;
     int specularAO;
     int renderMode;
-    int brdfType;
     int mulriScattering;
     float maxReflectionLod;
 UNIFORM_BLOCK_END
@@ -83,18 +79,6 @@ OUTPUT(0, outColor);
 
 #include "assets/shaders/library/brdf.glsl"
 #include "assets/shaders/library/ibl.glsl"
-
-vec3 BRDF(in ShadingProperties props)
-{
-    switch (brdfType) {
-        case BRDF_FILLAMENT:
-            return FillamentBRDF(props);
-        case BRDF_UE4:
-            return UE4BRDF(props);
-        default:
-            return vec3(1.0, 0.0, 1.0); // Error
-    }
-}
 
 float ConvertToGrayscale(in vec3 color)
 {

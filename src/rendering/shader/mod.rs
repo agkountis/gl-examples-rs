@@ -152,24 +152,12 @@ impl Shader {
     pub fn enable_keyword(&self, keyword: &str) {
         if let Some(&bits) = self.keyword_bitfield_map.get(keyword) {
             {
-                let mut active_variant = self.active_variant.borrow_mut();
                 let mut active_variant_bitfield = self.active_variant_bitfield.borrow_mut();
 
                 //TODO: the final bitfield must be a combination of each keyword set's bitfield.
 
-                // *active_variant_bitfield = *active_variant_bitfield | bits;
-                *active_variant_bitfield = bits;
-                *active_variant =
-                    if let Some(variant) = self.shader_variants.get(&*active_variant_bitfield) {
-                        variant.id()
-                    } else {
-                        eprintln!(
-                            "ERROR: Variant with bitfield {} does not exist!",
-                            *active_variant_bitfield
-                        );
-
-                        *active_variant
-                    };
+                *active_variant_bitfield |= bits;
+                self.set_active_shader_variant(*active_variant_bitfield);
             }
 
             self.bind()
@@ -179,13 +167,13 @@ impl Shader {
     }
 
     pub fn disable_keyword(&self, keyword: &str) {
-        let bits = self.keyword_bitfield_map[keyword];
+        if let Some(&bits) = self.keyword_bitfield_map.get(keyword) {
+            let mut active_variant_bitfield = self.active_variant_bitfield.borrow_mut();
 
-        let mut active_variant = self.active_variant.borrow_mut();
-        let mut active_variant_bitfield = self.active_variant_bitfield.borrow_mut();
+            *active_variant_bitfield &= !bits;
 
-        *active_variant_bitfield &= bits;
-        *active_variant = self.shader_variants[&*active_variant_bitfield].id();
+            self.set_active_shader_variant(*active_variant_bitfield);
+        }
     }
 
     pub fn bind(&self) {
@@ -198,6 +186,14 @@ impl Shader {
         unsafe {
             gl::BindProgramPipeline(0);
         }
+    }
+
+    fn set_active_shader_variant(&self, bitfield: u32) {
+        let mut active_variant = self.active_variant.borrow_mut();
+        *active_variant = self
+            .shader_variants
+            .get(&bitfield)
+            .map_or_else(|| *active_variant, |variant| variant.id());
     }
 }
 

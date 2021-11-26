@@ -138,4 +138,15 @@ vec3 UE4BRDF(in ShadingProperties props)
     return (kD * props.albedo.rgb * ONE_OVER_PI + specular) * lightColor.rgb * props.NoL;
 }
 
+vec3 BRDF(in ShadingProperties props)
+{
+    #if defined(FEATURE_BRDF_FILLAMENT)
+        return FillamentBRDF(props);
+    #elif defined(FEATURE_BRDF_UE4)
+        return UE4BRDF(props);
+    #else
+        return vec3(1.0, 0.0, 1.0);
+    #endif
+}
+
 #endif // BRDF_GLSL_

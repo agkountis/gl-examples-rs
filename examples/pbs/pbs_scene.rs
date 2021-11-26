@@ -108,7 +108,6 @@ struct FragmentPerFrameUniforms {
     geometric_specular_aa: i32,
     specular_ao: i32,
     render_mode: i32,
-    brdf_type: i32,
     multi_scattering: i32,
     max_reflection_lod: f32,
 }
@@ -530,7 +529,6 @@ impl PbsScene {
             geometric_specular_aa: self.lighting.geometric_specular_aa as i32,
             specular_ao: self.lighting.specular_ao as i32,
             render_mode: self.render_mode as i32,
-            brdf_type: self.lighting.brdf_type as i32,
             multi_scattering: self.lighting.multi_scattering as i32,
             max_reflection_lod: self.lighting.max_reflection_lod as f32,
         };
@@ -779,11 +777,20 @@ impl Scene for PbsScene {
                                 .open_on_double_click(true)
                                 .framed(false)
                                 .build(ui, || {
-                                    ui.combo_simple_string(
+                                    if ui.combo_simple_string(
                                         "BRDF Type",
                                         &mut self.lighting.brdf_type,
                                         &["Fillament", "Unreal Engine 4"],
-                                    );
+                                    ) {
+                                        let shader = self.material.shader();
+                                        if self.lighting.brdf_type == 0 {
+                                            shader.disable_keyword("FEATURE_BRDF_UE4");
+                                            shader.enable_keyword("FEATURE_BRDF_FILLAMENT");
+                                        } else {
+                                            shader.disable_keyword("FEATURE_BRDF_FILLAMENT");
+                                            shader.enable_keyword("FEATURE_BRDF_UE4");
+                                        }
+                                    }
 
                                     if self.lighting.brdf_type == 0 {
                                         ui.checkbox(

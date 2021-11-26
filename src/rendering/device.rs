@@ -89,7 +89,7 @@ impl Device {
     pub fn info(&self) -> &DeviceInfo {
         &self.info
     }
-    
+
     pub fn shader_manager(&mut self) -> &mut ShaderManager {
         &mut self.shader_manager
     }

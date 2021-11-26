@@ -157,6 +157,8 @@ impl Bloom {
 
         let mut current_source = Rc::clone(&current_destination);
 
+        self.bloom_shader
+            .disable_keyword("BLOOM_PASS_DOWNSAMPLE_PREFILTER");
         self.bloom_shader.enable_keyword("BLOOM_PASS_DOWNSAMPLE");
 
         for _ in 1..self.iterations {
@@ -197,6 +199,7 @@ impl Bloom {
     fn upsampling_passes(&self, input: Rc<Framebuffer>) -> Rc<Framebuffer> {
         let mut current_source = input;
 
+        self.bloom_shader.disable_keyword("BLOOM_PASS_DOWNSAMPLE");
         self.bloom_shader.enable_keyword("BLOOM_PASS_UPSAMPLE");
         for temporary in self.blit_framebuffers.iter().rev().skip(1) {
             let current_destination = Rc::clone(temporary);
@@ -222,6 +225,7 @@ impl Bloom {
     }
 
     fn composition_pass(&self, input: &Framebuffer, output: &Framebuffer) {
+        self.bloom_shader.disable_keyword("BLOOM_PASS_UPSAMPLE");
         self.bloom_shader
             .enable_keyword("BLOOM_PASS_UPSAMPLE_APPLY");
         self.bloom_shader.set_texture_2d_with_id(
@@ -241,7 +245,11 @@ impl Bloom {
         draw_full_screen_quad();
 
         output.unbind(false);
+
         self.bloom_shader.unbind();
+
+        self.bloom_shader
+            .disable_keyword("BLOOM_PASS_UPSAMPLE_APPLY");
     }
 }
 
@@ -450,7 +458,7 @@ impl BloomBuilder {
             .load_texture_2d(asset_path.join("textures/lens_dirt_mask.png"), true, false)
             .expect("Failed to load lens dirt texture.");
 
-        let mut bloom_shader = device.shader_manager().create_shader(
+        let bloom_shader = device.shader_manager().create_shader(
             &ShaderCreateInfo::builder("Bloom Shader")
                 .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
                 .stage(ShaderStage::Fragment, "assets/shaders/bloom.frag")

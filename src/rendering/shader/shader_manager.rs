@@ -37,6 +37,13 @@ impl ShaderManager {
 
         let keyword_sets = Self::extract_keyword_set_combinations(create_info);
 
+        let default_variant_bitfield = keyword_sets
+            .iter()
+            .map(|vec| vec.iter().copied().next().unwrap())
+            .filter(|&a| a != "_")
+            .map(String::from)
+            .fold(0u32, |acc, keyword| acc | keyword_bitfield_map[&keyword]);
+
         let shader_variants = Self::create_shader_variants(
             stages,
             keyword_sets,
@@ -48,6 +55,7 @@ impl ShaderManager {
         println!("Shader variants: {:?}", shader_variants);
 
         // TODO: This takes the 1st variant as default. This is not always correct
+
         let (default_variant_bitfield, default_variant_id) = shader_variants
             .iter()
             .sorted_by(|(&a, _), (&b, _)| Ord::cmp(&a, &b))
@@ -57,7 +65,7 @@ impl ShaderManager {
 
         let shader = Rc::new(Shader {
             name: create_info.name.clone(),
-            active_variant: RefCell::new(default_variant_id), // TODO: Have to figure out which one should be the default active shader variant.
+            active_variant: RefCell::new(shader_variants[&default_variant_bitfield].id()), // TODO: Have to figure out which one should be the default active shader variant.
             active_variant_bitfield: RefCell::new(default_variant_bitfield),
             shader_variants,
             keyword_bitfield_map,
