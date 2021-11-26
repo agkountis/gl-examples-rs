@@ -499,7 +499,7 @@ impl PbsScene {
         Framebuffer::blit(
             framebuffer,
             &self.resolve_framebuffer,
-            TextureFilter::Nearest,
+            TextureFilter::Linear,
         );
         framebuffer.unbind(true);
     }

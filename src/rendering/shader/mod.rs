@@ -14,6 +14,7 @@ use crate::rendering::shader::program::ShaderProgram;
 use crate::rendering::texture::{Texture2D, TextureCube};
 use gl::types::*;
 use gl_bindings as gl;
+use itertools::Itertools;
 
 pub fn check_spirv_support() -> bool {
     let mut format_count: GLint = 0;
@@ -53,7 +54,7 @@ pub enum ShaderStage {
 
 pub struct ShaderCreateInfo<'a> {
     name: String,
-    keyword_sets: Vec<HashSet<&'a str>>,
+    keyword_sets: Vec<Vec<&'a str>>,
     stages: Vec<(ShaderStage, PathBuf)>,
 }
 
@@ -69,7 +70,7 @@ impl<'a> ShaderCreateInfo<'a> {
 #[derive(Default)]
 pub struct ShaderCreateInfoBuilder<'a> {
     name: String,
-    keyword_sets: Vec<HashSet<&'a str>>,
+    keyword_sets: Vec<Vec<&'a str>>,
     modules: Vec<(ShaderStage, PathBuf)>,
 }
 
@@ -80,15 +81,14 @@ impl<'a> ShaderCreateInfoBuilder<'a> {
     }
 
     pub fn keyword_set(mut self, keyword_set: &'a [&'a str]) -> Self {
-        let keyword_hash_set = keyword_set.iter().cloned().collect::<HashSet<&str>>();
-        self.keyword_sets.push(keyword_hash_set);
+        let keyword_set = keyword_set.iter().copied().unique().collect_vec();
+        self.keyword_sets.push(keyword_set);
         self
     }
 
     pub fn build(self) -> ShaderCreateInfo<'a> {
         let keyword_sets = if self.keyword_sets.is_empty() {
-            let mut set = HashSet::new();
-            set.insert("_");
+            let mut set = vec!["_"];
             vec![set]
         } else {
             self.keyword_sets

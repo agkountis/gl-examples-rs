@@ -22,6 +22,18 @@ use crate::{
 
 const TONEMAPPER_FRAGMENT_SHADER_PATH: &str = "assets/shaders/tonemap.frag";
 
+const TONEMAPPER_SHADER_KEYWORDS: [&str; 7] = [
+    "TONE_MAP_FUNC_ACES_FITTED",
+    "TONE_MAP_FUNC_ACES_FILMIC",
+    "TONE_MAP_FUNC_REINHARD",
+    "TONE_MAP_FUNC_LUMA_BASED_REINHARD",
+    "TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD",
+    "TONE_MAP_FUNC_UNCHARTED_2",
+    "TONE_MAP_FUNC_ROMBINDAHOUSE",
+];
+
+const TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD: usize = 4;
+
 #[repr(C)]
 struct ToneMappingPerFrameUniforms {
     white_threshold: f32,
@@ -33,6 +45,7 @@ pub struct ToneMapper {
     shader: Rc<Shader>,
     tone_mapper_ubo: Buffer,
     sampler_nearest: Sampler,
+    prev_operator: usize,
     operator: usize,
     white_threshold: f32,
     exposure: f32,
@@ -48,19 +61,11 @@ impl ToneMapper {
         let create_info = ShaderCreateInfo::builder("ToneMapping Shader")
             .stage(ShaderStage::Vertex, FULLSCREEN_VERTEX_SHADER_PATH)
             .stage(ShaderStage::Fragment, TONEMAPPER_FRAGMENT_SHADER_PATH)
-            .keyword_set(&[
-                "TONE_MAP_FUNC_ACES_FITTED",
-                "TONE_MAP_FUNC_ACES_FILMIC",
-                "TONE_MAP_FUNC_REINHARD",
-                "TONE_MAP_FUNC_LUMA_BASED_REINHARD",
-                "TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD",
-                "TONE_MAP_FUNC_UNCHARTED_2",
-                "TONE_MAP_FUNC_ROMBINDAHOUSE",
-            ])
+            .keyword_set(&TONEMAPPER_SHADER_KEYWORDS)
             .build();
 
         let shader = device.shader_manager().create_shader(&create_info);
-        shader.enable_keyword("TONE_MAP_FUNC_ACES_FITTED");
+        shader.enable_keyword(TONEMAPPER_SHADER_KEYWORDS[0]);
 
         let mut tone_mapper_ubo = Buffer::new(
             "Tonemapping Fragment UBO",
@@ -85,6 +90,7 @@ impl ToneMapper {
             shader,
             tone_mapper_ubo,
             sampler_nearest,
+            prev_operator: 0,
             operator: 0,
             white_threshold: 2.0,
             exposure: 1.5,
@@ -163,29 +169,16 @@ impl Gui for ToneMapper {
                         "Uncharted 2",
                         "RomBinDaHouse",
                     ],
-                ) {
+                ) && self.prev_operator != self.operator {
                     println!("TONE MAP FUNC CHANGE!");
-
-                    if self.operator == 0 {
-                        self.shader.enable_keyword("TONE_MAP_FUNC_ACES_FITTED")
-                    } else if self.operator == 1 {
-                        self.shader.enable_keyword("TONE_MAP_FUNC_ACES_FILMIC")
-                    } else if self.operator == 2 {
-                        self.shader.enable_keyword("TONE_MAP_FUNC_REINHARD")
-                    } else if self.operator == 3 {
-                        self.shader
-                            .enable_keyword("TONE_MAP_FUNC_LUMA_BASED_REINHARD")
-                    } else if self.operator == 4 {
-                        self.shader
-                            .enable_keyword("TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD")
-                    } else if self.operator == 5 {
-                        self.shader.enable_keyword("TONE_MAP_FUNC_UNCHARTED_2")
-                    } else if self.operator == 6 {
-                        self.shader.enable_keyword("TONE_MAP_FUNC_ROMBINDAHOUSE")
-                    }
+                    println!("Disabling keyword: {} Operator: {}", TONEMAPPER_SHADER_KEYWORDS[self.prev_operator], self.prev_operator);
+                    println!("Enabling keyword: {} Operator: {}", TONEMAPPER_SHADER_KEYWORDS[self.operator], self.operator);
+                    self.shader.disable_keyword(TONEMAPPER_SHADER_KEYWORDS[self.prev_operator]);
+                    self.shader.enable_keyword(TONEMAPPER_SHADER_KEYWORDS[self.operator]);
+                    self.prev_operator = self.operator;
                 }
 
-                if self.operator == 4 {
+                if self.operator == TONE_MAP_FUNC_WHITE_PRESERVING_LUMA_BASED_REINHARD {
                     imgui::Slider::new("White Threshold", 0.3, 30.0)
                         .display_format("%.2f")
                         .build(ui, &mut self.white_threshold);

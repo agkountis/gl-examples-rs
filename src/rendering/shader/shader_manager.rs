@@ -35,33 +35,25 @@ impl ShaderManager {
 
         let stages = Self::create_compile_items(create_info);
 
-        let keyword_sets = Self::extract_keyword_set_combinations(create_info);
+        let keyword_combinations = Self::extract_keyword_set_combinations(create_info);
 
-        let default_variant_bitfield = keyword_sets
-            .iter()
-            .map(|vec| vec.iter().copied().next().unwrap())
-            .filter(|&a| a != "_")
-            .map(String::from)
-            .fold(0u32, |acc, keyword| acc | keyword_bitfield_map[&keyword]);
+        println!("Keyword Sets: {:?}", create_info.keyword_sets);
+
+        let mut default_variant_bitfield = 0u32;
+        for keyword_set in create_info.keyword_sets.iter() {
+            let kw = *keyword_set.iter().next().unwrap();
+            default_variant_bitfield |= keyword_bitfield_map[kw];
+        }
 
         let shader_variants = Self::create_shader_variants(
             stages,
-            keyword_sets,
+            keyword_combinations,
             &keyword_bitfield_map,
             &mut self.compiler,
             &mut self.shader_module_cache,
         );
 
         println!("Shader variants: {:?}", shader_variants);
-
-        // TODO: This takes the 1st variant as default. This is not always correct
-
-        let (default_variant_bitfield, default_variant_id) = shader_variants
-            .iter()
-            .sorted_by(|(&a, _), (&b, _)| Ord::cmp(&a, &b))
-            .next()
-            .map(|(a, b)| (*a, b.id()))
-            .unwrap();
 
         let shader = Rc::new(Shader {
             name: create_info.name.clone(),
@@ -149,8 +141,6 @@ impl ShaderManager {
         for keyword_set in keyword_sets.into_iter() {
             let mut shader_modules = Vec::with_capacity(compile_items.len());
 
-            println!("Keyword set: {:?}", keyword_set);
-
             for CompileItem {
                 shader_stage,
                 file_name,
@@ -169,8 +159,6 @@ impl ShaderManager {
 
                         let maybe_keywords =
                             (!filtered_keywords.is_empty()).then(|| filtered_keywords.as_slice());
-
-                        println!("Compile keyword set opt: {:?}", maybe_keywords);
 
                         let compiled_artifact = compiler
                             .compile(source, file_name, *shader_stage, maybe_keywords)
