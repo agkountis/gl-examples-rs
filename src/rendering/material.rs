@@ -158,22 +158,25 @@ impl Material for PbsMetallicRoughnessMaterial {
             .fill_mapped(0, &self.property_block.as_std140());
 
         self.shader
-            .set_texture_2d(ALBEDO_MAP_BINDING_INDEX, &self.albedo, &self.sampler)
-            .set_texture_2d(
+            .bind_texture_2d(ALBEDO_MAP_BINDING_INDEX, &self.albedo, &self.sampler)
+            .bind_texture_2d(
                 M_R_AO_MAP_BINDING_INDEX,
                 &self.metallic_roughness_ao,
                 &self.sampler,
             )
-            .set_texture_2d(NORMAL_MAP_BINDING_INDEX, &self.normals, &self.sampler)
-            .set_texture_2d(
+            .bind_texture_2d(NORMAL_MAP_BINDING_INDEX, &self.normals, &self.sampler)
+            .bind_texture_2d(
                 BRDF_LUT_MAP_BINDING_INDEX,
                 &self.ibl_brdf_lut,
                 &self.sampler,
             );
 
         if let Some(displacement) = &self.displacement {
-            self.shader
-                .set_texture_2d(DISPLACEMENT_MAP_BINDING_INDEX, displacement, &self.sampler);
+            self.shader.bind_texture_2d(
+                DISPLACEMENT_MAP_BINDING_INDEX,
+                displacement,
+                &self.sampler,
+            );
         }
     }
 

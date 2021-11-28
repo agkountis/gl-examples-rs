@@ -112,7 +112,7 @@ pub struct Shader {
 }
 
 impl Shader {
-    pub fn set_texture_2d(&self, location: u32, texture: &Texture2D, sampler: &Sampler) -> &Self {
+    pub fn bind_texture_2d(&self, location: u32, texture: &Texture2D, sampler: &Sampler) -> &Self {
         unsafe {
             gl::BindTextureUnit(location as GLuint, texture.get_id());
             gl::BindSampler(location as GLuint, sampler.id)
@@ -121,7 +121,7 @@ impl Shader {
         self
     }
 
-    pub fn set_texture_2d_with_id(
+    pub fn bind_texture_2d_with_id(
         &self,
         binding_location: u32,
         texture_id: u32,
@@ -135,7 +135,7 @@ impl Shader {
         self
     }
 
-    pub fn set_texture_cube(
+    pub fn bind_texture_cube(
         &self,
         binding_location: u32,
         texture: &TextureCube,

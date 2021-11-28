@@ -145,7 +145,7 @@ impl Bloom {
 
         self.bloom_shader
             .enable_keyword("BLOOM_PASS_DOWNSAMPLE_PREFILTER");
-        self.bloom_shader.set_texture_2d_with_id(
+        self.bloom_shader.bind_texture_2d_with_id(
             0,
             input.texture_attachments()[0].id(),
             &self.linear_sampler,
@@ -180,7 +180,7 @@ impl Bloom {
             current_destination.bind();
             current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
 
-            self.bloom_shader.set_texture_2d_with_id(
+            self.bloom_shader.bind_texture_2d_with_id(
                 0,
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
@@ -206,7 +206,7 @@ impl Bloom {
             //TODO: Do an upsampling blit here
             current_destination.bind();
 
-            self.bloom_shader.set_texture_2d_with_id(
+            self.bloom_shader.bind_texture_2d_with_id(
                 0,
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
@@ -228,18 +228,18 @@ impl Bloom {
         self.bloom_shader.disable_keyword("BLOOM_PASS_UPSAMPLE");
         self.bloom_shader
             .enable_keyword("BLOOM_PASS_UPSAMPLE_APPLY");
-        self.bloom_shader.set_texture_2d_with_id(
+        self.bloom_shader.bind_texture_2d_with_id(
             0,
             input.texture_attachments()[0].id(),
             &self.linear_sampler,
         );
-        self.bloom_shader.set_texture_2d_with_id(
+        self.bloom_shader.bind_texture_2d_with_id(
             1,
             output.texture_attachments()[0].id(),
             &self.linear_sampler,
         );
         self.bloom_shader
-            .set_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
+            .bind_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
         output.bind();
 
         draw_full_screen_quad();

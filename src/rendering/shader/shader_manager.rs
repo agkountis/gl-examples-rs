@@ -37,8 +37,6 @@ impl ShaderManager {
 
         let keyword_combinations = Self::extract_keyword_set_combinations(create_info);
 
-        println!("Keyword Sets: {:?}", create_info.keyword_sets);
-
         let mut default_variant_bitfield = 0u32;
         for keyword_set in create_info.keyword_sets.iter() {
             let kw = *keyword_set.iter().next().unwrap();
@@ -53,11 +51,9 @@ impl ShaderManager {
             &mut self.shader_module_cache,
         );
 
-        println!("Shader variants: {:?}", shader_variants);
-
         let shader = Rc::new(Shader {
             name: create_info.name.clone(),
-            active_variant: RefCell::new(shader_variants[&default_variant_bitfield].id()), // TODO: Have to figure out which one should be the default active shader variant.
+            active_variant: RefCell::new(shader_variants[&default_variant_bitfield].id()),
             active_variant_bitfield: RefCell::new(default_variant_bitfield),
             shader_variants,
             keyword_bitfield_map,
@@ -155,7 +151,6 @@ impl ShaderManager {
                             .filter(|&keyword| *keyword != "_")
                             .copied()
                             .collect_vec();
-                        println!("Filtered keywords: {:?}", filtered_keywords);
 
                         let maybe_keywords =
                             (!filtered_keywords.is_empty()).then(|| filtered_keywords.as_slice());
@@ -195,37 +190,6 @@ impl ShaderManager {
         }
 
         shader_variants
-    }
-}
-
-mod tests {
-    use crate::rendering::shader::ShaderCreateInfo;
-    use crate::shader::shader_manager::ShaderManager;
-    use itertools::Itertools;
-
-    #[test]
-    fn test_extract_keyword_set_combinations() {
-        let create_info = ShaderCreateInfo::builder("foo")
-            .keyword_set(&["_", "foo", "bla", "kek", "lol"])
-            .keyword_set(&["_", "ji", "jo"])
-            .keyword_set(&["asd", "aaa", "123sasd"])
-            .build();
-
-        let combinations = ShaderManager::extract_keyword_set_combinations(&create_info);
-
-        println!("{:?}", combinations)
-    }
-
-    #[test]
-    fn test_create_keyword_bitfield_map() {
-        let create_info = ShaderCreateInfo::builder("foo")
-            .keyword_set(&["_", "foo", "bla", "kek", "lol"])
-            .keyword_set(&["_", "ji", "jo"])
-            .keyword_set(&["asd", "aaa", "123sasd"])
-            .build();
-
-        let bitfield_map = ShaderManager::create_keyword_bitfield_map(&create_info);
-        println!("{:?}", bitfield_map)
     }
 }
 

@@ -2,7 +2,7 @@
 name = "engine"
 version = "0.1.0"
 authors = ["Angelos Gkountis <angelos.gkountis@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["use-spirv", "auto-compile-spirv"]

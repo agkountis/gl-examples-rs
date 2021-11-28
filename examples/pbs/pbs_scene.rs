@@ -438,12 +438,12 @@ impl PbsScene {
         const IRRADIANCE_MAP_BINDING_INDEX: u32 = 4;
         const RADIANCE_MAP_BINDING_INDEX: u32 = 5;
         shader
-            .set_texture_cube(
+            .bind_texture_cube(
                 IRRADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].irradiance,
                 &self.sampler_linear,
             )
-            .set_texture_cube(
+            .bind_texture_cube(
                 RADIANCE_MAP_BINDING_INDEX,
                 &self.environment.maps[self.environment.active_environment].radiance,
                 &self.sampler_linear,
@@ -478,7 +478,7 @@ impl PbsScene {
             }
         };
 
-        self.environment.skybox_program_pipeline.set_texture_cube(
+        self.environment.skybox_program_pipeline.bind_texture_cube(
             0,
             &environment_map,
             &self.sampler_linear,

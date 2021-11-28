@@ -137,7 +137,7 @@ impl PostprocessingEffect for ToneMapper {
 
         self.tone_mapper_ubo.fill_mapped(0, &tone_mapping_uniforms);
 
-        self.shader.set_texture_2d_with_id(
+        self.shader.bind_texture_2d_with_id(
             0,
             input.texture_attachment(0).id(),
             &self.sampler_nearest,
@@ -169,12 +169,21 @@ impl Gui for ToneMapper {
                         "Uncharted 2",
                         "RomBinDaHouse",
                     ],
-                ) && self.prev_operator != self.operator {
+                ) && self.prev_operator != self.operator
+                {
                     println!("TONE MAP FUNC CHANGE!");
-                    println!("Disabling keyword: {} Operator: {}", TONEMAPPER_SHADER_KEYWORDS[self.prev_operator], self.prev_operator);
-                    println!("Enabling keyword: {} Operator: {}", TONEMAPPER_SHADER_KEYWORDS[self.operator], self.operator);
-                    self.shader.disable_keyword(TONEMAPPER_SHADER_KEYWORDS[self.prev_operator]);
-                    self.shader.enable_keyword(TONEMAPPER_SHADER_KEYWORDS[self.operator]);
+                    println!(
+                        "Disabling keyword: {} Operator: {}",
+                        TONEMAPPER_SHADER_KEYWORDS[self.prev_operator], self.prev_operator
+                    );
+                    println!(
+                        "Enabling keyword: {} Operator: {}",
+                        TONEMAPPER_SHADER_KEYWORDS[self.operator], self.operator
+                    );
+                    self.shader
+                        .disable_keyword(TONEMAPPER_SHADER_KEYWORDS[self.prev_operator]);
+                    self.shader
+                        .enable_keyword(TONEMAPPER_SHADER_KEYWORDS[self.operator]);
                     self.prev_operator = self.operator;
                 }
 
