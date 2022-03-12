@@ -69,7 +69,7 @@ SAMPLER_CUBE(5, radianceMap);
     SAMPLER_2D(6, displacementMap);
 #endif
 
-OUTPUT(0, outColor);
+OUTPUT(0, vec4, outColor);
 
 #ifdef FEATURE_PARALLAX_MAPPING
     #include "assets/shaders/library/parallax_mapping.glsl"

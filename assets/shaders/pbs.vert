@@ -1,26 +1,19 @@
 #version 450 core
 #extension GL_ARB_separate_shader_objects : enable
 
+#include "assets/shaders/library/engine.glsl"
+
 //Vertex attributes
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec4 inTangent;
-layout(location = 3) in vec2 inTexcoord;
-layout(location = 4) in vec3 inColor;
+INPUT(0, vec3, inPosition);
+INPUT(1, vec3, inNormal);
+INPUT(2, vec4, inTangent);
+INPUT(3, vec2, inTexcoord);
+INPUT(4, vec3, inColor);
 
-layout(std140, binding = 0) uniform PerFrameBlock
-{
-    mat4 view;
-    mat4 projection;
-    mat4 view_projection;
-    vec4 eyePosition;
-};
-
-layout(std140, binding = 1) uniform PerDrawBlock
-{
+UNIFORM_BLOCK_BEGIN(1, PerDrawBlock)
     mat4 model;
     mat4 normalMatrix;
-};
+UNIFORM_BLOCK_END
 
 out gl_PerVertex {
     vec4 gl_Position;
@@ -31,19 +24,19 @@ out gl_PerVertex {
 //           v -> view space
 //           t -> tangent space
 //           l -> local space
-layout(location = 0) out VsOut {
+OUTPUT_BLOCK_BEGIN(0, VsOut)
     vec3 wViewDirection;
     vec3 wNormal;
     vec4 wTangent;
     vec2 texcoord;
-} vsOut;
+OUTPUT_BLOCK_END_NAMED(vsOut)
 
 void main()
 {
     //Transform vertex to clipspace.
     vec4 lVertexPosition = vec4(inPosition, 1.0);
     vec4 wVertexPosition = model * lVertexPosition;
-    gl_Position = projection * view * wVertexPosition;
+    gl_Position = LIB_VIEW_PROJECTION_MATRIX * wVertexPosition;
 
     mat3 normalMat = mat3(normalMatrix);
     //Calculate the normal. Bring it to world space
@@ -53,7 +46,7 @@ void main()
     vsOut.wTangent = vec4(normalMat * inTangent.xyz, inTangent.w);
 
     //Assign the view direction for output.
-    vsOut.wViewDirection = eyePosition.xyz - wVertexPosition.xyz;
+    vsOut.wViewDirection = LIB_CAMERA_POSITION.xyz - wVertexPosition.xyz;
 
     //Assign texture coorinates for output.
     vsOut.texcoord = inTexcoord;

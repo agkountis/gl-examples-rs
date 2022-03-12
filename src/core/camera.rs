@@ -1,5 +1,6 @@
 use glutin::dpi::PhysicalSize;
 use nalgebra_glm::{normalize, quat_normalize};
+use crevice::std140::AsStd140;
 
 use crate::core::math::{clamp_scalar, rotate_vec3, Vec4};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
@@ -8,11 +9,14 @@ use crate::math::{perspective, quaternion};
 use crate::rendering::buffer::{Buffer, BufferStorageFlags, BufferTarget, MapModeFlags};
 
 #[repr(C)]
+#[derive(Debug, AsStd140)]
 struct CameraUniformBlock {
-    view: Mat4,
-    projection: Mat4,
-    view_projection_matrix: Mat4,
-    eye_position: Vec4,
+    view: mint::ColumnMatrix4<f32>,
+    projection: mint::ColumnMatrix4<f32>,
+    view_projection_matrix: mint::ColumnMatrix4<f32>,
+    eye_position: mint::Vector4<f32>,
+    projection_params: mint::Vector4<f32>,
+    dof_params: mint::Vector3<f32>,
 }
 
 pub struct Camera {
@@ -25,6 +29,9 @@ pub struct Camera {
     aperture: f32,
     shutter_speed: f32,
     sensitivity: f32,
+    focus_distance: f32,
+    focus_range: f32,
+    bokeh_radius: f32,
     orbit_speed: f32,
     zoom_speed: f32,
     orbit_dampening: f32,
@@ -137,13 +144,19 @@ impl Camera {
         );
 
         let block = CameraUniformBlock {
-            view: self.transform,
-            projection,
-            view_projection_matrix: projection * self.transform,
-            eye_position: Vec4::new(self.position.x, self.position.y, self.position.z, 1.0),
+            view: self.transform.into(),
+            projection: projection.into(),
+            view_projection_matrix: (projection * self.transform).into(),
+            eye_position: Vec4::new(self.position.x, self.position.y, self.position.z, 1.0).into(),
+            projection_params: [
+                self.near_plane,
+                self.far_plane,
+                self.far_plane / (self.far_plane - self.near_plane),
+                (-self.far_plane * self.near_plane) / (self.far_plane - self.near_plane)].into(),
+            dof_params: [self.focus_distance, self.focus_range, self.bokeh_radius].into(),
         };
 
-        self.uniform_buffer.fill_mapped(0, &block)
+        self.uniform_buffer.fill_mapped(0, &block.as_std140())
     }
 
     pub fn exposure(&self) -> f32 {
@@ -164,6 +177,9 @@ pub struct CameraBuilder {
     aperture: f32,
     shutter_speed: f32,
     sensitivity: f32,
+    focus_distance: f32,
+    focus_range: f32,
+    bokeh_radius: f32,
     orbit_speed: f32,
     zoom_speed: f32,
     orbit_dampening: f32,
@@ -183,6 +199,9 @@ impl Default for CameraBuilder {
             aperture: 1.4,
             shutter_speed: 0.55,
             sensitivity: 500.0,
+            focus_distance: 66.0,
+            focus_range: 9.0,
+            bokeh_radius: 4.0,
             orbit_speed: 1.0,
             zoom_speed: 1.0,
             orbit_dampening: 0.0,
@@ -275,7 +294,7 @@ impl CameraBuilder {
 
         let mut uniform_buffer = Buffer::new(
             "Camera UBO",
-            std::mem::size_of::<CameraUniformBlock>() as isize,
+            std::mem::size_of::<<CameraUniformBlock as AsStd140>::Std140Type>() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -292,6 +311,9 @@ impl CameraBuilder {
             aperture: self.aperture,
             shutter_speed: self.shutter_speed,
             sensitivity: self.sensitivity,
+            focus_distance: self.focus_distance,
+            focus_range: self.focus_range,
+            bokeh_radius: self.bokeh_radius,
             orbit_speed: self.orbit_speed,
             zoom_speed: self.zoom_speed,
             min_distance: self.min_distance,
@@ -317,117 +339,134 @@ impl Gui for Camera {
         {
             ui.spacing();
             ui.group(|| {
-                imgui::TreeNode::new("Controls")
+                imgui::TreeNode::new("Lens")
                     .default_open(true)
                     .open_on_arrow(true)
                     .open_on_double_click(true)
                     .framed(false)
                     .build(ui, || {
-                        imgui::TreeNode::new("Lens")
-                            .default_open(true)
-                            .open_on_arrow(true)
-                            .open_on_double_click(true)
-                            .framed(false)
-                            .build(ui, || {
-                                let mut aperture = self.aperture;
-                                if imgui::Slider::new("Aperture (f-stop)", 32.0, 1.4)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut aperture)
-                                {
-                                    self.aperture = aperture;
-                                }
+                        let mut aperture = self.aperture;
+                        if imgui::Slider::new("Aperture (f-stop)", 32.0, 1.4)
+                            .display_format("%.2f")
+                            .build(ui, &mut aperture)
+                        {
+                            self.aperture = aperture;
+                        }
 
-                                let mut shutter_speed = self.shutter_speed;
-                                if imgui::Slider::new("Shutter Speed (s)", 0.00025, 30.0)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut shutter_speed)
-                                {
-                                    self.shutter_speed = shutter_speed;
-                                }
+                        let mut shutter_speed = self.shutter_speed;
+                        if imgui::Slider::new("Shutter Speed (s)", 0.00025, 30.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut shutter_speed)
+                        {
+                            self.shutter_speed = shutter_speed;
+                        }
 
-                                let mut sensitivity = self.sensitivity;
-                                if imgui::Slider::new("Sensitivity (ISO)", 200.0, 1600.0)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut sensitivity)
-                                {
-                                    self.sensitivity = sensitivity;
-                                }
-                            });
+                        let mut sensitivity = self.sensitivity;
+                        if imgui::Slider::new("Sensitivity (ISO)", 200.0, 1600.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut sensitivity)
+                        {
+                            self.sensitivity = sensitivity;
+                        }
 
-                        imgui::TreeNode::new("Projection")
-                            .default_open(true)
-                            .open_on_arrow(true)
-                            .open_on_double_click(true)
-                            .framed(false)
-                            .build(ui, || {
-                                let mut fov = self.fov_deg;
-                                if imgui::Drag::new("Field of View")
-                                    .range(1u32, 180u32)
-                                    .speed(1.0)
-                                    .build(ui, &mut fov)
-                                {
-                                    self.fov_deg = fov;
-                                }
+                        let mut focus_distance = self.focus_distance;
+                        if imgui::Slider::new("Focus Distance", 0.1, 100.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut focus_distance)
+                        {
+                            self.focus_distance = focus_distance;
+                        }
 
-                                let mut near_plane = self.near_plane;
-                                if imgui::Drag::new("Near Plane")
-                                    .range(0.5, 5000.0)
-                                    .display_format("%.2f")
-                                    .speed(0.5)
-                                    .build(ui, &mut near_plane)
-                                {
-                                    self.near_plane = near_plane;
-                                }
+                        let mut focus_range = self.focus_range;
+                        if imgui::Slider::new("Focus Range", 0.1, 10.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut focus_range)
+                        {
+                            self.focus_range = focus_range;
+                        }
 
-                                let mut far_plane = self.far_plane;
-                                if imgui::Drag::new("Far Plane")
-                                    .range(0.5, 5000.0)
-                                    .display_format("%.2f")
-                                    .speed(0.5)
-                                    .build(ui, &mut far_plane)
-                                {
-                                    self.far_plane = far_plane;
-                                }
-                            });
+                        let mut bokeh_radius = self.bokeh_radius;
+                        if imgui::Slider::new("Bokeh Radius", 1.0, 10.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut bokeh_radius)
+                        {
+                            self.bokeh_radius = bokeh_radius;
+                        }
+                    });
 
-                        imgui::TreeNode::new("Movement")
-                            .default_open(true)
-                            .open_on_arrow(true)
-                            .open_on_double_click(true)
-                            .framed(false)
-                            .build(ui, || {
-                                let mut orbit_speed = self.orbit_speed;
-                                if imgui::Slider::new("Orbit Speed", 1.0, 10.0)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut orbit_speed)
-                                {
-                                    self.set_orbit_speed(orbit_speed)
-                                }
+                imgui::TreeNode::new("Projection")
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .framed(false)
+                    .build(ui, || {
+                        let mut fov = self.fov_deg;
+                        if imgui::Drag::new("Field of View")
+                            .range(1u32, 180u32)
+                            .speed(1.0)
+                            .build(ui, &mut fov)
+                        {
+                            self.fov_deg = fov;
+                        }
 
-                                let mut orbit_dampening = self.orbit_dampening();
-                                if imgui::Slider::new("Orbit Dampening", 1.0, 10.0)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut orbit_dampening)
-                                {
-                                    self.set_orbit_dampening(orbit_dampening)
-                                }
+                        let mut near_plane = self.near_plane;
+                        if imgui::Drag::new("Near Plane")
+                            .range(0.5, 5000.0)
+                            .display_format("%.2f")
+                            .speed(0.5)
+                            .build(ui, &mut near_plane)
+                        {
+                            self.near_plane = near_plane;
+                        }
 
-                                let mut zoom_speed = self.zoom_speed();
-                                if imgui::Slider::new("Zoom Speed", 1.0, 40.0)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut zoom_speed)
-                                {
-                                    self.set_zoom_speed(zoom_speed)
-                                }
+                        let mut far_plane = self.far_plane;
+                        if imgui::Drag::new("Far Plane")
+                            .range(0.5, 5000.0)
+                            .display_format("%.2f")
+                            .speed(0.5)
+                            .build(ui, &mut far_plane)
+                        {
+                            self.far_plane = far_plane;
+                        }
+                    });
 
-                                let mut zoom_dampening = self.zoom_dampening();
-                                if imgui::Slider::new("Zoom Dampening", 0.1, 10.0)
-                                    .display_format("%.2f")
-                                    .build(ui, &mut zoom_dampening)
-                                {
-                                    self.set_zoom_dampening(zoom_dampening)
-                                }
-                            });
+                imgui::TreeNode::new("Movement")
+                    .default_open(true)
+                    .open_on_arrow(true)
+                    .open_on_double_click(true)
+                    .framed(false)
+                    .build(ui, || {
+                        let mut orbit_speed = self.orbit_speed;
+                        if imgui::Slider::new("Orbit Speed", 1.0, 10.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut orbit_speed)
+                        {
+                            self.set_orbit_speed(orbit_speed)
+                        }
+
+                        let mut orbit_dampening = self.orbit_dampening();
+                        if imgui::Slider::new("Orbit Dampening", 1.0, 10.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut orbit_dampening)
+                        {
+                            self.set_orbit_dampening(orbit_dampening)
+                        }
+
+                        let mut zoom_speed = self.zoom_speed();
+                        if imgui::Slider::new("Zoom Speed", 1.0, 40.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut zoom_speed)
+                        {
+                            self.set_zoom_speed(zoom_speed)
+                        }
+
+                        let mut zoom_dampening = self.zoom_dampening();
+                        if imgui::Slider::new("Zoom Dampening", 0.1, 10.0)
+                            .display_format("%.2f")
+                            .build(ui, &mut zoom_dampening)
+                        {
+                            self.set_zoom_dampening(zoom_dampening)
+                        }
                     });
             });
         }

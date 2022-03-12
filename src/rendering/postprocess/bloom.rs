@@ -85,6 +85,10 @@ pub struct Bloom {
 impl_as_any!(Bloom);
 
 impl Bloom {
+    pub fn builder() -> BloomBuilder {
+        BloomBuilder::default()
+    }
+
     fn update_uniforms(&mut self) {
         let threshold = srgb_to_linear(self.threshold);
         let knee = threshold * self.smooth_fade;
@@ -136,7 +140,7 @@ impl Bloom {
             .for_each(|fb| framebuffer_cache.release_temporary(Rc::clone(fb)));
         self.blit_framebuffers.clear();
 
-        let mut current_destination = framebuffer_cache.get_temporary(size, format, None);
+        let mut current_destination = framebuffer_cache.get_temporary("", size, format, None);
 
         self.blit_framebuffers.push(Rc::clone(&current_destination));
 
@@ -172,7 +176,7 @@ impl Bloom {
                 break;
             }
 
-            current_destination = framebuffer_cache.get_temporary(size, format, None);
+            current_destination = framebuffer_cache.get_temporary("", size, format, None);
 
             self.blit_framebuffers.push(Rc::clone(&current_destination));
             //TODO: Do a downsample blit here
@@ -416,10 +420,6 @@ impl Default for BloomBuilder {
 }
 
 impl BloomBuilder {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
     pub fn iterations(mut self, iterations: u32) -> Self {
         self.iterations = iterations;
         self

@@ -7,6 +7,7 @@ use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
 use crate::Msaa;
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::rc::Rc;
 
 #[repr(u32)]
@@ -66,16 +67,19 @@ impl AttachmentBindPoint {
 }
 
 pub struct FramebufferAttachmentCreateInfo {
+    name: String,
     format: SizedTextureFormat,
     attachment_type: AttachmentType,
 }
 
 impl FramebufferAttachmentCreateInfo {
     pub fn new(
+        name: &str,
         format: SizedTextureFormat,
         attachment_type: AttachmentType,
     ) -> FramebufferAttachmentCreateInfo {
         FramebufferAttachmentCreateInfo {
+            name: name.to_string(),
             format,
             attachment_type,
         }
@@ -137,6 +141,7 @@ impl FramebufferAttachment {
 
 #[derive(Debug)]
 pub struct Framebuffer {
+    _name: String,
     id: GLuint,
     size: UVec2,
     texture_attachments: Vec<FramebufferAttachment>,
@@ -148,14 +153,17 @@ pub struct Framebuffer {
 
 impl Framebuffer {
     pub fn new(
+        name: &str,
         size: UVec2,
         msaa: Msaa,
         attachment_create_infos: Vec<FramebufferAttachmentCreateInfo>,
     ) -> Result<Self, FramebufferError> {
         let mut framebuffer_id: GLuint = 0;
 
+        let label = CString::new(name).unwrap();
         unsafe {
             gl::CreateFramebuffers(1, &mut framebuffer_id);
+            gl::ObjectLabel(gl::FRAMEBUFFER, framebuffer_id, name.len() as i32 + 1, label.as_ptr())
         }
 
         let mut color_attachment_count = 0;
@@ -193,6 +201,9 @@ impl Framebuffer {
                 .zip(texture_attachment_ids.iter())
                 .for_each(|(&create_info, id)| {
                     unsafe {
+                        let label = CString::new(create_info.name.as_str()).unwrap();
+                        gl::ObjectLabel(gl::TEXTURE, *id, name.len() as i32 + 1, label.as_ptr());
+
                         //TODO: Assert that num samples is 0 if internal format is singed or unsigned int
                         match msaa {
                             Msaa::None => gl::TextureStorage2D(
@@ -279,6 +290,8 @@ impl Framebuffer {
                 .zip(renderbuffer_attachment_ids.iter())
                 .for_each(|(&create_info, id)| {
                     unsafe {
+                        let label = CString::new(create_info.name.as_str()).unwrap();
+                        gl::ObjectLabel(gl::RENDERBUFFER, *id, name.len() as i32 + 1, label.as_ptr());
                         match msaa {
                             Msaa::None => gl::NamedRenderbufferStorage(
                                 *id,
@@ -356,6 +369,7 @@ impl Framebuffer {
             Err(e)
         } else {
             Ok(Framebuffer {
+                _name: name.to_string(),
                 id: framebuffer_id,
                 size,
                 texture_attachments,
@@ -470,10 +484,8 @@ impl Framebuffer {
 
         assert_eq!(source_color_attachments.len(), dest_color_attachments.len());
 
-        source_color_attachments
-            .iter()
-            .enumerate()
-            .for_each(|(i, _)| unsafe {
+        for i in 0..source_color_attachments.len() {
+            unsafe {
                 //TODO: Check if this is correct for depth attachments or if it works by chance.
                 gl::NamedFramebufferReadBuffer(source.id(), gl::COLOR_ATTACHMENT0 + i as u32);
                 gl::NamedFramebufferDrawBuffer(destination.id(), gl::COLOR_ATTACHMENT0 + i as u32);
@@ -492,25 +504,29 @@ impl Framebuffer {
                     gl::COLOR_BUFFER_BIT,
                     filtering as u32,
                 );
-            });
+            }
+        }
+
+        if source.has_depth && destination.has_depth {
+            unsafe {
+                gl::BlitNamedFramebuffer(
+                    source.id(),
+                    destination.id(),
+                    0,
+                    0,
+                    source.size().x as i32,
+                    source.size().y as i32,
+                    0,
+                    0,
+                    destination.size().x as i32,
+                    destination.size().y as i32,
+                    gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
+                    gl::NEAREST,
+                );
+            }
+        }
 
         unsafe {
-            // TODO: This assumes all renderbuffers are depth textures, which is wrong.
-            gl::BlitNamedFramebuffer(
-                source.id(),
-                destination.id(),
-                0,
-                0,
-                source.size().x as i32,
-                source.size().y as i32,
-                0,
-                0,
-                destination.size().x as i32,
-                destination.size().y as i32,
-                gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
-                gl::NEAREST,
-            );
-
             gl::NamedFramebufferReadBuffer(source.id(), gl::COLOR_ATTACHMENT0);
             gl::NamedFramebufferDrawBuffers(
                 destination.id(),
@@ -581,6 +597,7 @@ impl Framebuffer {
         }
     }
 
+    /// Extracts all color attachments from the framebuffer (textures, renderbuffers).
     fn extract_attachments(framebuffer: &Framebuffer) -> Vec<&FramebufferAttachment> {
         framebuffer
             .texture_attachments
@@ -614,6 +631,7 @@ impl TemporaryFramebufferPool {
 
     pub fn get_temporary(
         &mut self,
+        name: &str,
         size: UVec2,
         format: SizedTextureFormat,
         depth_format: Option<SizedTextureFormat>,
@@ -629,14 +647,14 @@ impl TemporaryFramebufferPool {
                 return Rc::clone(framebuffer);
             }
 
-            let framebuffer = Self::create_temporary_framebuffer(size, format, depth_format);
+            let framebuffer = Self::create_temporary_framebuffer(name, size, format, depth_format);
 
             framebuffers.push((self.current_frame, true, Rc::clone(&framebuffer)));
 
             return framebuffer;
         }
 
-        let framebuffer = Self::create_temporary_framebuffer(size, format, depth_format);
+        let framebuffer = Self::create_temporary_framebuffer(name, size, format, depth_format);
 
         self.free_framebuffers_map.insert(
             key,
@@ -693,24 +711,27 @@ impl TemporaryFramebufferPool {
     }
 
     fn create_temporary_framebuffer(
+        name: &str,
         size: UVec2,
         format: SizedTextureFormat,
         depth_format: Option<SizedTextureFormat>,
     ) -> Rc<Framebuffer> {
         let mut attachment_create_infos = vec![FramebufferAttachmentCreateInfo {
+            name: format!("{}-Color", name),
             format,
             attachment_type: AttachmentType::Texture,
         }];
 
         if let Some(depth_format) = depth_format {
             attachment_create_infos.push(FramebufferAttachmentCreateInfo {
+                name: format!("{}-Depth", name),
                 format: depth_format,
                 attachment_type: AttachmentType::Texture,
             })
         }
 
         Rc::new(
-            Framebuffer::new(size, Msaa::None, attachment_create_infos)
+            Framebuffer::new(name, size, Msaa::None, attachment_create_infos)
                 .expect("Failed to create framebuffer!"),
         )
     }

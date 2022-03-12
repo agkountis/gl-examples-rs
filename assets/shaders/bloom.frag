@@ -21,7 +21,7 @@ INPUT_BLOCK_BEGIN(0, VsOut)
     vec2 texcoord;
 INPUT_BLOCK_END_NAMED(fsIn)
 
-OUTPUT(0, outColor);
+OUTPUT(0, vec4, outColor);
 
 vec3 Prefilter (vec3 c) {
     float brightness = max(c.r, max(c.g, c.b));

@@ -1,11 +1,10 @@
 use crate::rendering::shader::ShaderStage;
 use shaderc::{
     CompilationArtifact, CompileOptions, EnvVersion, IncludeCallbackResult, IncludeType,
-    ResolvedInclude, ShaderKind, SourceLanguage, TargetEnv,
+    ResolvedInclude, ShaderKind, TargetEnv,
 };
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
 
 pub(crate) struct Compiler {
     compiler: shaderc::Compiler,

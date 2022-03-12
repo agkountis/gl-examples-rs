@@ -1,10 +1,10 @@
 use crate::imgui::{Gui, Ui};
 use crate::rendering::framebuffer::Framebuffer;
-use crate::rendering::shader::ShaderStage;
 use crate::{AsAny, AsAnyMut, Context};
 
 pub mod bloom;
 pub mod tone_mapper;
+pub mod dof;
 
 const FULLSCREEN_VERTEX_SHADER_PATH: &str = "assets/shaders/fullscreen.vert";
 

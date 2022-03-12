@@ -155,9 +155,13 @@ impl ShaderManager {
                         let maybe_keywords =
                             (!filtered_keywords.is_empty()).then(|| filtered_keywords.as_slice());
 
-                        let compiled_artifact = compiler
-                            .compile(source, file_name, *shader_stage, maybe_keywords)
-                            .unwrap();
+                        let compiled_artifact = if cfg!(feature = "use-spirv") {
+                            compiler
+                                .compile(source, file_name, *shader_stage, maybe_keywords)
+                                .unwrap()
+                        } else {
+                            compiler.preprocess(source, file_name, maybe_keywords).unwrap()
+                        };
 
                         let module =
                             Rc::new(ShaderModule::new(*shader_stage, &compiled_artifact).unwrap());

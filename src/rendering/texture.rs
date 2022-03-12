@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use image;
 use image::{ColorType, DynamicImage, GenericImageView};
 
@@ -121,7 +122,7 @@ impl Asset for Texture2D {
         }
 
         match Utils::open_image_file(path.as_ref()) {
-            Ok(img) => Ok(Self::new_from_image(img, generate_mipmap, is_srgb)?),
+            Ok(img) => Ok(Self::new_from_image(path.as_ref().file_name().unwrap().to_str().unwrap(),img, generate_mipmap, is_srgb)?),
             Err(e) => Err(e.to_string()),
         }
     }
@@ -129,6 +130,7 @@ impl Asset for Texture2D {
 
 impl Texture2D {
     pub fn new_from_image(
+        name: &str,
         image: DynamicImage,
         generate_mipmap: bool,
         is_srgb: bool,
@@ -150,6 +152,9 @@ impl Texture2D {
         let mut id: GLuint = 0;
         unsafe {
             gl::CreateTextures(gl::TEXTURE_2D, 1, &mut id);
+
+            let label = CString::new(name).unwrap();
+            gl::ObjectLabel(gl::TEXTURE, id, name.len() as i32 + 1, label.as_ptr());
 
             gl::TextureStorage2D(
                 id,
@@ -233,6 +238,11 @@ impl Asset for TextureCube {
                 unsafe {
                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
 
+
+                    let name = path.as_ref().file_name().unwrap();
+                    let label = CString::new(name.to_str().unwrap()).unwrap();
+                    gl::ObjectLabel(gl::TEXTURE, id, name.len() as i32 + 1, label.as_ptr());
+
                     gl::TextureStorage2D(
                         id,
                         tex.levels() as i32,
@@ -303,6 +313,11 @@ impl TextureCube {
                 let mut id: GLuint = 0;
                 unsafe {
                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
+
+                    let name = path.as_ref().file_name().unwrap();
+                    let label = CString::new(name.to_str().unwrap()).unwrap();
+                    gl::ObjectLabel(gl::TEXTURE, id, name.len() as i32 + 1, label.as_ptr());
+
                     gl::TextureStorage2D(
                         id,
                         tex.levels() as i32,

@@ -28,7 +28,7 @@ use engine::{
         mesh::utilities::generate_cube,
         mesh::Mesh,
         postprocess::{
-            bloom::BloomBuilder, tone_mapper::ToneMapper, PostprocessingStack,
+            bloom::Bloom, tone_mapper::ToneMapper, PostprocessingStack,
             PostprocessingStackBuilder,
         },
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
@@ -41,6 +41,7 @@ use engine::{
     scene::Transition,
     Context, Msaa,
 };
+use engine::postprocess::dof::DepthOfField;
 
 struct EnvironmentMaps {
     skybox: TextureCube,
@@ -244,14 +245,17 @@ impl PbsScene {
 
         let msaa_framebuffers = [
             Framebuffer::new(
+                "NonMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::None,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "NoMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "NoMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -259,14 +263,17 @@ impl PbsScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
+                "2xMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X2,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "2xMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "2xMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -274,14 +281,17 @@ impl PbsScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
+                "4xMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X4,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "4xMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "4xMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -289,14 +299,17 @@ impl PbsScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
+                "8xMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X8,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "8xMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "8xMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -306,22 +319,25 @@ impl PbsScene {
         ];
 
         let resolve_framebuffer = Framebuffer::new(
+            "ResolveFramebuffer",
             UVec2::new(window.inner_size().width, window.inner_size().height),
             Msaa::None,
             vec![
                 FramebufferAttachmentCreateInfo::new(
+                    "Resolve-Color",
                     SizedTextureFormat::Rgba16f,
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
+                    "Resolve-Depth",
                     SizedTextureFormat::Depth24Stencil8,
-                    AttachmentType::Renderbuffer,
+                    AttachmentType::Texture,
                 ),
             ],
         )
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
-        let bloom = BloomBuilder::new().build(Context::new(
+        let bloom = Bloom::builder().build(Context::new(
             window,
             device,
             asset_manager,
@@ -332,6 +348,14 @@ impl PbsScene {
 
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(bloom)
+            .with_effect(DepthOfField::new(Context::new(
+                window,
+                device,
+                asset_manager,
+                timer,
+                framebuffer_cache,
+                settings,
+            )))
             .with_effect(ToneMapper::new(Context::new(
                 window,
                 device,
@@ -690,8 +714,14 @@ impl Scene for PbsScene {
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
+        let Context {
+            window,
+            ..
+        } = context;
+
+        let size = window.inner_size();
         imgui::Window::new("Inspector")
-            .size([358.0, 500.0], Condition::Appearing)
+            .size([(size.width / 4) as f32 , size.height as f32], Condition::Appearing)
             .position([2.0, 0.0], Condition::Appearing)
             .mouse_inputs(true)
             .resizable(true)
