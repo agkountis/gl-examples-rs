@@ -18,8 +18,8 @@ UNIFORM_BLOCK_END
 
 #define LIB_VIEW_PROJECTION_MATRIX view_projection
 #define LIB_CAMERA_POSITION cameraPosition
-#define LIB_NEAR_PLANE proj_params.x
-#define LIB_FAR_PLANE proj_params.y
+#define LIB_CAMERA_NEAR_PLANE proj_params.x
+#define LIB_CAMERA_FAR_PLANE proj_params.y
 
 // https://mynameismjp.wordpress.com/2010/09/05/position-from-depth-3/
 #define LIB_LINEARIZE_DEPTH(depth) proj_params.w / (depth - proj_params.z)

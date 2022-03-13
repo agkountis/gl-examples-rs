@@ -370,7 +370,7 @@ impl Gui for Camera {
                         }
 
                         let mut focus_distance = self.focus_distance;
-                        if imgui::Slider::new("Focus Distance", 0.1, 100.0)
+                        if imgui::Slider::new("Focus Distance", 0.1, 500.0)
                             .display_format("%.2f")
                             .build(ui, &mut focus_distance)
                         {
@@ -378,7 +378,7 @@ impl Gui for Camera {
                         }
 
                         let mut focus_range = self.focus_range;
-                        if imgui::Slider::new("Focus Range", 0.1, 10.0)
+                        if imgui::Slider::new("Focus Range", 0.1, 100.0)
                             .display_format("%.2f")
                             .build(ui, &mut focus_range)
                         {

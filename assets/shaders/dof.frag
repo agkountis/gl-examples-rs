@@ -6,6 +6,7 @@
 SAMPLER_2D(0, mainImage);
 SAMPLER_2D(1, depthTex);
 SAMPLER_2D(2, cocTex);
+SAMPLER_2D(3, dofTex);
 
 INPUT_BLOCK_BEGIN(0, VsOut)
     vec2 texcoord;
@@ -17,12 +18,19 @@ INPUT_BLOCK_END_NAMED(fsIn)
     OUTPUT(0, vec4, outColor);
 #endif
 
+float linearize_depth(float depth)
+{
+    float zNear = LIB_CAMERA_NEAR_PLANE;
+    float zFar = LIB_CAMERA_FAR_PLANE;
+    float depthNdc = 2.0 * depth - 1.0;
+    return (2.0 * zNear * zFar / (zFar + zNear - depthNdc * (zFar - zNear)));
+}
 
 #if defined(DOF_PASS_COC)
     void CoCPass()
     {
         float depth = 0.0;
-        depth = LIB_LINEARIZE_DEPTH(texture(depthTex, fsIn.texcoord).r);
+        depth = linearize_depth(texture(depthTex, fsIn.texcoord).r);// LIB_LINEARIZE_DEPTH(texture(depthTex, fsIn.texcoord).r);
 
         float coc = clamp((depth - LIB_CAMERA_FOCUS_DISTANCE) / LIB_CAMERA_FOCUS_RANGE, -1.0, 1.0) * LIB_CAMERA_BOKEH_RADIUS;
 
@@ -33,8 +41,8 @@ INPUT_BLOCK_END_NAMED(fsIn)
     #if defined(BOKEH_KERNEL_SMALL)
         // From https://github.com/Unity-Technologies/PostProcessing/
         // blob/v2/PostProcessing/Shaders/Builtins/DiskKernels.hlsl
-        const int kernelSampleCount = 16;
-        const vec2 kernel[kernelSampleCount] = {
+        #define KERNEL_SAMPLE_COUNT 16
+        const vec2 kernel[KERNEL_SAMPLE_COUNT] = {
             vec2(0, 0),
             vec2(0.54545456, 0),
             vec2(0.16855472, 0.5187581),
@@ -53,8 +61,8 @@ INPUT_BLOCK_END_NAMED(fsIn)
             vec2(0.80901694, -0.5877853),
         };
     #elif defined(BOKEH_KERNEL_MEDIUM)
-        const int kernelSampleCount = 22;
-        const vec2 kernel[kernelSampleCount] = {
+        #define KERNEL_SAMPLE_COUNT 22
+        const vec2 kernel[KERNEL_SAMPLE_COUNT] = {
             vec2(0, 0),
             vec2(0.53333336, 0),
             vec2(0.3325279, 0.4169768),
@@ -80,31 +88,52 @@ INPUT_BLOCK_END_NAMED(fsIn)
         };
     #endif //BOKEH_KERNEL_SMALL
 
+    float Weigh(float coc, float radius)
+    {
+        return clamp((coc - radius + 2.0) / 2.0, 0.0, 1.0);
+    }
+
     void BokehPass()
     {
-        vec3 color = vec3(0.0);
-        vec2 texelSize = 1.0 / textureSize(mainImage, 0);
-        float weight = 0.0;
+        vec3 bgColor = vec3(0.0);
+        vec3 fgColor = vec3(0.0);
+        float bgWeight = 0.0;
+        float fgWeight = 0.0;
 
-        for (int k = 0; k < kernelSampleCount; k++) {
+        vec2 texelSize =  1.0 / textureSize(mainImage, 0);
+
+        for (int k = 0; k < KERNEL_SAMPLE_COUNT; k++) {
             vec2 offset = kernel[k] * LIB_CAMERA_BOKEH_RADIUS;
             float radius = length(offset);
             offset *= texelSize;
             vec4 s = texture(mainImage, fsIn.texcoord + offset);
 
-            if (abs(s.a) >= radius) {
-                color += s.rgb;
-                weight += 1.0;
-            }
+            float bgw = Weigh(max(0.0, s.a), radius);
+            bgColor += s.rgb * bgw;
+            bgWeight += bgw;
+
+            float fgw = Weigh(-s.a, radius);
+            fgColor += s.rgb * fgw;
+            fgWeight += fgw;
         }
 
-        color *= 1.0 / weight;
-        outColor = vec4(color, 1.0);
+        bgColor *= 1.0 / (bgWeight + float((bgWeight == 0)));
+        fgColor *= 1.0 / (fgWeight + float((fgWeight == 0)));
+
+        float bgfg = min(1.0, fgWeight * PI / KERNEL_SAMPLE_COUNT);
+
+        vec3 color = mix(bgColor, fgColor, bgfg);
+        outColor = vec4(color, bgfg);
     }
-#else
+#elif defined(DOF_PASS_DOWNSAMPLE)
+    float Weigh(vec3 c)
+    {
+        return 1.0 / (1.0 + max(max(c.r, c.g), c.b));
+    }
+
     void DownsamplePass()
     {
-        vec4 coc_samples = textureGather(cocTex, fsIn.texcoord);
+        vec4 coc_samples = textureGather(cocTex, fsIn.texcoord, 0);
 
         float coc_min = min(
             min(
@@ -122,10 +151,33 @@ INPUT_BLOCK_END_NAMED(fsIn)
         );
 
         float coc = coc_max >= -coc_min ? coc_max : coc_min;
+#define TONE_DOWN_BOKEH
+#ifdef TONE_DOWN_BOKEH
+        vec2 texelSize = 1.0 / textureSize(mainImage, 0);
+        vec4 offset = texelSize.xyxy * vec2(-0.5, 0.5).xxyy;
 
+        vec3 sample0 = texture(mainImage, fsIn.texcoord + offset.xy).rgb;
+        vec3 sample1 = texture(mainImage, fsIn.texcoord + offset.zy).rgb;
+        vec3 sample2 = texture(mainImage, fsIn.texcoord + offset.xw).rgb;
+        vec3 sample3 = texture(mainImage, fsIn.texcoord + offset.zw).rgb;
+
+        float w0 = Weigh(sample0);
+        float w1 = Weigh(sample1);
+        float w2 = Weigh(sample2);
+        float w3 = Weigh(sample3);
+
+        vec3 color = sample0 * w0 + sample1 * w1 + sample2 * w2 + sample3 * w3;
+        color /= max(w0 + w1 + w2 + w3, EPSILON);
+
+        // Premultiply CoC again
+        color *= smoothstep(0, texelSize.y * 2.0, abs(coc));
+
+        outColor = vec4(color, coc);
+#else
         outColor = vec4(texture(mainImage, fsIn.texcoord).rgb, coc);
+#endif
     }
-
+#else
     void BokehBlurPass()
     {
         vec2 texelSize = 1.0 / textureSize(mainImage, 0);
@@ -138,14 +190,18 @@ INPUT_BLOCK_END_NAMED(fsIn)
 
         outColor = color * 0.25;
     }
+
+    void DofCombinePass()
+    {
+        vec4 source = texture(mainImage, fsIn.texcoord);
+        float coc = texture(cocTex, fsIn.texcoord).r;
+        vec4 dof = texture(dofTex, fsIn.texcoord);
+
+        float dofStrength = smoothstep(0.1, 1.0, abs(coc));
+        vec3 color = mix(source.rgb, dof.rgb, dofStrength + dof.a - dofStrength * dof.a);
+        outColor = vec4(color, source.a);
+    }
 #endif // DOF_PASS_BOKEH
-
-
-#ifdef DOF_PASS_COC
-
-#else
-
-#endif
 
 void main()
 {
@@ -157,5 +213,7 @@ void main()
     BokehPass();
 #elif defined(DOF_PASS_BOKEH_BLUR)
     BokehBlurPass();
+#elif defined(DOF_PASS_COMBINE)
+    DofCombinePass();
 #endif
 }
