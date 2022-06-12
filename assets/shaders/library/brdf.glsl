@@ -44,9 +44,9 @@ float BiasedAxisAlignedGeometricSpecularAA(in vec3 wNormal, in float perceptualR
 
     float roughness = PerceptualRoughnessToRoughness(perceptualRoughness);
     float kernelRoughness = min(2.0 * variance, ssVarianceAndThreshold.y);
-    float squareRoughness = clamp(roughness * roughness + kernelRoughness, 0.0, 1.0);
+    float filteredRoughness = clamp(roughness + kernelRoughness, 0.0, 1.0);
 
-    return RoughnessToPerceptualRoughness(sqrt(squareRoughness));
+    return RoughnessToPerceptualRoughness(filteredRoughness);
 }
 
 float ComputeSpecularAO(float NoV, float ao, float roughness)

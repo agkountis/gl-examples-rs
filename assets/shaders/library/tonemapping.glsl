@@ -1,6 +1,8 @@
 #ifndef TONEMAPPING_FUNCTIONS_GLSL
 #define TONEMAPPING_FUNCTIONS_GLSL
 
+#include "assets/shaders/library/core_utils.glsl"
+
 layout(std140, binding = 3) uniform ToneMappingBlock
 {
     float whiteThreshold;
@@ -147,5 +149,38 @@ vec3 RomBinDaHouse(vec3 color)
 
 #endif
 
+// From: https://github.com/Unity-Technologies/Graphics/blob/master/com.unity.postprocessing/PostProcessing/Shaders/Colors.hlsl
+// Fast reversible tonemapper
+// http://gpuopen.com/optimized-reversible-tonemapper-for-resolve/
+//
+vec3 FastTonemap(vec3 c)
+{
+    return c / (Max3(c.r, c.g, c.b) + 1.0);
+}
+
+vec4 FastTonemap(vec4 c)
+{
+    return vec4(FastTonemap(c.rgb), c.a);
+}
+
+vec3 FastTonemap(vec3 c, float w)
+{
+    return c * (w / (Max3(c.r, c.g, c.b) + 1.0));
+}
+
+vec4 FastTonemap(vec4 c, float w)
+{
+    return vec4(FastTonemap(c.rgb, w), c.a);
+}
+
+vec3 FastTonemapInvert(vec3 c)
+{
+    return c / (1.0 - Max3(c.r, c.g, c.b));
+}
+
+vec4 FastTonemapInvert(vec4 c)
+{
+    return vec4(FastTonemapInvert(c.rgb), c.a);
+}
 
 #endif // TONEMAPPING_FUNCTIONS_GLSL

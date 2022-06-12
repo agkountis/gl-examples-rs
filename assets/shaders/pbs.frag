@@ -110,7 +110,7 @@ void PopulateMaterialProperties(inout ShadingProperties props)
     props.perceptualRoughness = clamp((m_r_ao.g + roughnessBias) * roughnessScale, MIN_ROUGHNESS, 1.0) ;
 
     if (specularAA == 1) {
-        props.perceptualRoughness = BiasedAxisAlignedGeometricSpecularAA(props.n, props.perceptualRoughness);
+        props.perceptualRoughness = BiasedAxisAlignedGeometricSpecularAA(props.worldNormal, props.perceptualRoughness);
     }
 
     props.roughness = PerceptualRoughnessToRoughness(props.perceptualRoughness);

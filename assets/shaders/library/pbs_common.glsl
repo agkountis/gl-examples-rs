@@ -19,6 +19,7 @@ struct ShadingProperties {
     float NoL;
     float NoH;
     float HoV;
+    vec3 worldNormal;
     vec3 n;
     vec3 r;
     vec3 t;
@@ -83,7 +84,8 @@ void CalculateTextureCoordinates(inout ShadingProperties props)
 void PopulateVectorProducts(inout ShadingProperties props)
 {
     props.t = normalize(fsIn.wTangent.xyz);
-    mat3 tangentToWorldMat = CreateTangentToWorldMatrix(normalize(fsIn.wNormal), props.t, fsIn.wTangent.w);
+    props.worldNormal = normalize(fsIn.wNormal);
+    mat3 tangentToWorldMat = CreateTangentToWorldMatrix(props.worldNormal, props.t, fsIn.wTangent.w);
 
     vec3 v = normalize(fsIn.wViewDirection);
 
