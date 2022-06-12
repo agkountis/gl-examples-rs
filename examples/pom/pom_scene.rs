@@ -26,8 +26,7 @@ use engine::{
         mesh::utilities::generate_cube,
         mesh::Mesh,
         postprocess::{
-            bloom::BloomBuilder, tone_mapper::ToneMapper, PostprocessingStack,
-            PostprocessingStackBuilder,
+            bloom::Bloom, tone_mapper::ToneMapper, PostprocessingStack, PostprocessingStackBuilder,
         },
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::{Shader, ShaderStage},
@@ -249,14 +248,17 @@ impl PomScene {
 
         let msaa_framebuffers = [
             Framebuffer::new(
+                "NonMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::None,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "NoMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "NoMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -264,14 +266,17 @@ impl PomScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
+                "2xMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X2,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "2xMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "2xMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -279,14 +284,17 @@ impl PomScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
+                "4xMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X4,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "4xMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "4xMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -294,14 +302,17 @@ impl PomScene {
             )
             .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error)),
             Framebuffer::new(
+                "8xMSAAFramebuffer",
                 UVec2::new(window.inner_size().width, window.inner_size().height),
                 Msaa::X8,
                 vec![
                     FramebufferAttachmentCreateInfo::new(
+                        "8xMSAA-Color",
                         SizedTextureFormat::Rgba16f,
                         AttachmentType::Renderbuffer,
                     ),
                     FramebufferAttachmentCreateInfo::new(
+                        "8xMSAA-Depth",
                         SizedTextureFormat::Depth24Stencil8,
                         AttachmentType::Renderbuffer,
                     ),
@@ -311,22 +322,25 @@ impl PomScene {
         ];
 
         let resolve_framebuffer = Framebuffer::new(
+            "ResolveFramebuffer",
             UVec2::new(window.inner_size().width, window.inner_size().height),
             Msaa::None,
             vec![
                 FramebufferAttachmentCreateInfo::new(
+                    "Resolve-Color",
                     SizedTextureFormat::Rgba16f,
                     AttachmentType::Texture,
                 ),
                 FramebufferAttachmentCreateInfo::new(
+                    "Resolve-Depth",
                     SizedTextureFormat::Depth24Stencil8,
-                    AttachmentType::Renderbuffer,
+                    AttachmentType::Texture,
                 ),
             ],
         )
         .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
-        let bloom = BloomBuilder::new().build(Context::new(
+        let bloom = Bloom::builder().build(Context::new(
             window,
             device,
             asset_manager,

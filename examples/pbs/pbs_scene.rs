@@ -334,8 +334,7 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
             ],
-        )
-        .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
+        ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let bloom = Bloom::builder().build(Context::new(
             window,
