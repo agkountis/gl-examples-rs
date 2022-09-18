@@ -1,20 +1,16 @@
-use crate::framebuffer::{Framebuffer, TextureFilter};
+use crate::framebuffer::Framebuffer;
 use crate::imgui::Gui;
 use crate::postprocess::{AsAny, AsAnyMut, PostprocessingEffect, FULLSCREEN_VERTEX_SHADER_PATH};
 use crate::shader::{Shader, ShaderCreateInfo, ShaderStage};
 use crate::Context;
 use imgui::{Condition, TextureId, Ui};
 use std::any::Any;
-use std::ops::Div;
 use std::rc::Rc;
 
 use crate::math::{UVec2, Vec4};
 use crate::mesh::utilities::draw_full_screen_quad;
 use crate::sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode};
-use crate::state::{BlendFactor, StateManager};
 use crate::texture::SizedTextureFormat;
-use gl::types::*;
-use gl_bindings as gl;
 
 pub struct DepthOfField {
     dof_shader: Rc<Shader>,
@@ -22,13 +18,12 @@ pub struct DepthOfField {
     linear_sampler: Sampler,
     enabled: bool,
     show_debug_window: bool,
-    linearize_depth: bool,
 }
 
 impl_as_any!(DepthOfField);
 
 impl DepthOfField {
-    pub fn new(context: Context) -> Self {
+    pub fn new(context: Context, enabled: bool) -> Self {
         let Context {
             device,
             framebuffer_cache,
@@ -69,9 +64,8 @@ impl DepthOfField {
                 None,
             ),
             dof_shader,
-            enabled: true,
+            enabled,
             show_debug_window: false,
-            linearize_depth: true,
             linear_sampler,
         }
     }
@@ -179,9 +173,6 @@ impl PostprocessingEffect for DepthOfField {
         draw_full_screen_quad();
         input.unbind(false);
         self.dof_shader.disable_keyword("DOF_PASS_COMBINE");
-        // input.bind();
-        // Framebuffer::blit(tmp0.as_ref(), input, TextureFilter::Linear);
-        // input.unbind(false);
     }
 }
 

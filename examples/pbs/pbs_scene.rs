@@ -1,4 +1,3 @@
-use std::mem;
 use std::rc::Rc;
 
 use crevice::std140::AsStd140;
@@ -6,6 +5,7 @@ use glutin::event::{
     ElementState, KeyboardInput, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent,
 };
 
+use engine::postprocess::dof::DepthOfField;
 use engine::rendering::buffer::BufferStorageFlags;
 use engine::rendering::shader::{Shader, ShaderCreateInfo};
 use engine::{
@@ -28,8 +28,7 @@ use engine::{
         mesh::utilities::generate_cube,
         mesh::Mesh,
         postprocess::{
-            bloom::Bloom, tone_mapper::ToneMapper, PostprocessingStack,
-            PostprocessingStackBuilder,
+            bloom::Bloom, tone_mapper::ToneMapper, PostprocessingStack, PostprocessingStackBuilder,
         },
         sampler::{Anisotropy, MagnificationFilter, MinificationFilter, Sampler, WrappingMode},
         shader::ShaderStage,
@@ -41,7 +40,6 @@ use engine::{
     scene::Transition,
     Context, Msaa,
 };
-use engine::postprocess::dof::DepthOfField;
 
 struct EnvironmentMaps {
     skybox: TextureCube,
@@ -334,7 +332,8 @@ impl PbsScene {
                     AttachmentType::Texture,
                 ),
             ],
-        ).unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
+        )
+        .unwrap_or_else(|error| panic!("Framebuffer creation error: {}", error));
 
         let bloom = Bloom::builder().build(Context::new(
             window,
@@ -347,14 +346,17 @@ impl PbsScene {
 
         let post_stack = PostprocessingStackBuilder::new()
             .with_effect(bloom)
-            .with_effect(DepthOfField::new(Context::new(
-                window,
-                device,
-                asset_manager,
-                timer,
-                framebuffer_cache,
-                settings,
-            )))
+            .with_effect(DepthOfField::new(
+                Context::new(
+                    window,
+                    device,
+                    asset_manager,
+                    timer,
+                    framebuffer_cache,
+                    settings,
+                ),
+                false,
+            ))
             .with_effect(ToneMapper::new(Context::new(
                 window,
                 device,
@@ -393,7 +395,7 @@ impl PbsScene {
 
         let mut vertex_per_draw_ubo = Buffer::new(
             "Vertex Per Draw UBO",
-            mem::size_of::<<VertexPerDrawUniforms as AsStd140>::Std140Type>() as isize,
+            VertexPerDrawUniforms::std140_size_static() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -402,7 +404,7 @@ impl PbsScene {
 
         let mut fragment_per_frame_ubo = Buffer::new(
             "Fragment Per Frame UBO",
-            std::mem::size_of::<<FragmentPerFrameUniforms as AsStd140>::Std140Type>() as isize,
+            FragmentPerFrameUniforms::std140_size_static() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
@@ -713,14 +715,14 @@ impl Scene for PbsScene {
     }
 
     fn gui(&mut self, context: Context, ui: &Ui) {
-        let Context {
-            window,
-            ..
-        } = context;
+        let Context { window, .. } = context;
 
         let size = window.inner_size();
         imgui::Window::new("Inspector")
-            .size([(size.width / 4) as f32 , size.height as f32], Condition::Appearing)
+            .size(
+                [(size.width / 4) as f32, size.height as f32],
+                Condition::Appearing,
+            )
             .position([2.0, 0.0], Condition::Appearing)
             .mouse_inputs(true)
             .resizable(true)

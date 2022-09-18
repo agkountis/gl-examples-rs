@@ -1,6 +1,6 @@
+use crevice::std140::AsStd140;
 use glutin::dpi::PhysicalSize;
 use nalgebra_glm::{normalize, quat_normalize};
-use crevice::std140::AsStd140;
 
 use crate::core::math::{clamp_scalar, rotate_vec3, Vec4};
 use crate::core::{math, math::matrix, math::Axes, math::Mat4, math::Quat, math::Vec3};
@@ -152,7 +152,9 @@ impl Camera {
                 self.near_plane,
                 self.far_plane,
                 self.far_plane / (self.far_plane - self.near_plane),
-                (-self.far_plane * self.near_plane) / (self.far_plane - self.near_plane)].into(),
+                (-self.far_plane * self.near_plane) / (self.far_plane - self.near_plane),
+            ]
+            .into(),
             dof_params: [self.focus_distance, self.focus_range, self.bokeh_radius].into(),
         };
 
@@ -294,7 +296,7 @@ impl CameraBuilder {
 
         let mut uniform_buffer = Buffer::new(
             "Camera UBO",
-            std::mem::size_of::<<CameraUniformBlock as AsStd140>::Std140Type>() as isize,
+            CameraUniformBlock::std140_size_static() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );

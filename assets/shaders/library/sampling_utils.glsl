@@ -5,7 +5,7 @@ vec3 SampleNormalMap(in sampler2D normalMap, in vec2 texcoords, in float strengt
 {
     vec3 norm = texture(normalMap, texcoords).rgb * 2.0 - 1.0;
     norm.xy *= strength;
-    return norm;
+    return normalize(norm);
 }
 
 #endif // SAMPLING_UTILS_GLSL_

@@ -105,7 +105,9 @@ impl PbsMetallicRoughnessMaterial {
         );
 
         let ibl_brdf_lut = Texture2D::load(
-            asset_path.as_ref().join("textures/pbs/ibl_brdf_lut.png"),
+            asset_path
+                .as_ref()
+                .join("textures/pbs/brdf_lut_multiscatter.png"),
             Some(Texture2DLoadConfig {
                 is_srgb: false,
                 generate_mipmap: false,
@@ -115,7 +117,7 @@ impl PbsMetallicRoughnessMaterial {
 
         let mut material_ubo = Buffer::new(
             "MaterialPropertyBlock UBO",
-            std::mem::size_of::<<MaterialPropertyBlock as AsStd140>::Std140Type>() as isize,
+            MaterialPropertyBlock::std140_size_static() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );

@@ -116,6 +116,11 @@ vec3 FillamentBRDF(in ShadingProperties props)
     vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - props.metallic);
 
+    if (specularAO == 1) {
+        specular *= props.so;
+        specular *= props.horizonSo;
+    }
+
     return (kD * props.albedo.rgb * ONE_OVER_PI + specular) * lightColor.rgb * props.NoL;
 }
 

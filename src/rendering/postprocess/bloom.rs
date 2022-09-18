@@ -473,7 +473,7 @@ impl BloomBuilder {
 
         let mut ubo = Buffer::new(
             "Bloom UBO",
-            std::mem::size_of::<<BloomUboData as AsStd140>::Std140Type>() as isize,
+            BloomUboData::std140_size_static() as isize,
             BufferTarget::Uniform,
             BufferStorageFlags::MAP_WRITE_PERSISTENT_COHERENT,
         );
