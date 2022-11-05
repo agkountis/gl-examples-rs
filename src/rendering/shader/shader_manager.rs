@@ -160,7 +160,9 @@ impl ShaderManager {
                                 .compile(source, file_name, *shader_stage, maybe_keywords)
                                 .unwrap()
                         } else {
-                            compiler.preprocess(source, file_name, maybe_keywords).unwrap()
+                            compiler
+                                .preprocess(source, file_name, maybe_keywords)
+                                .unwrap()
                         };
 
                         let module =

@@ -1,6 +1,6 @@
-use std::ffi::CString;
 use image;
 use image::{ColorType, DynamicImage, GenericImageView};
+use std::ffi::CString;
 
 use gli::GliTexture;
 use gli_rs as gli;
@@ -26,6 +26,7 @@ pub enum SizedTextureFormat {
     Rgba16f = gl::RGBA16F,
     Rgb32f = gl::RGB32F,
     Rgba32f = gl::RGBA32F,
+    R11fG11fB10f = gl::R11F_G11F_B10F,
     Depth16 = gl::DEPTH_COMPONENT16,
     Depth24 = gl::DEPTH_COMPONENT24,
     Depth32 = gl::DEPTH_COMPONENT32,
@@ -123,7 +124,12 @@ impl Asset for Texture2D {
         }
 
         match Utils::open_image_file(path.as_ref()) {
-            Ok(img) => Ok(Self::new_from_image(path.as_ref().file_name().unwrap().to_str().unwrap(),img, generate_mipmap, is_srgb)?),
+            Ok(img) => Ok(Self::new_from_image(
+                path.as_ref().file_name().unwrap().to_str().unwrap(),
+                img,
+                generate_mipmap,
+                is_srgb,
+            )?),
             Err(e) => Err(e.to_string()),
         }
     }
@@ -238,7 +244,6 @@ impl Asset for TextureCube {
                 let mut id: GLuint = 0;
                 unsafe {
                     gl::CreateTextures(gl::TEXTURE_CUBE_MAP, 1, &mut id);
-
 
                     let name = path.as_ref().file_name().unwrap();
                     let label = CString::new(name.to_str().unwrap()).unwrap();

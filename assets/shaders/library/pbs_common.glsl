@@ -1,7 +1,8 @@
 #ifndef PBS_COMMON_GLSL_
 #define PBS_COMMON_GLSL_
 
-#include "assets/shaders/library/sampling_utils.glsl"
+#include "assets/shaders/library/utilities.glsl"
+#include "assets/shaders/library/sampling.glsl"
 
 struct ShadingProperties {
     vec4 albedo;

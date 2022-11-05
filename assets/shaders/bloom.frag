@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 #include "assets/shaders/library/engine.glsl"
-#include "assets/shaders/library/dual_filtering_blur_sampling.glsl"
+#include "assets/shaders/library/sampling.glsl"
 
 SAMPLER_2D(0, image);
 SAMPLER_2D(1, mainImage);
@@ -11,6 +11,7 @@ SAMPLER_2D(2, lensDirt);
 UNIFORM_BLOCK_BEGIN(7, BloomParams)
     float spread;
     vec4 filterCurve;
+    float filterRadius;
     float intensity;
     int useLensDirt;
     float lensDirtIntensity;
@@ -24,7 +25,7 @@ INPUT_BLOCK_END_NAMED(fsIn)
 OUTPUT(0, vec4, outColor);
 
 vec3 Prefilter (vec3 c) {
-    float brightness = max(c.r, max(c.g, c.b));
+    float brightness = LumaRec709(c);//max(c.r, max(c.g, c.b));
     float soft = brightness - filterCurve.y;
     soft = clamp(soft, 0, filterCurve.z);
     soft = soft * soft * filterCurve.w;
@@ -33,20 +34,44 @@ vec3 Prefilter (vec3 c) {
     return c * contribution;
 }
 
+#ifdef COD_AW_FILTERING
+    #ifdef BLOOM_PASS_DOWNSAMPLE_PREFILTER
+        #define DOWNSAMPLE_FUNC(image, uv, texelSize) CoD_AW_FilteringDownsampleWithKarisAverage(image, uv, texelSize)
+    #else
+        #define DOWNSAMPLE_FUNC(image, uv, texelSize) CoD_AW_FilteringDownsample(image, uv, texelSize)
+    #endif
+
+    #define UPSAMPLE_FUNC(image, uv, texelSize) CoD_AW_FilteringUpsample(image, uv, texelSize, filterRadius)
+#else
+    #ifdef BLOOM_PASS_DOWNSAMPLE_PREFILTER
+        #define DOWNSAMPLE_FUNC(image, uv, texelSize) DualFilteringDownsampleWithKarisAverage(image, uv, texelSize)
+    #else
+        #define DOWNSAMPLE_FUNC(image, uv, texelSize) DualFilteringDownsample(image, uv, texelSize)
+    #endif
+
+    #define UPSAMPLE_FUNC(image, uv, texelSize) DualFilteringUpsample(image, uv, texelSize)
+#endif
+
 void main()
 {
-    vec2 halfpixel = (1.0 / textureSize(image, 0)) * 0.5;
-    halfpixel *= spread;
+#ifdef COD_AW_FILTERING
+    float texelSizeScalar = 1.0;
+#else
+    float texelSizeScalar = 0.5;
+#endif
+
+    vec2 texelSize = 1.0 / textureSize(image, 0) * texelSizeScalar;
+    texelSize *= spread;
 
 #if defined(BLOOM_PASS_DOWNSAMPLE_PREFILTER)
-    vec4 pixelColor = Downsample(image, fsIn.texcoord, halfpixel);
-    outColor = vec4(Prefilter(pixelColor.rgb), pixelColor.a);
+    vec3 pixelColor = max(DOWNSAMPLE_FUNC(image, fsIn.texcoord, texelSize), 0.0001);
+    outColor = vec4(Prefilter(pixelColor), 1.0);
 #elif defined(BLOOM_PASS_DOWNSAMPLE)
-    outColor = Downsample(image, fsIn.texcoord, halfpixel);
+    outColor = vec4(DOWNSAMPLE_FUNC(image, fsIn.texcoord, texelSize), 1.0);
 #elif defined(BLOOM_PASS_UPSAMPLE)
-    outColor = Upsample(image, fsIn.texcoord, halfpixel);
+    outColor = vec4(UPSAMPLE_FUNC(image, fsIn.texcoord, texelSize), 1.0);
 #elif defined(BLOOM_PASS_UPSAMPLE_APPLY)
-    vec3 bloom = intensity * Upsample(image, fsIn.texcoord, halfpixel).rgb;
+    vec3 bloom = intensity * UPSAMPLE_FUNC(image, fsIn.texcoord, texelSize).rgb;
 
     if (useLensDirt == TRUE)
     {
@@ -59,7 +84,8 @@ void main()
 
     vec4 mainImageColor = texture(mainImage, fsIn.texcoord);
 
-    outColor = min(vec4(mainImageColor.rgb + bloom, mainImageColor.a), vec4(FP16_MAX));
+    vec3 combinedColor = min(mainImageColor.rgb + bloom, vec3(FP16_MAX));
+    outColor = vec4(mix(mainImageColor.rgb, combinedColor, intensity), mainImageColor.a);
 #endif
 }
 

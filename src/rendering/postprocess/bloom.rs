@@ -6,6 +6,7 @@ use crevice::std140::AsStd140;
 use crate::postprocess::FULLSCREEN_VERTEX_SHADER_PATH;
 use crate::rendering::shader::Shader;
 use crate::shader::ShaderCreateInfo;
+use crate::texture::SizedTextureFormat;
 use crate::{
     color::srgb_to_linear,
     core::math::{UVec2, Vec4},
@@ -27,12 +28,12 @@ const UBO_BINDING_INDEX: u32 = 7;
 const EPSILON: f32 = 0.00001;
 const MIN_ITERATIONS: u32 = 1;
 const MAX_ITERATIONS: u32 = 16;
-const MIN_THRESHOLD: f32 = 0.1;
-const MAX_THRESHOLD: f32 = 10.0;
+const MIN_THRESHOLD: f32 = 0.0;
+const MAX_THRESHOLD: f32 = 1.0;
 const MIN_SMOOTH_FADE: f32 = 0.01;
 const MAX_SMOOTH_FADE: f32 = 1.0;
-const MIN_INTENSITY: f32 = 0.01;
-const MAX_INTENSITY: f32 = 10.0;
+const MIN_INTENSITY: f32 = 0.0;
+const MAX_INTENSITY: f32 = 1.0;
 const MIN_LENS_DIRT_INTENSITY: f32 = 0.0;
 const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 
@@ -41,6 +42,7 @@ const MAX_LENS_DIRT_INTENSITY: f32 = 100.0;
 struct BloomUboData {
     spread: f32,
     filter: mint::Vector4<f32>,
+    filterRadius: f32,
     intensity: f32,
     use_lens_dirt: i32,
     lens_dirt_intensity: f32,
@@ -52,6 +54,7 @@ impl Default for BloomUboData {
         Self {
             spread: 0.0,
             filter: [0.0, 0.0, 0.0, 0.0].into(),
+            filterRadius: 0.005,
             intensity: 0.0,
             use_lens_dirt: 0,
             lens_dirt_intensity: 0.0,
@@ -66,6 +69,7 @@ pub struct Bloom {
     threshold: f32,
     smooth_fade: f32,
     intensity: f32,
+    filter_radius: f32,
     tint: [f32; 3],
     resolution_divisors: [u32; 2],
     resolution_divisor_index: usize,
@@ -80,6 +84,7 @@ pub struct Bloom {
     enable_lens_dirt: bool,
     lens_dirt_intensity: f32,
     lens_dirt: Rc<Texture2D>,
+    filtering_method: usize,
 }
 
 impl_as_any!(Bloom);
@@ -105,6 +110,7 @@ impl Bloom {
         self.ubo_data.intensity = self.intensity;
         self.ubo_data.use_lens_dirt = self.enable_lens_dirt as i32;
         self.ubo_data.lens_dirt_intensity = self.lens_dirt_intensity;
+        self.ubo_data.filterRadius = self.filter_radius;
 
         self.ubo.fill_mapped(0, &self.ubo_data.as_std140());
     }
@@ -133,14 +139,15 @@ impl Bloom {
             "Bloom effect do not support depth texture attachments."
         );
 
-        let format = attachment.format();
+        let format = SizedTextureFormat::R11fG11fB10f;
 
         self.blit_framebuffers
             .iter()
             .for_each(|fb| framebuffer_cache.release_temporary(Rc::clone(fb)));
         self.blit_framebuffers.clear();
 
-        let mut current_destination = framebuffer_cache.get_temporary("", size, format, None);
+        let mut current_destination =
+            framebuffer_cache.get_temporary("BloomTex0", size, format, None);
 
         self.blit_framebuffers.push(Rc::clone(&current_destination));
 
@@ -155,6 +162,8 @@ impl Bloom {
             &self.linear_sampler,
         );
 
+        StateManager::viewport(0, 0, size.x as i32, size.y as i32);
+
         draw_full_screen_quad();
 
         current_destination.unbind(false);
@@ -165,7 +174,7 @@ impl Bloom {
             .disable_keyword("BLOOM_PASS_DOWNSAMPLE_PREFILTER");
         self.bloom_shader.enable_keyword("BLOOM_PASS_DOWNSAMPLE");
 
-        for _ in 1..self.iterations {
+        for i in 1..self.iterations {
             size.x /= resolution_divisor;
             size.y /= resolution_divisor;
 
@@ -176,10 +185,14 @@ impl Bloom {
                 break;
             }
 
-            current_destination = framebuffer_cache.get_temporary("", size, format, None);
+            current_destination = framebuffer_cache.get_temporary(
+                format!("BloomTex{}", i).as_str(),
+                size,
+                format,
+                None,
+            );
 
             self.blit_framebuffers.push(Rc::clone(&current_destination));
-            //TODO: Do a downsample blit here
 
             current_destination.bind();
             current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
@@ -189,6 +202,8 @@ impl Bloom {
                 current_source.texture_attachments()[0].id(),
                 &self.linear_sampler,
             );
+
+            StateManager::viewport(0, 0, size.x as i32, size.y as i32);
 
             draw_full_screen_quad();
 
@@ -205,8 +220,10 @@ impl Bloom {
 
         self.bloom_shader.disable_keyword("BLOOM_PASS_DOWNSAMPLE");
         self.bloom_shader.enable_keyword("BLOOM_PASS_UPSAMPLE");
+        StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
         for temporary in self.blit_framebuffers.iter().rev().skip(1) {
             let current_destination = Rc::clone(temporary);
+            let size = current_destination.size();
             //TODO: Do an upsampling blit here
             current_destination.bind();
 
@@ -216,14 +233,15 @@ impl Bloom {
                 &self.linear_sampler,
             );
 
-            StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
+            StateManager::viewport(0, 0, size.x as i32, size.y as i32);
             draw_full_screen_quad();
-            StateManager::disable_blending();
 
             current_destination.unbind(false);
 
             current_source = Rc::clone(&current_destination);
         }
+
+        StateManager::disable_blending();
 
         current_source
     }
@@ -245,6 +263,10 @@ impl Bloom {
         self.bloom_shader
             .bind_texture_2d_with_id(2, self.lens_dirt.get_id(), &self.linear_sampler);
         output.bind();
+
+        let size = output.size();
+
+        StateManager::viewport(0, 0, size.x as i32, size.y as i32);
 
         draw_full_screen_quad();
 
@@ -333,6 +355,18 @@ impl Gui for Bloom {
                             });
                     }
 
+                    if ui.combo_simple_string(
+                        "Filtering",
+                        &mut self.filtering_method,
+                        &["CoD: Advanced Warfare", "ARM: Dual Filtering"],
+                    ) {
+                        match self.filtering_method {
+                            0 => self.bloom_shader.enable_keyword("COD_AW_FILTERING"),
+                            1 => self.bloom_shader.disable_keyword("COD_AW_FILTERING"),
+                            _ => unreachable!(),
+                        }
+                    }
+
                     ui.combo(
                         "Resolution",
                         &mut self.resolution_divisor_index,
@@ -355,6 +389,12 @@ impl Gui for Bloom {
                         .build(ui, &mut self.iterations)
                     {
                         self.blit_framebuffers = Vec::with_capacity(self.iterations as usize);
+                    }
+
+                    if self.filtering_method == 0 {
+                        imgui::Slider::new("Filter Radius", 0.001, 1.0)
+                            .display_format("%.3f")
+                            .build(ui, &mut self.filter_radius);
                     }
 
                     imgui::Slider::new("Spread", 1.0, 10.0)
@@ -410,9 +450,9 @@ pub struct BloomBuilder {
 impl Default for BloomBuilder {
     fn default() -> Self {
         Self {
-            iterations: 8,
-            threshold: 1.0,
-            smooth_fade: 0.54,
+            iterations: 4,
+            threshold: 0.0,
+            smooth_fade: 0.0,
             intensity: 0.1,
             enabled: true,
         }
@@ -468,8 +508,11 @@ impl BloomBuilder {
                     "BLOOM_PASS_UPSAMPLE",
                     "BLOOM_PASS_UPSAMPLE_APPLY",
                 ])
+                .keyword_set(&["_", "COD_AW_FILTERING"])
                 .build(),
         );
+
+        bloom_shader.enable_keyword("COD_AW_FILTERING");
 
         let mut ubo = Buffer::new(
             "Bloom UBO",
@@ -496,6 +539,7 @@ impl BloomBuilder {
             threshold: self.threshold,
             smooth_fade: self.smooth_fade,
             intensity: self.intensity,
+            filter_radius: 0.005,
             tint: [1.0; 3],
             resolution_divisors: [2, 4],
             resolution_divisor_index: 0,
@@ -510,6 +554,7 @@ impl BloomBuilder {
             enable_lens_dirt: true,
             lens_dirt_intensity: 30.0,
             lens_dirt,
+            filtering_method: 0,
         }
     }
 }
