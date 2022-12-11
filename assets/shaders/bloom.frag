@@ -5,8 +5,11 @@
 #include "assets/shaders/library/sampling.glsl"
 
 SAMPLER_2D(0, image);
-SAMPLER_2D(1, mainImage);
-SAMPLER_2D(2, lensDirt);
+
+#ifdef BLOOM_PASS_UPSAMPLE_APPLY
+    SAMPLER_2D(1, mainImage);
+    SAMPLER_2D(2, lensDirt);
+#endif
 
 UNIFORM_BLOCK_BEGIN(7, BloomParams)
     float spread;

@@ -3,8 +3,11 @@ use gl_bindings as gl;
 use std::fmt;
 
 use crate::core::math::{UVec2, Vec4};
+use crate::mesh::utilities::draw_full_screen_quad;
 use crate::rendering::state::StateManager;
 use crate::rendering::texture::SizedTextureFormat;
+use crate::sampler::Sampler;
+use crate::shader::Shader;
 use crate::Msaa;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -163,7 +166,12 @@ impl Framebuffer {
         let label = CString::new(name).unwrap();
         unsafe {
             gl::CreateFramebuffers(1, &mut framebuffer_id);
-            gl::ObjectLabel(gl::FRAMEBUFFER, framebuffer_id, name.len() as i32 + 1, label.as_ptr())
+            gl::ObjectLabel(
+                gl::FRAMEBUFFER,
+                framebuffer_id,
+                name.len() as i32 + 1,
+                label.as_ptr(),
+            )
         }
 
         let mut color_attachment_count = 0;
@@ -291,7 +299,12 @@ impl Framebuffer {
                 .for_each(|(&create_info, id)| {
                     unsafe {
                         let label = CString::new(create_info.name.as_str()).unwrap();
-                        gl::ObjectLabel(gl::RENDERBUFFER, *id, name.len() as i32 + 1, label.as_ptr());
+                        gl::ObjectLabel(
+                            gl::RENDERBUFFER,
+                            *id,
+                            name.len() as i32 + 1,
+                            label.as_ptr(),
+                        );
                         match msaa {
                             Msaa::None => gl::NamedRenderbufferStorage(
                                 *id,
@@ -428,18 +441,18 @@ impl Framebuffer {
 
     pub fn invalidate(&self) {
         if !self.renderbuffer_attachments.is_empty() {
+            let attachment_bind_points = self
+                .renderbuffer_attachments
+                .iter()
+                .map(|a| match a.attachment_bind_point {
+                    AttachmentBindPoint::Color(n, _) => n,
+                    AttachmentBindPoint::Depth(n) => n,
+                    AttachmentBindPoint::DepthStencil(n) => n,
+                    AttachmentBindPoint::Stencil(n) => n,
+                })
+                .collect::<Vec<_>>();
             unsafe {
-                let attachment_bind_points = self
-                    .renderbuffer_attachments
-                    .iter()
-                    .map(|a| match a.attachment_bind_point {
-                        AttachmentBindPoint::Color(n, _) => n,
-                        AttachmentBindPoint::Depth(n) => n,
-                        AttachmentBindPoint::DepthStencil(n) => n,
-                        AttachmentBindPoint::Stencil(n) => n,
-                    })
-                    .collect::<Vec<_>>();
-
+                //let attachment_bind_points = attachment_bind_points;
                 gl::InvalidateNamedFramebufferData(
                     self.id,
                     attachment_bind_points.len() as i32,
@@ -475,6 +488,41 @@ impl Framebuffer {
 
     pub fn samples(&self) -> u32 {
         self.samples
+    }
+
+    pub fn blit_with_shader(
+        source: &Framebuffer,
+        destination: &Framebuffer,
+        sampler: &Sampler,
+        shader: &Shader,
+        clear_destination: bool,
+        invalidate_destination: bool,
+    ) {
+        let source_color_attachment = source.texture_attachment(0);
+
+        assert!(
+            !source_color_attachment.is_depth_stencil(),
+            "Blit method does not support depth only attachments"
+        );
+
+        destination.bind();
+
+        if clear_destination {
+            destination.clear(&Vec4::new(0.0, 0.0, 0.0, 1.0))
+        }
+
+        shader.bind();
+        shader.bind_texture_2d_with_id(0, source_color_attachment.id(), sampler);
+
+        StateManager::viewport(
+            0,
+            0,
+            destination.size().x as i32,
+            destination.size().y as i32,
+        );
+
+        draw_full_screen_quad();
+        destination.unbind(invalidate_destination);
     }
 
     pub fn blit(source: &Framebuffer, destination: &Framebuffer, filtering: TextureFilter) {

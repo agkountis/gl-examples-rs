@@ -132,10 +132,10 @@ impl Bloom {
         //TODO: this can exceed supported texture limits leading to an incomplete attachment error/crash.
         size.y += (size.y as f32 * self.anamorphic_stretch) as u32;
 
-        let attachment = input.texture_attachment(0);
+        let input_attachment = input.texture_attachment(0);
 
         assert!(
-            !attachment.is_depth_stencil(),
+            !input_attachment.is_depth_stencil(),
             "Bloom effect do not support depth texture attachments."
         );
 
@@ -151,22 +151,17 @@ impl Bloom {
 
         self.blit_framebuffers.push(Rc::clone(&current_destination));
 
-        current_destination.bind();
-        current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
-
         self.bloom_shader
             .enable_keyword("BLOOM_PASS_DOWNSAMPLE_PREFILTER");
-        self.bloom_shader.bind_texture_2d_with_id(
-            0,
-            input.texture_attachments()[0].id(),
+
+        Framebuffer::blit_with_shader(
+            input,
+            &current_destination,
             &self.linear_sampler,
+            &self.bloom_shader,
+            false,
+            false,
         );
-
-        StateManager::viewport(0, 0, size.x as i32, size.y as i32);
-
-        draw_full_screen_quad();
-
-        current_destination.unbind(false);
 
         let mut current_source = Rc::clone(&current_destination);
 
@@ -194,20 +189,14 @@ impl Bloom {
 
             self.blit_framebuffers.push(Rc::clone(&current_destination));
 
-            current_destination.bind();
-            current_destination.clear(&Vec4::new(0.5, 0.5, 0.5, 1.0));
-
-            self.bloom_shader.bind_texture_2d_with_id(
-                0,
-                current_source.texture_attachments()[0].id(),
+            Framebuffer::blit_with_shader(
+                &current_source,
+                &current_destination,
                 &self.linear_sampler,
+                &self.bloom_shader,
+                false,
+                false,
             );
-
-            StateManager::viewport(0, 0, size.x as i32, size.y as i32);
-
-            draw_full_screen_quad();
-
-            current_destination.unbind(false);
 
             current_source = Rc::clone(&current_destination);
         }
@@ -223,20 +212,14 @@ impl Bloom {
         StateManager::enable_blending_with_function(BlendFactor::One, BlendFactor::One);
         for temporary in self.blit_framebuffers.iter().rev().skip(1) {
             let current_destination = Rc::clone(temporary);
-            let size = current_destination.size();
-            //TODO: Do an upsampling blit here
-            current_destination.bind();
-
-            self.bloom_shader.bind_texture_2d_with_id(
-                0,
-                current_source.texture_attachments()[0].id(),
+            Framebuffer::blit_with_shader(
+                &current_source,
+                &current_destination,
                 &self.linear_sampler,
+                &self.bloom_shader,
+                false,
+                false,
             );
-
-            StateManager::viewport(0, 0, size.x as i32, size.y as i32);
-            draw_full_screen_quad();
-
-            current_destination.unbind(false);
 
             current_source = Rc::clone(&current_destination);
         }
@@ -252,12 +235,12 @@ impl Bloom {
             .enable_keyword("BLOOM_PASS_UPSAMPLE_APPLY");
         self.bloom_shader.bind_texture_2d_with_id(
             0,
-            input.texture_attachments()[0].id(),
+            input.texture_attachment(0).id(),
             &self.linear_sampler,
         );
         self.bloom_shader.bind_texture_2d_with_id(
             1,
-            output.texture_attachments()[0].id(),
+            output.texture_attachment(0).id(),
             &self.linear_sampler,
         );
         self.bloom_shader

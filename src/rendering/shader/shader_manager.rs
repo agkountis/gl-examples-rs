@@ -53,6 +53,7 @@ impl ShaderManager {
 
         let shader = Rc::new(Shader {
             name: create_info.name.clone(),
+            bound: RefCell::new(false),
             active_variant: RefCell::new(shader_variants[&default_variant_bitfield].id()),
             active_variant_bitfield: RefCell::new(default_variant_bitfield),
             shader_variants,

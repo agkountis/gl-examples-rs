@@ -105,6 +105,7 @@ impl<'a> ShaderCreateInfoBuilder<'a> {
 #[derive(Debug)]
 pub struct Shader {
     name: String,
+    bound: RefCell<bool>,
     active_variant: RefCell<GLuint>,
     active_variant_bitfield: RefCell<u32>,
     shader_variants: HashMap<u32, ShaderProgram>,
@@ -160,7 +161,8 @@ impl Shader {
                 self.set_active_shader_variant(*active_variant_bitfield);
             }
 
-            self.bind()
+            self.bind_internal();
+            *self.bound.borrow_mut() = true
         } else {
             eprintln!("ERROR: Keyword {} not found!", keyword)
         }
@@ -173,18 +175,29 @@ impl Shader {
             *active_variant_bitfield &= !bits;
 
             self.set_active_shader_variant(*active_variant_bitfield);
+            self.bind_internal();
+            *self.bound.borrow_mut() = true
         }
     }
 
     pub fn bind(&self) {
-        unsafe {
-            gl::BindProgramPipeline(*self.active_variant.borrow());
+        let mut bound = self.bound.borrow_mut();
+        if !*bound {
+            self.bind_internal();
+            *bound = true
         }
     }
 
     pub fn unbind(&self) {
         unsafe {
             gl::BindProgramPipeline(0);
+        }
+        *self.bound.borrow_mut() = false;
+    }
+
+    fn bind_internal(&self) {
+        unsafe {
+            gl::BindProgramPipeline(*self.active_variant.borrow());
         }
     }
 
